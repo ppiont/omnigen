@@ -84,6 +84,7 @@ func (s *Server) setupRoutes() {
 		s.config.Logger,
 	)
 	s.router.GET("/health", healthHandler.Check)
+	s.router.HEAD("/health", healthHandler.Check) // For Docker HEALTHCHECK
 
 	// Swagger documentation (no auth required for development)
 	if s.config.Environment != "production" {

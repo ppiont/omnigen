@@ -4,7 +4,7 @@ Go-based REST API for the OmniGen AI video generation pipeline.
 
 ## Tech Stack
 
-- **Go 1.22**
+- **Go 1.25.4**
 - **Gin** - Web framework
 - **AWS SDK v2** - DynamoDB, S3, Step Functions, Secrets Manager
 - **Zap** - Structured logging

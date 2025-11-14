@@ -24,17 +24,17 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 # Runtime stage
 FROM alpine:3.22
 
-# Install ca-certificates for HTTPS and wget for health checks
-RUN apk --no-cache add ca-certificates wget
+# Install ca-certificates for HTTPS and curl for health checks
+RUN apk --no-cache add ca-certificates curl
 
 WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /app/api .
 
-# Health check
+# Health check (using curl with -f flag for proper GET requests)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Expose port
 EXPOSE 8080
