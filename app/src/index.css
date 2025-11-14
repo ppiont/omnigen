@@ -11,7 +11,8 @@ body {
 }
 
 body.dark {
-  @apply bg-background text-text-primary;
+  background-color: #0a0e1a;
+  color: #e8edf5;
 }
 
 body:not(.dark) {
