@@ -1,4 +1,6 @@
 .env
+.env.local
+.env*
 .human/
 .DS_Store
 CLAUDE.md

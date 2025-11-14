@@ -1,0 +1,234 @@
+basePath: /
+definitions:
+  errors.APIError:
+    properties:
+      code:
+        type: string
+      details:
+        additionalProperties: true
+        type: object
+      message:
+        type: string
+    type: object
+  errors.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/errors.APIError'
+    type: object
+  handlers.GenerateRequest:
+    properties:
+      aspect_ratio:
+        enum:
+        - "16:9"
+        - "9:16"
+        - "1:1"
+        type: string
+      duration:
+        maximum: 180
+        minimum: 15
+        type: integer
+      prompt:
+        maxLength: 1000
+        minLength: 10
+        type: string
+      style:
+        maxLength: 200
+        type: string
+    required:
+    - duration
+    - prompt
+    type: object
+  handlers.GenerateResponse:
+    properties:
+      created_at:
+        type: integer
+      estimated_completion:
+        description: in seconds
+        type: integer
+      job_id:
+        type: string
+      status:
+        type: string
+    type: object
+  handlers.HealthResponse:
+    properties:
+      checks:
+        additionalProperties:
+          type: string
+        type: object
+      status:
+        type: string
+      timestamp:
+        type: integer
+    type: object
+  handlers.JobResponse:
+    properties:
+      completed_at:
+        type: integer
+      created_at:
+        type: integer
+      duration:
+        type: integer
+      error_message:
+        type: string
+      job_id:
+        type: string
+      prompt:
+        type: string
+      status:
+        type: string
+      style:
+        type: string
+      video_url:
+        type: string
+    type: object
+  handlers.ListJobsResponse:
+    properties:
+      jobs:
+        items:
+          $ref: '#/definitions/handlers.JobResponse'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total_count:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@omnigen.ai
+    name: API Support
+    url: http://www.omnigen.ai/support
+  description: AI video generation pipeline API for creating professional-quality
+    video content
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: OmniGen API
+  version: "1.0"
+paths:
+  /api/v1/generate:
+    post:
+      consumes:
+      - application/json
+      description: Create a new video generation job for an ad creative
+      parameters:
+      - description: Generation parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.GenerateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.GenerateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Submit video generation job
+      tags:
+      - jobs
+  /api/v1/jobs:
+    get:
+      description: Get a list of video generation jobs
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ListJobsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List jobs
+      tags:
+      - jobs
+  /api/v1/jobs/{id}:
+    get:
+      description: Get the status and details of a video generation job
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.JobResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get job status
+      tags:
+      - jobs
+  /health:
+    get:
+      description: Check if the API is healthy and can connect to dependencies
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.HealthResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.HealthResponse'
+      summary: Health check
+      tags:
+      - health
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: x-api-key
+    type: apiKey
+swagger: "2.0"
