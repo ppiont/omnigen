@@ -67,13 +67,13 @@ outputs: ## Show terraform outputs
 
 # Docker commands
 
-docker-build: ## Build Docker image for ECS
-	@printf '${CYAN}Building Docker image...${NC}\n'
-	@cd backend && docker build -t ${PROJECT_NAME}-api:latest .
+docker-build: ## Build Docker image for ECS (linux/amd64)
+	@printf '${CYAN}Building Docker image for linux/amd64...${NC}\n'
+	@cd backend && docker buildx build --platform linux/amd64 -t ${PROJECT_NAME}-api:latest --load .
 	@printf '${GREEN}Docker image built successfully!${NC}\n'
 
-docker-push: ## Build and push Docker image to ECR
-	@printf '${CYAN}Building and pushing Docker image to ECR...${NC}\n'
+docker-push: ## Build and push Docker image to ECR (linux/amd64)
+	@printf '${CYAN}Building and pushing Docker image to ECR (linux/amd64)...${NC}\n'
 	$(eval ECR_URL := $(shell cd $(INFRA_DIR) && terraform output -raw ecr_repository_url 2>/dev/null))
 	@if [ -z "$(ECR_URL)" ]; then \
 		printf '${RED}Error: Could not get ECR repository URL. Run terraform apply first.${NC}\n'; \
@@ -82,8 +82,8 @@ docker-push: ## Build and push Docker image to ECR
 	@printf "ECR Repository: $(ECR_URL)\n"
 	@printf '${CYAN}Logging in to ECR...${NC}\n'
 	@aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin $(ECR_URL)
-	@printf '${CYAN}Building image...${NC}\n'
-	@cd backend && docker build -t ${PROJECT_NAME}-api:latest .
+	@printf '${CYAN}Building image for linux/amd64...${NC}\n'
+	@cd backend && docker buildx build --platform linux/amd64 -t ${PROJECT_NAME}-api:latest --load .
 	@printf '${CYAN}Tagging image...${NC}\n'
 	@docker tag ${PROJECT_NAME}-api:latest $(ECR_URL):latest
 	@printf '${CYAN}Pushing image...${NC}\n'

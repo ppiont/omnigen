@@ -106,7 +106,8 @@ resource "aws_iam_role_policy" "ecs_task" {
           "dynamodb:GetItem",
           "dynamodb:UpdateItem",
           "dynamodb:Query",
-          "dynamodb:Scan"
+          "dynamodb:Scan",
+          "dynamodb:DescribeTable"
         ]
         Resource = [
           var.dynamodb_table_arn,
@@ -127,7 +128,10 @@ resource "aws_iam_role_policy" "ecs_task" {
         Action = [
           "secretsmanager:GetSecretValue"
         ]
-        Resource = var.replicate_secret_arn
+        Resource = [
+          var.replicate_secret_arn,
+          "arn:aws:secretsmanager:*:*:secret:${var.project_name}/api-keys*"
+        ]
       },
       {
         Effect = "Allow"
