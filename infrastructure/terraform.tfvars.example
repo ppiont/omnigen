@@ -1,0 +1,58 @@
+# OmniGen Infrastructure Configuration
+# Copy this file to terraform.tfvars and fill in your values
+
+# AWS Configuration
+aws_region        = "us-east-1"
+availability_zone = "us-east-1a"
+
+# Project Configuration
+project_name = "omnigen"
+
+# REQUIRED: Create this secret manually before running terraform
+# aws secretsmanager create-secret \
+#   --name omnigen/replicate-api-key \
+#   --description "Replicate API Key for OmniGen video generation" \
+#   --secret-string "your-replicate-api-key-here" \
+#   --region us-east-1
+#
+# Then get the ARN:
+# aws secretsmanager describe-secret \
+#   --secret-id omnigen/replicate-api-key \
+#   --region us-east-1 \
+#   --query 'ARN' \
+#   --output text
+replicate_api_key_secret_arn = "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:omnigen/replicate-api-key-XXXXX"
+
+# Networking
+vpc_cidr            = "10.0.0.0/16"
+public_subnet_cidr  = "10.0.1.0/24"
+private_subnet_cidr = "10.0.10.0/24"
+enable_nat_gateway  = true
+
+# ECS Configuration
+ecs_min_tasks              = 1
+ecs_max_tasks              = 5
+ecs_cpu                    = 1024  # 1 vCPU
+ecs_memory                 = 2048  # 2 GB
+ecs_target_cpu_utilization = 70
+
+# Lambda Configuration
+lambda_generator_memory      = 2048   # 2 GB
+lambda_composer_memory       = 10240  # 10 GB (max)
+lambda_timeout               = 900    # 15 minutes
+lambda_generator_concurrency = 10
+lambda_composer_concurrency  = 5
+
+# Storage Configuration
+s3_assets_lifecycle_ia_days          = 30   # Days before moving to Infrequent Access
+s3_assets_lifecycle_glacier_days     = 90   # Days before moving to Glacier
+s3_assets_lifecycle_expiration_days  = 365  # Days before deletion
+dynamodb_ttl_days                    = 90   # Days before DynamoDB TTL deletion
+dynamodb_point_in_time_recovery      = true
+
+# CloudFront Configuration
+cloudfront_price_class = "PriceClass_100"  # US and Europe only (cost-optimized)
+# Options: PriceClass_All, PriceClass_200, PriceClass_100
+
+# Monitoring Configuration
+cloudwatch_log_retention_days = 7

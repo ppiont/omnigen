@@ -1,1 +1,4 @@
+.env
 .human/
+.DS_Store
+CLAUDE.md
