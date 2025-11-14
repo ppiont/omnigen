@@ -1,0 +1,148 @@
+name: Terraform Deploy (DISABLED)
+
+# DISABLED - Uncomment 'on:' section below to re-enable
+# on:
+#   push:
+#     branches:
+#       - master
+#     paths:
+#       - 'infrastructure/**'
+#       - 'backend/**'
+#       - 'frontend/**'
+#       - '.github/workflows/terraform-deploy.yml'
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infrastructure
+    outputs:
+      ecr_url: ${{ steps.outputs.outputs.ecr_url }}
+      ecs_cluster: ${{ steps.outputs.outputs.ecs_cluster }}
+      ecs_service: ${{ steps.outputs.outputs.ecs_service }}
+      frontend_bucket: ${{ steps.outputs.outputs.frontend_bucket }}
+      cloudfront_id: ${{ steps.outputs.outputs.cloudfront_id }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.13.5"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false tfplan
+
+      - name: Get Terraform Outputs
+        id: outputs
+        run: |
+          echo "ecr_url=$(terraform output -raw ecr_repository_url)" >> $GITHUB_OUTPUT
+          echo "ecs_cluster=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
+          echo "ecs_service=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
+          echo "frontend_bucket=$(terraform output -raw frontend_bucket_name)" >> $GITHUB_OUTPUT
+          echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+
+  deploy-backend:
+    name: Deploy Backend (ECS)
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'backend/')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to Amazon ECR
+        working-directory: ./backend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ needs.terraform-apply.outputs.ecr_url }}
+        run: |
+          docker build -t omnigen-api:${{ github.sha }} .
+          docker tag omnigen-api:${{ github.sha }} $ECR_REPOSITORY:latest
+          docker tag omnigen-api:${{ github.sha }} $ECR_REPOSITORY:${{ github.sha }}
+          docker push $ECR_REPOSITORY:latest
+          docker push $ECR_REPOSITORY:${{ github.sha }}
+
+      - name: Update ECS service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ needs.terraform-apply.outputs.ecs_cluster }} \
+            --service ${{ needs.terraform-apply.outputs.ecs_service }} \
+            --force-new-deployment \
+            --region ${{ vars.AWS_REGION || 'us-east-1' }}
+
+  deploy-frontend:
+    name: Deploy Frontend (CloudFront)
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'frontend/')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync frontend/dist/ s3://${{ needs.terraform-apply.outputs.frontend_bucket }}/ --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ needs.terraform-apply.outputs.cloudfront_id }} \
+            --paths "/*"
