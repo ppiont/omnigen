@@ -24,6 +24,10 @@ resource "aws_ecs_task_definition" "api" {
 
       environment = [
         {
+          name  = "ENVIRONMENT"
+          value = var.environment
+        },
+        {
           name  = "AWS_REGION"
           value = var.aws_region
         },
