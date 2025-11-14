@@ -31,7 +31,7 @@ resource "aws_cloudfront_distribution" "frontend" {
     compress               = true
 
     # Use AWS managed cache policy for caching optimized
-    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"  # Managed-CachingOptimized
+    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimized
   }
 
   # Cache behavior for static assets (immutable caching)
@@ -44,7 +44,7 @@ resource "aws_cloudfront_distribution" "frontend" {
     compress               = true
 
     # Use AWS managed cache policy with long TTL for immutable assets
-    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"  # Managed-CachingOptimized (1 year TTL)
+    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimized (1 year TTL)
   }
 
   # Cache behavior for index.html (no caching for SPA)
@@ -57,7 +57,7 @@ resource "aws_cloudfront_distribution" "frontend" {
     compress               = true
 
     # Use AWS managed cache policy with no caching for SPA entry point
-    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"  # Managed-CachingDisabled
+    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
   }
 
   restrictions {

@@ -2,8 +2,9 @@
 # Copy this file to terraform.tfvars and fill in your values
 
 # AWS Configuration
-aws_region        = "us-east-1"
-availability_zone = "us-east-1a"
+aws_region         = "us-east-1"
+availability_zones = ["us-east-1a", "us-east-1b"]  # Multi-AZ for ALB high availability
+availability_zone  = "us-east-1a"                   # Single AZ for private subnet (cost optimization)
 
 # Project Configuration
 project_name = "omnigen"
@@ -24,10 +25,10 @@ project_name = "omnigen"
 replicate_api_key_secret_arn = "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:omnigen/replicate-api-key-XXXXX"
 
 # Networking
-vpc_cidr            = "10.0.0.0/16"
-public_subnet_cidr  = "10.0.1.0/24"
-private_subnet_cidr = "10.0.10.0/24"
-enable_nat_gateway  = true
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]  # One subnet per AZ for ALB
+private_subnet_cidr  = "10.0.10.0/24"
+enable_nat_gateway   = true
 
 # ECS Configuration
 ecs_min_tasks              = 1

@@ -13,7 +13,7 @@ resource "aws_lambda_function" "composer" {
   reserved_concurrent_executions = var.composer_concurrency
 
   ephemeral_storage {
-    size = 10240  # 10 GB for video processing
+    size = 10240 # 10 GB for video processing
   }
 
   vpc_config {
@@ -23,7 +23,6 @@ resource "aws_lambda_function" "composer" {
 
   environment {
     variables = {
-      AWS_REGION           = var.aws_region
       ASSETS_BUCKET        = var.assets_bucket_name
       JOB_TABLE            = var.dynamodb_table_name
       REPLICATE_SECRET_ARN = var.replicate_secret_arn

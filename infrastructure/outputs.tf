@@ -86,8 +86,13 @@ output "vpc_id" {
   value       = module.networking.vpc_id
 }
 
+output "public_subnet_ids" {
+  description = "List of public subnet IDs (multi-AZ for ALB)"
+  value       = module.networking.public_subnet_ids
+}
+
 output "public_subnet_id" {
-  description = "Public subnet ID"
+  description = "First public subnet ID (backwards compatibility)"
   value       = module.networking.public_subnet_id
 }
 
@@ -131,7 +136,7 @@ output "lambda_composer_log_group_name" {
 # Quick Start Commands
 output "quick_start_commands" {
   description = "Quick start commands for deployment"
-  value = <<-EOT
+  value       = <<-EOT
 
     🚀 OmniGen Infrastructure Deployed Successfully!
 

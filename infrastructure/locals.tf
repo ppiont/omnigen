@@ -9,17 +9,17 @@ locals {
   }
 
   # Resource names
-  vpc_name                  = "${local.name_prefix}-vpc"
-  assets_bucket_name        = "${local.name_prefix}-assets"
-  frontend_bucket_name      = "${local.name_prefix}-frontend"
-  dynamodb_table_name       = "${local.name_prefix}-jobs"
-  ecs_cluster_name          = local.name_prefix
-  ecs_service_name          = "${local.name_prefix}-api"
-  ecr_repository_name       = "${local.name_prefix}-api"
-  lambda_generator_name     = "${local.name_prefix}-generator"
-  lambda_composer_name      = "${local.name_prefix}-composer"
-  step_functions_name       = "${local.name_prefix}-workflow"
-  alb_name                  = local.name_prefix
+  vpc_name                     = "${local.name_prefix}-vpc"
+  assets_bucket_name           = "${local.name_prefix}-assets"
+  frontend_bucket_name         = "${local.name_prefix}-frontend"
+  dynamodb_table_name          = "${local.name_prefix}-jobs"
+  ecs_cluster_name             = local.name_prefix
+  ecs_service_name             = "${local.name_prefix}-api"
+  ecr_repository_name          = "${local.name_prefix}-api"
+  lambda_generator_name        = "${local.name_prefix}-generator"
+  lambda_composer_name         = "${local.name_prefix}-composer"
+  step_functions_name          = "${local.name_prefix}-workflow"
+  alb_name                     = local.name_prefix
   cloudfront_distribution_name = "${local.name_prefix}-frontend"
 
   # Security group names
@@ -28,10 +28,10 @@ locals {
   lambda_sg_name = "${local.name_prefix}-lambda-sg"
 
   # CloudWatch log group names
-  ecs_log_group_name          = "/ecs/${local.name_prefix}"
-  lambda_generator_log_group  = "/aws/lambda/${local.lambda_generator_name}"
-  lambda_composer_log_group   = "/aws/lambda/${local.lambda_composer_name}"
-  step_functions_log_group    = "/aws/states/${local.step_functions_name}"
+  ecs_log_group_name         = "/ecs/${local.name_prefix}"
+  lambda_generator_log_group = "/aws/lambda/${local.lambda_generator_name}"
+  lambda_composer_log_group  = "/aws/lambda/${local.lambda_composer_name}"
+  step_functions_log_group   = "/aws/states/${local.step_functions_name}"
 
   # IAM role names
   ecs_task_execution_role_name = "${local.name_prefix}-ecs-task-execution"
