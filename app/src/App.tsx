@@ -10,7 +10,7 @@ const AppRoutes = () => {
   return (
     <div
       className={`min-h-screen transition-colors ${
-        theme === 'light' ? 'bg-light-bg text-light-text' : 'bg-background text-text-primary'
+        theme === 'light' ? 'bg-light-bg text-light-text' : 'bg-background text-foreground'
       }`}
     >
       <AnimatePresence mode="wait">

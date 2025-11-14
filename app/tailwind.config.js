@@ -20,9 +20,11 @@ export default {
         'aurora-orange': '#ffa500',
 
         // Text Colors
-        'text-primary': '#e8edf5', // --text-primary
-        'text-secondary': '#9ca3b8', // --text-secondary
-        'text-muted': '#6b7188', // --text-muted
+        foreground: {
+          DEFAULT: '#e8edf5', // --text-primary
+          secondary: '#9ca3b8', // --text-secondary
+          muted: '#6b7188', // --text-muted
+        },
 
         // Status Colors
         success: '#7cff00',
