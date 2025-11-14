@@ -20,6 +20,17 @@ variable "project_name" {
   }
 }
 
+variable "environment" {
+  description = "Environment name (development, staging, production)"
+  type        = string
+  default     = "development"
+
+  validation {
+    condition     = contains(["development", "staging", "production"], var.environment)
+    error_message = "Environment must be one of: development, staging, production."
+  }
+}
+
 variable "availability_zones" {
   description = "Availability zones for multi-AZ deployment (required for ALB)"
   type        = list(string)
