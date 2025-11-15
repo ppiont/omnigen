@@ -95,6 +95,28 @@ definitions:
       total_count:
         type: integer
     type: object
+  handlers.LoginRequest:
+    properties:
+      access_token:
+        type: string
+      id_token:
+        type: string
+      refresh_token:
+        type: string
+    required:
+    - access_token
+    - id_token
+    - refresh_token
+    type: object
+  handlers.UserResponse:
+    properties:
+      email:
+        type: string
+      subscription_tier:
+        type: string
+      user_id:
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -110,6 +132,91 @@ info:
   title: OmniGen API
   version: "1.0"
 paths:
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Frontend calls this after authenticating with Cognito SDK to exchange
+        tokens for secure httpOnly cookies
+      parameters:
+      - description: Cognito tokens from frontend
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Invalid token
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Exchange Cognito tokens for httpOnly cookies
+      tags:
+      - auth
+  /api/v1/auth/logout:
+    post:
+      description: Clear httpOnly cookies and log out the user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Logout
+      tags:
+      - auth
+  /api/v1/auth/me:
+    get:
+      description: Returns the current authenticated user's information from JWT
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.UserResponse'
+        "401":
+          description: Not authenticated
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user information
+      tags:
+      - auth
+  /api/v1/auth/refresh:
+    post:
+      description: Refresh the access token using the refresh token from httpOnly
+        cookie
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Returns new tokens
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Missing or invalid refresh token
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Refresh access token
+      tags:
+      - auth
   /api/v1/generate:
     post:
       consumes:
@@ -134,7 +241,15 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
         "401":
-          description: Unauthorized
+          description: Unauthorized - Invalid or missing JWT token
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "402":
+          description: Payment Required - Monthly quota exceeded
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "429":
+          description: Too Many Requests - Rate limit exceeded
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
         "500":
@@ -142,7 +257,7 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: Submit video generation job
       tags:
       - jobs
@@ -176,7 +291,7 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: List jobs
       tags:
       - jobs
@@ -205,7 +320,7 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: Get job status
       tags:
       - jobs
@@ -227,8 +342,9 @@ paths:
       tags:
       - health
 securityDefinitions:
-  ApiKeyAuth:
+  BearerAuth:
+    description: 'JWT Bearer token authentication. Format: "Bearer {token}"'
     in: header
-    name: x-api-key
+    name: Authorization
     type: apiKey
 swagger: "2.0"

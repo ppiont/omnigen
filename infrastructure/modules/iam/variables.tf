@@ -18,6 +18,11 @@ variable "dynamodb_table_arn" {
   type        = string
 }
 
+variable "dynamodb_usage_table_arn" {
+  description = "ARN of the DynamoDB usage table"
+  type        = string
+}
+
 variable "step_functions_arn" {
   description = "ARN of the Step Functions state machine"
   type        = string

@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import "../styles/auth.css";
 
 function Login() {
+  const navigate = useNavigate();
+  const { login } = useAuth();
   const [values, setValues] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,7 +31,7 @@ function Login() {
     return nextErrors;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const nextErrors = validate();
     setErrors(nextErrors);
@@ -39,10 +42,27 @@ function Login() {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      console.log("Login submitted", values);
+    try {
+      const result = await login(values.email, values.password);
+
+      if (result.success) {
+        // Redirect to dashboard on successful login
+        navigate('/dashboard');
+      } else {
+        // Handle specific error codes
+        if (result.code === 'UserNotConfirmedException') {
+          // Redirect to verification page with email
+          navigate(`/verify?email=${encodeURIComponent(values.email)}`);
+        } else {
+          setErrors({ form: result.error });
+        }
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setErrors({ form: 'An unexpected error occurred. Please try again.' });
+    } finally {
       setIsSubmitting(false);
-    }, 1200);
+    }
   };
 
   const emailErrorId = errors.email ? "login-email-error" : undefined;
@@ -73,6 +93,12 @@ function Login() {
           </div>
 
           <form className="auth-form" onSubmit={handleSubmit} noValidate>
+            {errors.form && (
+              <div className="auth-error" role="alert" aria-live="polite">
+                {errors.form}
+              </div>
+            )}
+
             <div className="form-field">
               <label htmlFor="login-email">Email</label>
               <input
@@ -120,7 +146,7 @@ function Login() {
             </div>
 
             <div className="auth-meta">
-              <span>Need help? Contact support</span>
+              <Link to="/forgot-password">Forgot password?</Link>
               <Link to="/signup">Create account</Link>
             </div>
 

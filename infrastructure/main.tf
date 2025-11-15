@@ -31,6 +31,7 @@ module "iam" {
   assets_bucket_arn             = module.storage.assets_bucket_arn
   frontend_bucket_arn           = module.storage.frontend_bucket_arn
   dynamodb_table_arn            = module.storage.dynamodb_table_arn
+  dynamodb_usage_table_arn      = module.storage.dynamodb_usage_table_arn
   step_functions_arn            = module.serverless.step_functions_arn
   replicate_secret_arn          = var.replicate_api_key_secret_arn
   ecr_repository_arn            = module.compute.ecr_repository_arn
@@ -84,12 +85,18 @@ module "compute" {
   container_port          = local.container_port
   log_group_name          = module.monitoring.ecs_log_group_name
   aws_region              = var.aws_region
-  assets_bucket_name      = module.storage.assets_bucket_name
-  dynamodb_table_name     = module.storage.dynamodb_table_name
-  step_functions_arn      = module.serverless.step_functions_arn
+  assets_bucket_name         = module.storage.assets_bucket_name
+  dynamodb_table_name        = module.storage.dynamodb_table_name
+  dynamodb_usage_table_name  = module.storage.dynamodb_usage_table_name
+  step_functions_arn         = module.serverless.step_functions_arn
   replicate_secret_arn    = var.replicate_api_key_secret_arn
+  cognito_user_pool_id    = module.auth.user_pool_id
+  cognito_client_id       = module.auth.client_id
+  jwt_issuer              = module.auth.issuer_url
+  cognito_domain          = module.auth.hosted_ui_domain
+  cloudfront_domain       = module.cdn.cloudfront_domain_name
 
-  depends_on = [module.monitoring]
+  depends_on = [module.monitoring, module.auth]
 }
 
 # Serverless Module - Lambda Functions and Step Functions
@@ -138,5 +145,14 @@ module "cdn" {
   frontend_bucket_id     = module.storage.frontend_bucket_id
   frontend_bucket_arn    = module.storage.frontend_bucket_arn
   frontend_bucket_domain = module.storage.frontend_bucket_regional_domain_name
+  alb_dns_name           = module.loadbalancer.alb_dns_name
   price_class            = var.cloudfront_price_class
+}
+
+# Auth Module - Cognito User Pool for Authentication
+module "auth" {
+  source = "./modules/auth"
+
+  project_name       = var.project_name
+  cloudfront_domain  = module.cdn.cloudfront_domain_name
 }

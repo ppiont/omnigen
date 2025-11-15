@@ -17,10 +17,24 @@ resource "aws_cloudfront_distribution" "frontend" {
   default_root_object = "index.html"
   price_class         = var.price_class
 
+  # S3 origin for frontend static files
   origin {
     domain_name              = var.frontend_bucket_domain
     origin_id                = "S3-${var.frontend_bucket_id}"
     origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
+  }
+
+  # ALB origin for API requests
+  origin {
+    domain_name = var.alb_dns_name
+    origin_id   = "ALB-API"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"  # ALB only has HTTP listener
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
   }
 
   default_cache_behavior {
@@ -32,6 +46,22 @@ resource "aws_cloudfront_distribution" "frontend" {
 
     # Use AWS managed cache policy for caching optimized
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimized
+  }
+
+  # Cache behavior for API requests (no caching, proxy to ALB)
+  ordered_cache_behavior {
+    path_pattern           = "/api/*"
+    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "ALB-API"
+    viewer_protocol_policy = "https-only"
+    compress               = false
+
+    # No caching for API requests
+    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
+
+    # Forward all headers, cookies, and query strings
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # Managed-AllViewer
   }
 
   # Cache behavior for static assets (immutable caching)

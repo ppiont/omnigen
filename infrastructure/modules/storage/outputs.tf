@@ -42,3 +42,13 @@ output "dynamodb_table_arn" {
   description = "ARN of the DynamoDB jobs table"
   value       = aws_dynamodb_table.jobs.arn
 }
+
+output "dynamodb_usage_table_name" {
+  description = "Name of the DynamoDB usage table"
+  value       = aws_dynamodb_table.usage.name
+}
+
+output "dynamodb_usage_table_arn" {
+  description = "ARN of the DynamoDB usage table"
+  value       = aws_dynamodb_table.usage.arn
+}

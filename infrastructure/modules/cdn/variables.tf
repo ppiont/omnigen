@@ -23,3 +23,8 @@ variable "price_class" {
   type        = string
   default     = "PriceClass_100"
 }
+
+variable "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer for API requests"
+  type        = string
+}

@@ -61,7 +61,7 @@ type ListJobsResponse struct {
 // @Failure 404 {object} errors.ErrorResponse
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /api/v1/jobs/{id} [get]
-// @Security ApiKeyAuth
+// @Security BearerAuth
 func (h *JobsHandler) GetJob(c *gin.Context) {
 	jobID := c.Param("id")
 
@@ -121,7 +121,7 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 // @Success 200 {object} ListJobsResponse
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /api/v1/jobs [get]
-// @Security ApiKeyAuth
+// @Security BearerAuth
 func (h *JobsHandler) ListJobs(c *gin.Context) {
 	// Get query parameters
 	page := c.DefaultQuery("page", "1")
