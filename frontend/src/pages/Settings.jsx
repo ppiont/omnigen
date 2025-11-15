@@ -183,7 +183,9 @@ function Settings() {
                   type="button"
                   className="password-toggle"
                   onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                  aria-label={
+                    showCurrentPassword ? "Hide password" : "Show password"
+                  }
                 >
                   {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -221,7 +223,9 @@ function Settings() {
                   type="button"
                   className="password-toggle"
                   onClick={() => setShowNewPassword(!showNewPassword)}
-                  aria-label={showNewPassword ? "Hide password" : "Show password"}
+                  aria-label={
+                    showNewPassword ? "Hide password" : "Show password"
+                  }
                 >
                   {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -261,7 +265,9 @@ function Settings() {
                   type="button"
                   className="password-toggle"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  aria-label={
+                    showConfirmPassword ? "Hide password" : "Show password"
+                  }
                 >
                   {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
