@@ -1,7 +1,10 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import "../styles/navbar.css";
 
 function Navbar() {
+  const { isAuthenticated, user, logout } = useAuth();
+
   return (
     <nav className="navbar" role="navigation" aria-label="Main navigation">
       <div className="navbar-container">
@@ -18,10 +21,10 @@ function Navbar() {
             <defs>
               {/* <!-- Aurora gradient for prism --> */}
               <linearGradient id="omnigen-aurora" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#7cff00" />
-                <stop offset="30%" stop-color="#00ffd1" />
-                <stop offset="65%" stop-color="#b44cff" />
-                <stop offset="100%" stop-color="#ff00ff" />
+                <stop offset="0%" stopColor="#7cff00" />
+                <stop offset="30%" stopColor="#00ffd1" />
+                <stop offset="65%" stopColor="#b44cff" />
+                <stop offset="100%" stopColor="#ff00ff" />
               </linearGradient>
 
               {/* <!-- Soft glow --> */}
@@ -47,9 +50,9 @@ function Navbar() {
                 x2="1"
                 y2="0"
               >
-                <stop offset="0%" stop-color="#e8edf5" />
-                <stop offset="40%" stop-color="#9ca3b8" />
-                <stop offset="100%" stop-color="#b44cff" />
+                <stop offset="0%" stopColor="#e8edf5" />
+                <stop offset="40%" stopColor="#9ca3b8" />
+                <stop offset="100%" stopColor="#b44cff" />
               </linearGradient>
             </defs>
 
@@ -78,10 +81,10 @@ function Navbar() {
               <text
                 x="0"
                 y="0"
-                font-family="'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif"
-                font-size="44"
-                font-weight="600"
-                letter-spacing="0.04em"
+                fontFamily="'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif"
+                fontSize="44"
+                fontWeight="600"
+                letterSpacing="0.04em"
                 fill="url(#omnigen-text-gradient)"
               >
                 OmniGen
@@ -91,12 +94,26 @@ function Navbar() {
         </Link>
 
         <div className="navbar-links">
-          <Link to="/login" className="navbar-link">
-            Login
-          </Link>
-          <Link to="/signup" className="navbar-link navbar-link-primary">
-            Get Started
-          </Link>
+          {isAuthenticated ? (
+            <>
+              <Link to="/dashboard" className="navbar-link">
+                Dashboard
+              </Link>
+              <span className="navbar-user">{user?.email}</span>
+              <button onClick={logout} className="navbar-link navbar-link-secondary">
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="navbar-link">
+                Login
+              </Link>
+              <Link to="/signup" className="navbar-link navbar-link-primary">
+                Get Started
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </nav>
