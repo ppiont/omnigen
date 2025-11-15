@@ -6,11 +6,15 @@ import Landing from "./pages/Landing.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
+import DashboardOverview from "./pages/DashboardOverview.jsx";
+import Create from "./pages/Create.jsx";
+import Videos from "./pages/Videos.jsx";
+import Settings from "./pages/Settings.jsx";
 
 function App() {
   const location = useLocation();
-  const showNavbar = location.pathname !== '/dashboard';
+  const appRoutes = ["/dashboard", "/create", "/videos", "/settings"];
+  const showNavbar = !appRoutes.includes(location.pathname);
 
   return (
     <ThemeProvider>
@@ -25,7 +29,31 @@ function App() {
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <DashboardOverview />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/create"
+            element={
+              <ProtectedRoute>
+                <Create />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/videos"
+            element={
+              <ProtectedRoute>
+                <Videos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
               </ProtectedRoute>
             }
           />
