@@ -13,6 +13,7 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	_ "github.com/omnigen/backend/docs" // Import generated docs
 	"github.com/omnigen/backend/internal/api"
+	"github.com/omnigen/backend/internal/auth"
 	"github.com/omnigen/backend/internal/aws"
 	"github.com/omnigen/backend/internal/repository"
 	"github.com/omnigen/backend/internal/service"
@@ -35,9 +36,10 @@ import (
 // @host localhost:8080
 // @BasePath /
 
-// @securityDefinitions.apikey ApiKeyAuth
+// @securityDefinitions.apikey BearerAuth
 // @in header
-// @name x-api-key
+// @name Authorization
+// @description JWT Bearer token authentication. Format: "Bearer {token}"
 
 func main() {
 	// Load configuration
@@ -82,6 +84,15 @@ func main() {
 		zapLogger,
 	)
 
+	usageRepo := repository.NewUsageRepository(
+		awsClients.DynamoDB,
+		cfg.UsageTable,
+		zapLogger,
+	)
+
+	// Initialize rate limiter (1-minute window)
+	rateLimiter := auth.NewRateLimiter(time.Minute, zapLogger)
+
 	// Initialize services
 	secretsService := service.NewSecretsService(
 		awsClients.SecretsManager,
@@ -113,6 +124,25 @@ func main() {
 		zapLogger,
 	)
 
+	// Initialize JWT validator
+	jwksURL := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
+		cfg.AWSRegion, cfg.CognitoUserPoolID)
+
+	jwtValidator := auth.NewJWTValidator(jwksURL, cfg.JWTIssuer, cfg.CognitoClientID, zapLogger)
+
+	// Fetch JWKS keys at startup
+	if err := jwtValidator.FetchJWKS(); err != nil {
+		zapLogger.Fatal("Failed to fetch JWKS", zap.Error(err))
+	}
+	zapLogger.Info("JWT validator initialized successfully")
+
+	// Cookie configuration for httpOnly tokens
+	cookieConfig := auth.CookieConfig{
+		Secure:   cfg.Environment == "production", // HTTPS only in production
+		Domain:   "",                               // Empty for same-origin cookies
+		SameSite: http.SameSiteStrictMode,         // Strict CSRF protection
+	}
+
 	// Initialize HTTP server
 	server := api.NewServer(&api.ServerConfig{
 		Port:             cfg.Port,
@@ -120,8 +150,14 @@ func main() {
 		Logger:           zapLogger,
 		JobRepo:          jobRepo,
 		S3Service:        s3Service,
+		UsageRepo:        usageRepo,
 		GeneratorService: generatorService,
 		APIKeys:          apiKeys,
+		JWTValidator:     jwtValidator,
+		RateLimiter:      rateLimiter,
+		CookieConfig:     cookieConfig,
+		CloudFrontDomain: cfg.CloudFrontDomain,
+		CognitoDomain:    cfg.CognitoDomain,
 		ReadTimeout:      time.Duration(cfg.ReadTimeout) * time.Second,
 		WriteTimeout:     time.Duration(cfg.WriteTimeout) * time.Second,
 	})
@@ -171,8 +207,18 @@ type Config struct {
 	AWSRegion          string `envconfig:"AWS_REGION" required:"true"`
 	AssetsBucket       string `envconfig:"ASSETS_BUCKET" required:"true"`
 	JobTable           string `envconfig:"JOB_TABLE" required:"true"`
+	UsageTable         string `envconfig:"USAGE_TABLE" required:"true"`
 	StepFunctionsARN   string `envconfig:"STEP_FUNCTIONS_ARN" required:"true"`
 	ReplicateSecretARN string `envconfig:"REPLICATE_SECRET_ARN" required:"true"`
+
+	// Authentication configuration
+	CognitoUserPoolID string `envconfig:"COGNITO_USER_POOL_ID" required:"true"`
+	CognitoClientID   string `envconfig:"COGNITO_CLIENT_ID" required:"true"`
+	JWTIssuer         string `envconfig:"JWT_ISSUER" required:"true"`
+	CognitoDomain     string `envconfig:"COGNITO_DOMAIN"` // Optional: for CORS
+
+	// Frontend configuration (optional, for CORS)
+	CloudFrontDomain string `envconfig:"CLOUDFRONT_DOMAIN"`
 }
 
 func loadConfig() (*Config, error) {
