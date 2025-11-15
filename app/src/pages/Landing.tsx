@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import FeatureCard from "../components/FeatureCard";
-import Logo from "../components/Logo";
 import "../styles/aurora.css";
 import "../styles/landing.css";
 
@@ -81,9 +80,6 @@ function Landing() {
               data-motion="rise"
               style={{ "--motion-delay": "0.05s" }}
             >
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: "2rem" }}>
-                <Logo size={120} />
-              </div>
               <p className="hero-kicker">AI Video Generation Platform</p>
               <h1 className="hero-title">Create Video Ads at Scale.</h1>
               <p className="hero-subtitle">
