@@ -103,18 +103,30 @@ deploy-ecs: docker-push ## Deploy new version to ECS (builds and pushes Docker i
 	@printf '${GREEN}ECS service update initiated!${NC}\n'
 	@printf 'Monitor deployment with: make logs-ecs\n'
 
-# Frontend deployment
+# Frontend commands
 
-deploy-frontend: ## Build and deploy frontend to S3 and invalidate CloudFront
-	@printf '${CYAN}Building and deploying frontend...${NC}\n'
+frontend-install: ## Install frontend dependencies with Bun
+	@printf '${CYAN}Installing frontend dependencies with Bun...${NC}\n'
+	@cd frontend && bun install
+	@printf '${GREEN}Dependencies installed successfully!${NC}\n'
+
+frontend-dev: ## Run frontend development server
+	@printf '${CYAN}Starting frontend dev server...${NC}\n'
+	@cd frontend && bun run dev
+
+frontend-build: ## Build frontend for production
+	@printf '${CYAN}Building frontend...${NC}\n'
+	@cd frontend && bun run build
+	@printf '${GREEN}Frontend built successfully!${NC}\n'
+
+deploy-frontend: frontend-build ## Build and deploy frontend to S3 and invalidate CloudFront
+	@printf '${CYAN}Deploying frontend...${NC}\n'
 	$(eval BUCKET := $(shell cd $(INFRA_DIR) && terraform output -raw frontend_bucket_name 2>/dev/null))
 	$(eval CF_ID := $(shell cd $(INFRA_DIR) && terraform output -raw cloudfront_distribution_id 2>/dev/null))
 	@if [ -z "$(BUCKET)" ] || [ -z "$(CF_ID)" ]; then \
 		printf '${RED}Error: Could not get bucket/CloudFront info. Run terraform apply first.${NC}\n'; \
 		exit 1; \
 	fi
-	@printf '${CYAN}Building frontend...${NC}\n'
-	@cd frontend && npm run build
 	@printf '${CYAN}Syncing to S3...${NC}\n'
 	@aws s3 sync frontend/dist/ s3://$(BUCKET)/ --delete
 	@printf '${CYAN}Invalidating CloudFront cache...${NC}\n'
