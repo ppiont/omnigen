@@ -62,14 +62,7 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
               <ChevronRight className="h-5 w-5" />
             </button>
           ) : (
-            <div
-              className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-2xl overflow-hidden',
-                isLight ? 'bg-primary/15' : 'bg-primary/25',
-              )}
-            >
-              <Logo size={40} className="flex-shrink-0" />
-            </div>
+            <Logo size={40} />
           )}
           {!isCollapsed && (
             <p className={cn('text-sm font-semibold', isLight ? 'text-light-text' : 'text-foreground')}>OmniGen Studio</p>
