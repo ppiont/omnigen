@@ -113,6 +113,7 @@ resource "aws_iam_policy" "terraform_operations" {
         Action = [
           "secretsmanager:DescribeSecret",
           "secretsmanager:GetSecretValue",
+          "secretsmanager:GetResourcePolicy",
           "secretsmanager:ListSecrets"
         ]
         Resource = "*"
