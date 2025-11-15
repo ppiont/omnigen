@@ -1,16 +1,22 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import "../styles/auth.css";
 
 function Signup() {
+  const navigate = useNavigate();
+  const { signup, confirmSignup, resendCode } = useAuth();
+  const [step, setStep] = useState('signup'); // 'signup' or 'verify'
   const [values, setValues] = useState({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
   });
+  const [verificationCode, setVerificationCode] = useState("");
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -46,7 +52,7 @@ function Signup() {
     return nextErrors;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const nextErrors = validate();
     setErrors(nextErrors);
@@ -56,11 +62,81 @@ function Signup() {
     }
 
     setIsSubmitting(true);
+    setErrors({});
+    setSuccessMessage("");
 
-    setTimeout(() => {
-      console.log("Signup submitted", values);
+    try {
+      const result = await signup(values.name, values.email, values.password);
+
+      if (result.success) {
+        if (result.userConfirmed) {
+          // User is auto-confirmed, redirect to login
+          setSuccessMessage(result.message);
+          setTimeout(() => navigate('/login'), 2000);
+        } else {
+          // Need email verification
+          setSuccessMessage(result.message);
+          setStep('verify');
+        }
+      } else {
+        setErrors({ form: result.error });
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      setErrors({ form: 'An unexpected error occurred. Please try again.' });
+    } finally {
       setIsSubmitting(false);
-    }, 1400);
+    }
+  };
+
+  const handleVerify = async (event) => {
+    event.preventDefault();
+
+    if (!verificationCode.trim()) {
+      setErrors({ code: 'Verification code is required' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrors({});
+    setSuccessMessage("");
+
+    try {
+      const result = await confirmSignup(values.email, verificationCode);
+
+      if (result.success) {
+        setSuccessMessage(result.message);
+        // Redirect to login after 2 seconds
+        setTimeout(() => navigate('/login'), 2000);
+      } else {
+        setErrors({ form: result.error });
+      }
+    } catch (error) {
+      console.error('Verification error:', error);
+      setErrors({ form: 'An unexpected error occurred. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setIsSubmitting(true);
+    setErrors({});
+    setSuccessMessage("");
+
+    try {
+      const result = await resendCode(values.email);
+      if (result.success) {
+        setSuccessMessage(result.message);
+      } else {
+        setErrors({ form: result.error });
+      }
+    } catch (error) {
+      console.error('Resend code error:', error);
+      setErrors({ form: 'Failed to resend code. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const fieldErrorId = (field) =>
@@ -86,10 +162,23 @@ function Signup() {
 
         <section className="auth-card accent-shift">
           <div className="auth-card-header">
-            <h1>Create account</h1>
-            <p>Spin up your ad studio and publish your first video today.</p>
+            <h1>{step === 'signup' ? 'Create account' : 'Verify your email'}</h1>
+            <p>{step === 'signup' ? 'Spin up your ad studio and publish your first video today.' : 'Enter the code we sent to your email'}</p>
           </div>
 
+          {successMessage && (
+            <div className="auth-success" role="alert">
+              {successMessage}
+            </div>
+          )}
+
+          {errors.form && (
+            <div className="auth-error" role="alert" aria-live="polite">
+              {errors.form}
+            </div>
+          )}
+
+          {step === 'signup' ? (
           <form className="auth-form" onSubmit={handleSubmit} noValidate>
             <div className="form-field">
               <label htmlFor="signup-name">Full name</label>
@@ -202,6 +291,61 @@ function Signup() {
               {isSubmitting ? "Creating…" : "Create account"}
             </button>
           </form>
+          ) : (
+          <form className="auth-form" onSubmit={handleVerify} noValidate>
+            <div className="form-field">
+              <label htmlFor="verification-code">Verification Code</label>
+              <input
+                id="verification-code"
+                name="code"
+                type="text"
+                className={`form-input ${errors.code ? "error" : ""}`}
+                value={verificationCode}
+                onChange={(e) => {
+                  setVerificationCode(e.target.value);
+                  setErrors((prev) => ({ ...prev, code: undefined }));
+                }}
+                placeholder="Enter 6-digit code"
+                aria-invalid={Boolean(errors.code)}
+                aria-describedby={errors.code ? "verification-code-error" : undefined}
+                required
+                disabled={isSubmitting}
+              />
+              {errors.code && (
+                <p className="input-error" id="verification-code-error" role="status">
+                  {errors.code}
+                </p>
+              )}
+            </div>
+
+            <div className="auth-meta">
+              <button
+                type="button"
+                onClick={handleResendCode}
+                disabled={isSubmitting}
+                className="auth-link-button"
+              >
+                Resend code
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep('signup')}
+                disabled={isSubmitting}
+                className="auth-link-button"
+              >
+                Back to signup
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              className="auth-submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Verifying…" : "Verify Email"}
+            </button>
+          </form>
+          )}
 
           <p className="auth-support">
             Already have an account? <Link to="/login">Sign in</Link>

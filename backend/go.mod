@@ -12,6 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sfn v1.39.13
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.11.0
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/swaggo/files v1.0.1

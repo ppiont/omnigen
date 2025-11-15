@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/omnigen/backend/internal/api/handlers"
 	"github.com/omnigen/backend/internal/api/middleware"
+	"github.com/omnigen/backend/internal/auth"
 	"github.com/omnigen/backend/internal/repository"
 	"github.com/omnigen/backend/internal/service"
 	swaggerFiles "github.com/swaggo/files"
@@ -16,15 +17,21 @@ import (
 
 // ServerConfig holds the server configuration
 type ServerConfig struct {
-	Port             string
-	Environment      string
-	Logger           *zap.Logger
-	JobRepo          *repository.DynamoDBRepository
-	S3Service        *repository.S3Service
-	GeneratorService *service.GeneratorService
-	APIKeys          []string
-	ReadTimeout      time.Duration
-	WriteTimeout     time.Duration
+	Port              string
+	Environment       string
+	Logger            *zap.Logger
+	JobRepo           *repository.DynamoDBRepository
+	S3Service         *repository.S3Service
+	UsageRepo         *repository.UsageRepository
+	GeneratorService  *service.GeneratorService
+	APIKeys           []string // Deprecated: Use JWTValidator instead
+	JWTValidator      *auth.JWTValidator
+	RateLimiter       *auth.RateLimiter
+	CookieConfig      auth.CookieConfig // Cookie configuration for httpOnly tokens
+	CloudFrontDomain  string // For CORS in production
+	CognitoDomain     string // Cognito hosted UI domain for CORS
+	ReadTimeout       time.Duration
+	WriteTimeout      time.Duration
 }
 
 // Server represents the HTTP server
@@ -49,11 +56,28 @@ func NewServer(config *ServerConfig) *Server {
 	router.Use(middleware.Logger(config.Logger))
 
 	// CORS configuration
+	// Build allowed origins list
+	allowedOrigins := []string{
+		"http://localhost:3000",      // Local development
+		"http://localhost:5173",      // Vite default port
+		"http://localhost:8080",      // Local backend
+	}
+
+	// Add CloudFront domain if in production
+	if config.Environment == "production" && config.CloudFrontDomain != "" {
+		allowedOrigins = append(allowedOrigins, "https://"+config.CloudFrontDomain)
+	}
+
+	// Add Cognito hosted UI domain for OAuth2 redirects
+	if config.CognitoDomain != "" {
+		allowedOrigins = append(allowedOrigins, config.CognitoDomain)
+	}
+
 	corsConfig := cors.Config{
-		AllowOrigins:     []string{"*"}, // Configure this for production
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "x-api-key"},
-		ExposeHeaders:    []string{"Content-Length"},
+		AllowOrigins:     allowedOrigins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}
@@ -91,9 +115,24 @@ func (s *Server) setupRoutes() {
 		s.router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	}
 
-	// API v1 routes (with authentication)
+	// Auth routes (no JWT middleware - used for login/logout)
+	authHandler := handlers.NewAuthHandler(
+		s.config.JWTValidator,
+		s.config.CookieConfig,
+		s.config.Logger,
+	)
+	authGroup := s.router.Group("/api/v1/auth")
+	{
+		authGroup.POST("/login", authHandler.Login)       // Exchange Cognito tokens for cookies
+		authGroup.POST("/refresh", authHandler.Refresh)   // Refresh token endpoint
+		authGroup.POST("/logout", authHandler.Logout)     // Clear cookies
+		authGroup.GET("/me", auth.JWTAuthMiddleware(s.config.JWTValidator, s.config.Logger), authHandler.Me) // Get current user (requires auth)
+	}
+
+	// API v1 routes (with JWT authentication and rate limiting)
 	v1 := s.router.Group("/api/v1")
-	v1.Use(middleware.Auth(s.config.APIKeys))
+	v1.Use(auth.JWTAuthMiddleware(s.config.JWTValidator, s.config.Logger))
+	v1.Use(auth.RateLimitMiddleware(s.config.RateLimiter, s.config.Logger))
 	{
 		// Initialize handlers
 		generateHandler := handlers.NewGenerateHandler(
@@ -107,8 +146,11 @@ func (s *Server) setupRoutes() {
 			s.config.Logger,
 		)
 
-		// Routes
-		v1.POST("/generate", generateHandler.Generate)
+		// Routes with quota enforcement for generation endpoint
+		v1.POST("/generate",
+			auth.QuotaEnforcementMiddleware(s.config.UsageRepo, s.config.Logger),
+			generateHandler.Generate,
+		)
 		v1.GET("/jobs/:id", jobsHandler.GetJob)
 		v1.GET("/jobs", jobsHandler.ListJobs)
 	}

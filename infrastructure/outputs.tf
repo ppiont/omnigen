@@ -133,6 +133,50 @@ output "lambda_composer_log_group_name" {
   value       = module.monitoring.lambda_composer_log_group_name
 }
 
+# Authentication (Cognito)
+output "auth_user_pool_id" {
+  description = "Cognito User Pool ID for frontend configuration"
+  value       = module.auth.user_pool_id
+}
+
+output "auth_client_id" {
+  description = "Cognito User Pool Client ID for frontend configuration"
+  value       = module.auth.client_id
+}
+
+output "auth_hosted_ui_domain" {
+  description = "Cognito Hosted UI domain URL"
+  value       = module.auth.hosted_ui_domain
+}
+
+output "auth_issuer_url" {
+  description = "JWT issuer URL for token validation"
+  value       = module.auth.issuer_url
+}
+
+output "auth_jwks_uri" {
+  description = "JWKS URI for JWT validation"
+  value       = module.auth.jwks_uri
+}
+
+# Frontend Environment Variables
+output "frontend_env_vars" {
+  description = "Environment variables for frontend .env file"
+  value       = <<-EOT
+
+    📋 Frontend Environment Variables (.env)
+    Copy these values to frontend/.env:
+
+    VITE_API_URL=http://${module.loadbalancer.alb_dns_name}
+    VITE_COGNITO_USER_POOL_ID=${module.auth.user_pool_id}
+    VITE_COGNITO_CLIENT_ID=${module.auth.client_id}
+    VITE_COGNITO_DOMAIN=${module.auth.hosted_ui_domain}
+
+    For production, replace VITE_API_URL with your CloudFront domain:
+    VITE_API_URL=https://${module.cdn.cloudfront_domain_name}
+  EOT
+}
+
 # Quick Start Commands
 output "quick_start_commands" {
   description = "Quick start commands for deployment"

@@ -116,7 +116,20 @@ frontend-dev: ## Run frontend development server
 
 frontend-build: ## Build frontend for production
 	@printf '${CYAN}Building frontend...${NC}\n'
-	@cd frontend && bun run build
+	$(eval CF_DOMAIN := $(shell cd $(INFRA_DIR) && terraform output -raw cloudfront_domain_name 2>/dev/null))
+	$(eval USER_POOL := $(shell cd $(INFRA_DIR) && terraform output -raw auth_user_pool_id 2>/dev/null))
+	$(eval CLIENT_ID := $(shell cd $(INFRA_DIR) && terraform output -raw auth_client_id 2>/dev/null))
+	$(eval COGNITO_DOMAIN := $(shell cd $(INFRA_DIR) && terraform output -raw auth_hosted_ui_domain 2>/dev/null))
+	@if [ -z "$(CF_DOMAIN)" ]; then \
+		printf '${RED}Error: Could not get CloudFront domain. Run terraform apply first.${NC}\n'; \
+		exit 1; \
+	fi
+	@cd frontend && \
+		VITE_API_URL=https://$(CF_DOMAIN) \
+		VITE_COGNITO_USER_POOL_ID=$(USER_POOL) \
+		VITE_COGNITO_CLIENT_ID=$(CLIENT_ID) \
+		VITE_COGNITO_DOMAIN=$(COGNITO_DOMAIN) \
+		bun run build
 	@printf '${GREEN}Frontend built successfully!${NC}\n'
 
 deploy-frontend: frontend-build ## Build and deploy frontend to S3 and invalidate CloudFront

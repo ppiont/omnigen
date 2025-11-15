@@ -40,12 +40,36 @@ resource "aws_ecs_task_definition" "api" {
           value = var.dynamodb_table_name
         },
         {
+          name  = "USAGE_TABLE"
+          value = var.dynamodb_usage_table_name
+        },
+        {
           name  = "STEP_FUNCTIONS_ARN"
           value = var.step_functions_arn
         },
         {
           name  = "REPLICATE_SECRET_ARN"
           value = var.replicate_secret_arn
+        },
+        {
+          name  = "COGNITO_USER_POOL_ID"
+          value = var.cognito_user_pool_id
+        },
+        {
+          name  = "COGNITO_CLIENT_ID"
+          value = var.cognito_client_id
+        },
+        {
+          name  = "JWT_ISSUER"
+          value = var.jwt_issuer
+        },
+        {
+          name  = "COGNITO_DOMAIN"
+          value = var.cognito_domain
+        },
+        {
+          name  = "CLOUDFRONT_DOMAIN"
+          value = var.cloudfront_domain
         }
       ]
 

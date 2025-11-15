@@ -85,7 +85,7 @@ func (g *GeneratorService) GenerateVideo(ctx context.Context, req *domain.Genera
 
 	job := &domain.Job{
 		JobID:       jobID,
-		UserID:      "system", // TODO: Get from auth context
+		UserID:      req.UserID,
 		Status:      domain.StatusPending,
 		Prompt:      req.Prompt,
 		Duration:    req.Duration,
