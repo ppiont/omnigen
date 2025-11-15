@@ -30,7 +30,7 @@ concurrency:
 
 env:
   AWS_REGION: us-east-1
-  NODE_VERSION: '20'
+  BUN_VERSION: 'latest'
   TF_VERSION: 1.13.5
 
 jobs:
@@ -44,21 +44,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Configure AWS credentials (for Terraform outputs)
         if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -88,7 +86,7 @@ jobs:
 
       - name: Build (PR - with mock env vars)
         if: github.event_name == 'pull_request'
-        run: npm run build
+        run: bun run build
         env:
           VITE_API_URL: https://example.cloudfront.net
           VITE_COGNITO_USER_POOL_ID: us-east-1_XXXXXXXXX
@@ -97,7 +95,7 @@ jobs:
 
       - name: Build (Production - with real env vars)
         if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
-        run: npm run build
+        run: bun run build
         env:
           VITE_API_URL: https://${{ steps.tf-outputs.outputs.cf_domain }}
           VITE_COGNITO_USER_POOL_ID: ${{ steps.tf-outputs.outputs.user_pool }}
@@ -106,7 +104,7 @@ jobs:
 
       - name: Upload build artifacts
         if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: frontend-dist
           path: frontend/dist/
@@ -121,10 +119,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -148,7 +146,7 @@ jobs:
           echo "cf_domain=$CF_DOMAIN" >> $GITHUB_OUTPUT
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: frontend-dist
           path: frontend/dist/
