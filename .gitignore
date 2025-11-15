@@ -1,6 +1,9 @@
 .env
 .env.local
 .env*
+.env
+.env.local
+.env*
 .human/
 .DS_Store
 CLAUDE.md
@@ -37,4 +40,7 @@ lerna-debug.log*
 *.sln
 *.sw?
 
+AI Video Generation Pipeline.pdf
+.DS_Store
+CLAUDE.md
 AI Video Generation Pipeline.pdf
