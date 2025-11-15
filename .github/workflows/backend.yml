@@ -12,19 +12,32 @@ on:
       - 'backend/**'
       - '.github/workflows/backend.yml'
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Infrastructure (Terraform)"]
+    types:
+      - completed
+    branches:
+      - master
 
 permissions:
   id-token: write
   contents: read
 
+# Prevent concurrent deployments
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   AWS_REGION: us-east-1
   GO_VERSION: '1.25.4'
+  TF_VERSION: 1.13.5
 
 jobs:
   build-test:
     name: Build and Test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: backend
@@ -51,8 +64,9 @@ jobs:
   docker-build-push:
     name: Docker Build and Push
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: build-test
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
     outputs:
       image_uri: ${{ steps.build.outputs.image_uri }}
 
@@ -66,18 +80,18 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
       - name: Get Terraform outputs
         id: tf-outputs
         working-directory: infrastructure
         run: |
-          # Install Terraform
-          wget -q https://releases.hashicorp.com/terraform/1.13.5/terraform_1.13.5_linux_amd64.zip
-          unzip -q terraform_1.13.5_linux_amd64.zip
-          chmod +x terraform
-
-          # Initialize and get outputs
-          ./terraform init -backend=true
-          ECR_URL=$(./terraform output -raw ecr_repository_url)
+          terraform init -backend=true
+          ECR_URL=$(terraform output -raw ecr_repository_url)
           echo "ecr_url=$ECR_URL" >> $GITHUB_OUTPUT
 
       - name: Login to Amazon ECR
@@ -117,8 +131,9 @@ jobs:
   deploy-ecs:
     name: Deploy to ECS
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: docker-build-push
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
 
     steps:
       - name: Checkout code
@@ -130,19 +145,19 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
       - name: Get Terraform outputs
         id: tf-outputs
         working-directory: infrastructure
         run: |
-          # Install Terraform
-          wget -q https://releases.hashicorp.com/terraform/1.13.5/terraform_1.13.5_linux_amd64.zip
-          unzip -q terraform_1.13.5_linux_amd64.zip
-          chmod +x terraform
-
-          # Initialize and get outputs
-          ./terraform init -backend=true
-          CLUSTER=$(./terraform output -raw ecs_cluster_name)
-          SERVICE=$(./terraform output -raw ecs_service_name)
+          terraform init -backend=true
+          CLUSTER=$(terraform output -raw ecs_cluster_name)
+          SERVICE=$(terraform output -raw ecs_service_name)
           echo "cluster=$CLUSTER" >> $GITHUB_OUTPUT
           echo "service=$SERVICE" >> $GITHUB_OUTPUT
 

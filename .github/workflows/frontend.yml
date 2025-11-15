@@ -12,19 +12,32 @@ on:
       - 'frontend/**'
       - '.github/workflows/frontend.yml'
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Infrastructure (Terraform)"]
+    types:
+      - completed
+    branches:
+      - master
 
 permissions:
   id-token: write
   contents: read
 
+# Prevent concurrent deployments
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   AWS_REGION: us-east-1
   NODE_VERSION: '20'
+  TF_VERSION: 1.13.5
 
 jobs:
   build:
     name: Build Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -43,35 +56,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Configure AWS credentials (for Terraform outputs)
+        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
       - name: Get Terraform outputs (for production build)
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
         id: tf-outputs
+        working-directory: infrastructure
         run: |
-          # Configure AWS for Terraform outputs
-          pip install awscli --quiet
-          export AWS_DEFAULT_REGION=${{ env.AWS_REGION }}
-
-          # Install Terraform
-          cd ../infrastructure
-          wget -q https://releases.hashicorp.com/terraform/1.13.5/terraform_1.13.5_linux_amd64.zip
-          unzip -q terraform_1.13.5_linux_amd64.zip
-          chmod +x terraform
-
-          # Get outputs
-          ./terraform init -backend=true
-          CF_DOMAIN=$(./terraform output -raw cloudfront_domain_name)
-          USER_POOL=$(./terraform output -raw auth_user_pool_id)
-          CLIENT_ID=$(./terraform output -raw auth_client_id)
-          COGNITO_DOMAIN=$(./terraform output -raw auth_hosted_ui_domain)
+          terraform init -backend=true
+          CF_DOMAIN=$(terraform output -raw cloudfront_domain_name)
+          USER_POOL=$(terraform output -raw auth_user_pool_id)
+          CLIENT_ID=$(terraform output -raw auth_client_id)
+          COGNITO_DOMAIN=$(terraform output -raw auth_hosted_ui_domain)
 
           echo "cf_domain=$CF_DOMAIN" >> $GITHUB_OUTPUT
           echo "user_pool=$USER_POOL" >> $GITHUB_OUTPUT
           echo "client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
           echo "cognito_domain=$COGNITO_DOMAIN" >> $GITHUB_OUTPUT
-        env:
-          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
 
       - name: Build (PR - with mock env vars)
         if: github.event_name == 'pull_request'
@@ -83,7 +96,7 @@ jobs:
           VITE_COGNITO_DOMAIN: https://mock.auth.us-east-1.amazoncognito.com
 
       - name: Build (Production - with real env vars)
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
         run: npm run build
         env:
           VITE_API_URL: https://${{ steps.tf-outputs.outputs.cf_domain }}
@@ -92,7 +105,7 @@ jobs:
           VITE_COGNITO_DOMAIN: ${{ steps.tf-outputs.outputs.cognito_domain }}
 
       - name: Upload build artifacts
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
@@ -102,8 +115,9 @@ jobs:
   deploy:
     name: Deploy to S3 and CloudFront
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: build
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
 
     steps:
       - name: Checkout code
@@ -115,20 +129,20 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
       - name: Get Terraform outputs
         id: tf-outputs
         working-directory: infrastructure
         run: |
-          # Install Terraform
-          wget -q https://releases.hashicorp.com/terraform/1.13.5/terraform_1.13.5_linux_amd64.zip
-          unzip -q terraform_1.13.5_linux_amd64.zip
-          chmod +x terraform
-
-          # Initialize and get outputs
-          ./terraform init -backend=true
-          BUCKET=$(./terraform output -raw frontend_bucket_name)
-          CF_ID=$(./terraform output -raw cloudfront_distribution_id)
-          CF_DOMAIN=$(./terraform output -raw cloudfront_domain_name)
+          terraform init -backend=true
+          BUCKET=$(terraform output -raw frontend_bucket_name)
+          CF_ID=$(terraform output -raw cloudfront_distribution_id)
+          CF_DOMAIN=$(terraform output -raw cloudfront_domain_name)
           echo "bucket=$BUCKET" >> $GITHUB_OUTPUT
           echo "cf_id=$CF_ID" >> $GITHUB_OUTPUT
           echo "cf_domain=$CF_DOMAIN" >> $GITHUB_OUTPUT
@@ -141,6 +155,7 @@ jobs:
 
       - name: Sync to S3
         run: |
+          # Upload all files except index.html with long-term caching
           aws s3 sync frontend/dist/ s3://${{ steps.tf-outputs.outputs.bucket }}/ \
             --delete \
             --cache-control "public, max-age=31536000, immutable" \
