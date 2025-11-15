@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Check } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import PasswordStrength from "../components/PasswordStrength";
 import "../styles/auth.css";
 
 function Signup() {
@@ -15,6 +17,7 @@ function Signup() {
   });
   const [verificationCode, setVerificationCode] = useState("");
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -22,6 +25,61 @@ function Signup() {
     const { name, value } = event.target;
     setValues((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
+  };
+
+  const handleBlur = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    validateField(field);
+  };
+
+  const validateField = (field) => {
+    const nextErrors = { ...errors };
+
+    switch (field) {
+      case "name":
+        if (!values.name.trim()) {
+          nextErrors.name = "Name is required.";
+        } else {
+          delete nextErrors.name;
+        }
+        break;
+
+      case "email":
+        if (!values.email.trim()) {
+          nextErrors.email = "Email is required.";
+        } else if (!/^\S+@\S+\.\S+$/.test(values.email)) {
+          nextErrors.email = "Enter a valid email address.";
+        } else {
+          delete nextErrors.email;
+        }
+        break;
+
+      case "password":
+        if (!values.password.trim()) {
+          nextErrors.password = "Password is required.";
+        } else if (values.password.length < 8) {
+          nextErrors.password = "Password must be at least 8 characters.";
+        } else {
+          delete nextErrors.password;
+        }
+        break;
+
+      case "confirmPassword":
+        if (!values.confirmPassword.trim()) {
+          nextErrors.confirmPassword = "Confirm your password.";
+        } else if (values.confirmPassword !== values.password) {
+          nextErrors.confirmPassword = "Passwords do not match.";
+        } else {
+          delete nextErrors.confirmPassword;
+        }
+        break;
+    }
+
+    setErrors(nextErrors);
+  };
+
+  const isFieldValid = (field) => {
+    return touched[field] && values[field] && !errors[field];
   };
 
   const validate = () => {
@@ -149,14 +207,14 @@ function Signup() {
           <span className="brand-badge">Omnigen</span>
           <h1>Start generating video ads in under 60 seconds.</h1>
           <p>
-            Launch the Ad Creative Pipeline, upload your product details, and
-            let Omnigen handle shot lists, captions, and aspect ratios with
-            aurora-grade polish.
+            Join the Ad Creative Pipeline and create production-ready video ads
+            with multi-format exports, brand-consistent styling, and
+            professional quality every time.
           </p>
           <ul className="brand-points">
-            <li>Free trial with 5 video generations</li>
-            <li>No credit card required to start</li>
-            <li>Export 16:9 · 9:16 · 1:1 instantly</li>
+            <li>10K+ videos generated for leading brands</li>
+            <li>98% success rate across all renders</li>
+            <li>16:9 · 9:16 · 1:1 outputs in one pass</li>
           </ul>
         </section>
 
@@ -186,14 +244,18 @@ function Signup() {
                 id="signup-name"
                 name="name"
                 type="text"
-                className={`form-input ${errors.name ? "error" : ""}`}
+                className={`form-input ${errors.name ? "error" : ""} ${isFieldValid("name") ? "success" : ""}`}
                 value={values.name}
                 onChange={handleChange}
+                onBlur={() => handleBlur("name")}
                 autoComplete="name"
                 aria-invalid={Boolean(errors.name)}
                 aria-describedby={fieldErrorId("name")}
                 required
               />
+              {isFieldValid("name") && (
+                <Check size={18} className="field-icon" />
+              )}
               {errors.name && (
                 <p className="input-error" id="signup-name-error" role="status">
                   {errors.name}
@@ -207,14 +269,18 @@ function Signup() {
                 id="signup-email"
                 name="email"
                 type="email"
-                className={`form-input ${errors.email ? "error" : ""}`}
+                className={`form-input ${errors.email ? "error" : ""} ${isFieldValid("email") ? "success" : ""}`}
                 value={values.email}
                 onChange={handleChange}
+                onBlur={() => handleBlur("email")}
                 autoComplete="email"
                 aria-invalid={Boolean(errors.email)}
                 aria-describedby={fieldErrorId("email")}
                 required
               />
+              {isFieldValid("email") && (
+                <Check size={18} className="field-icon" />
+              )}
               {errors.email && (
                 <p
                   className="input-error"
@@ -232,14 +298,18 @@ function Signup() {
                 id="signup-password"
                 name="password"
                 type="password"
-                className={`form-input ${errors.password ? "error" : ""}`}
+                className={`form-input ${errors.password ? "error" : ""} ${isFieldValid("password") ? "success" : ""}`}
                 value={values.password}
                 onChange={handleChange}
+                onBlur={() => handleBlur("password")}
                 autoComplete="new-password"
                 aria-invalid={Boolean(errors.password)}
                 aria-describedby={fieldErrorId("password")}
                 required
               />
+              {isFieldValid("password") && (
+                <Check size={18} className="field-icon" />
+              )}
               {errors.password && (
                 <p
                   className="input-error"
@@ -249,6 +319,7 @@ function Signup() {
                   {errors.password}
                 </p>
               )}
+              {touched.password && <PasswordStrength password={values.password} />}
             </div>
 
             <div className="form-field">
@@ -259,14 +330,18 @@ function Signup() {
                 type="password"
                 className={`form-input ${
                   errors.confirmPassword ? "error" : ""
-                }`}
+                } ${isFieldValid("confirmPassword") ? "success" : ""}`}
                 value={values.confirmPassword}
                 onChange={handleChange}
+                onBlur={() => handleBlur("confirmPassword")}
                 autoComplete="new-password"
                 aria-invalid={Boolean(errors.confirmPassword)}
                 aria-describedby={fieldErrorId("confirmPassword")}
                 required
               />
+              {isFieldValid("confirmPassword") && (
+                <Check size={18} className="field-icon" />
+              )}
               {errors.confirmPassword && (
                 <p
                   className="input-error"
