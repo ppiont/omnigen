@@ -14,17 +14,23 @@ import (
 // GenerateHandler handles video generation requests
 type GenerateHandler struct {
 	generatorService *service.GeneratorService
+	mockService      *service.MockService
 	logger           *zap.Logger
+	mockMode         bool
 }
 
 // NewGenerateHandler creates a new generate handler
 func NewGenerateHandler(
 	generatorService *service.GeneratorService,
+	mockService *service.MockService,
 	logger *zap.Logger,
+	mockMode bool,
 ) *GenerateHandler {
 	return &GenerateHandler{
 		generatorService: generatorService,
+		mockService:      mockService,
 		logger:           logger,
+		mockMode:         mockMode,
 	}
 }
 
@@ -74,48 +80,73 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 	// Get trace ID from context
 	traceID, _ := c.Get("trace_id")
 
-	// Get user ID from auth context
-	userID := auth.MustGetUserID(c)
+	// Get user ID from auth context (or use mock user ID in mock mode)
+	var userID string
+	if h.mockMode {
+		userID = "mock-user-local-dev"
+	} else {
+		userID = auth.MustGetUserID(c)
+	}
 
 	h.logger.Info("Generating video",
 		zap.String("trace_id", traceID.(string)),
 		zap.String("user_id", userID),
 		zap.String("prompt", req.Prompt),
 		zap.Int("duration", req.Duration),
+		zap.Bool("mock_mode", h.mockMode),
 	)
 
-	// Create domain request
-	domainReq := &domain.GenerateRequest{
-		UserID:      userID,
-		Prompt:      req.Prompt,
-		Duration:    req.Duration,
-		AspectRatio: req.AspectRatio,
-		Style:       req.Style,
-	}
+	var job *domain.Job
+	var err error
 
-	// Generate video
-	job, err := h.generatorService.GenerateVideo(c.Request.Context(), domainReq)
-	if err != nil {
-		h.logger.Error("Failed to generate video",
+	// Use mock service in mock mode, otherwise use real generation
+	if h.mockMode {
+		h.logger.Info("Using mock service for video generation",
 			zap.String("trace_id", traceID.(string)),
-			zap.Error(err),
+			zap.String("user_id", userID),
 		)
-
-		// Handle different error types
-		if apiErr, ok := err.(*errors.APIError); ok {
-			c.JSON(apiErr.Status, errors.ErrorResponse{Error: apiErr})
-			return
+		job = h.mockService.CreateMockJob(userID, req.Prompt, req.Duration, req.AspectRatio)
+	} else {
+		// Create domain request
+		domainReq := &domain.GenerateRequest{
+			UserID:      userID,
+			Prompt:      req.Prompt,
+			Duration:    req.Duration,
+			AspectRatio: req.AspectRatio,
+			Style:       req.Style,
 		}
 
-		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
-			Error: errors.ErrInternalServer,
-		})
-		return
+		// Generate video using real pipeline
+		job, err = h.generatorService.GenerateVideo(c.Request.Context(), domainReq)
+		if err != nil {
+			h.logger.Error("Failed to generate video",
+				zap.String("trace_id", traceID.(string)),
+				zap.Error(err),
+			)
+
+			// Handle different error types
+			if apiErr, ok := err.(*errors.APIError); ok {
+				c.JSON(apiErr.Status, errors.ErrorResponse{Error: apiErr})
+				return
+			}
+
+			c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
+				Error: errors.ErrInternalServer,
+			})
+			return
+		}
 	}
 
-	// Estimate completion time (based on duration)
-	// 15s video ~= 3min, 30s ~= 5min, 60s ~= 10min
-	estimatedSeconds := req.Duration * 10
+	// Estimate completion time
+	var estimatedSeconds int
+	if h.mockMode {
+		// Mock mode: 180 seconds (3 minutes) fixed time
+		estimatedSeconds = 180
+	} else {
+		// Real mode: based on video duration
+		// 15s video ~= 3min, 30s ~= 5min, 60s ~= 10min
+		estimatedSeconds = req.Duration * 10
+	}
 
 	response := GenerateResponse{
 		JobID:               job.JobID,
