@@ -59,6 +59,7 @@ func main() {
 		zap.String("environment", cfg.Environment),
 		zap.String("port", cfg.Port),
 		zap.String("aws_region", cfg.AWSRegion),
+		zap.Bool("mock_mode", cfg.MockMode),
 	)
 
 	// Initialize AWS SDK configuration
@@ -124,17 +125,28 @@ func main() {
 		zapLogger,
 	)
 
+	// Initialize mock service (always available, but only used when MOCK_MODE=true)
+	mockService := service.NewMockService()
+
 	// Initialize JWT validator
-	jwksURL := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
-		cfg.AWSRegion, cfg.CognitoUserPoolID)
+	var jwtValidator *auth.JWTValidator
 
-	jwtValidator := auth.NewJWTValidator(jwksURL, cfg.JWTIssuer, cfg.CognitoClientID, zapLogger)
+	if cfg.MockMode {
+		zapLogger.Info("Mock mode enabled - JWT validation will be skipped")
+		// Create a nil validator - middleware will be skipped entirely in mock mode
+		jwtValidator = nil
+	} else {
+		jwksURL := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
+			cfg.AWSRegion, cfg.CognitoUserPoolID)
 
-	// Fetch JWKS keys at startup
-	if err := jwtValidator.FetchJWKS(); err != nil {
-		zapLogger.Fatal("Failed to fetch JWKS", zap.Error(err))
+		jwtValidator = auth.NewJWTValidator(jwksURL, cfg.JWTIssuer, cfg.CognitoClientID, zapLogger)
+
+		// Fetch JWKS keys at startup
+		if err := jwtValidator.FetchJWKS(); err != nil {
+			zapLogger.Fatal("Failed to fetch JWKS", zap.Error(err))
+		}
+		zapLogger.Info("JWT validator initialized successfully")
 	}
-	zapLogger.Info("JWT validator initialized successfully")
 
 	// Cookie configuration for httpOnly tokens
 	cookieConfig := auth.CookieConfig{
@@ -147,11 +159,13 @@ func main() {
 	server := api.NewServer(&api.ServerConfig{
 		Port:             cfg.Port,
 		Environment:      cfg.Environment,
+		MockMode:         cfg.MockMode,
 		Logger:           zapLogger,
 		JobRepo:          jobRepo,
 		S3Service:        s3Service,
 		UsageRepo:        usageRepo,
 		GeneratorService: generatorService,
+		MockService:      mockService,
 		APIKeys:          apiKeys,
 		JWTValidator:     jwtValidator,
 		RateLimiter:      rateLimiter,
@@ -202,6 +216,7 @@ type Config struct {
 	Environment  string `envconfig:"ENVIRONMENT" default:"production"`
 	ReadTimeout  int    `envconfig:"READ_TIMEOUT" default:"30"`
 	WriteTimeout int    `envconfig:"WRITE_TIMEOUT" default:"30"`
+	MockMode     bool   `envconfig:"MOCK_MODE" default:"true"` // Enable mock responses for frontend development
 
 	// AWS configuration
 	AWSRegion          string `envconfig:"AWS_REGION" required:"true"`

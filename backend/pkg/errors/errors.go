@@ -82,6 +82,19 @@ var (
 		Status:  http.StatusNotFound,
 	}
 
+	ErrNotFound = &APIError{
+		Code:    "NOT_FOUND",
+		Message: "Resource not found",
+		Status:  http.StatusNotFound,
+	}
+
+	// Not implemented (501)
+	ErrNotImplemented = &APIError{
+		Code:    "NOT_IMPLEMENTED",
+		Message: "Feature not yet implemented",
+		Status:  http.StatusNotImplemented,
+	}
+
 	// Server errors (500)
 	ErrInternalServer = &APIError{
 		Code:    "INTERNAL_SERVER_ERROR",
