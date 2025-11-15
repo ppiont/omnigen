@@ -5,7 +5,6 @@ import {
   Film,
   Menu,
   Settings,
-  Sparkles,
   Sun,
   Moon,
   User,
@@ -16,6 +15,7 @@ import { PropsWithChildren, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useTheme } from '../../context/ThemeContext'
 import { cn } from '../../lib/cn'
+import Logo from '../Logo'
 
 type PlanTier = 'free' | 'pro' | 'max'
 
@@ -26,14 +26,13 @@ type DashboardLayoutProps = PropsWithChildren<{
 }>
 
 const navItems = [
-  { label: 'Generate', icon: Sparkles, to: '/dashboard', active: true },
+  { label: 'Generate', icon: Film, to: '/dashboard', active: true },
   { label: 'My Videos', icon: Film, badge: 'Soon', disabled: true },
 ]
 
 export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: DashboardLayoutProps) => {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const { theme, toggleTheme } = useTheme()
 
   const sidebarWidth = useMemo(() => (isCollapsed ? 72 : 256), [isCollapsed])
@@ -44,19 +43,6 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
     max: 'Max plan',
   }
 
-  const userMenuRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!isUserMenuOpen) return
-    const handler = (event: MouseEvent) => {
-      if (!userMenuRef.current?.contains(event.target as Node)) {
-        setIsUserMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [isUserMenuOpen])
-
   const SidebarContent = (
     <div className="relative flex h-full flex-col">
       <div className="flex items-center justify-between px-5 py-4">
@@ -66,7 +52,7 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
               type="button"
               onClick={() => setIsCollapsed(false)}
               className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-full border text-text-secondary transition hover:scale-105',
+                'flex h-10 w-10 items-center justify-center rounded-full border text-foreground-secondary transition hover:scale-105',
                 isLight
                   ? 'border-light-border bg-light-surface text-light-text hover:bg-light-accent'
                   : 'border-bg-highlight bg-bg-elevated/80',
@@ -76,17 +62,10 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
               <ChevronRight className="h-5 w-5" />
             </button>
           ) : (
-            <div
-              className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-2xl text-primary',
-                isLight ? 'bg-primary/15' : 'bg-primary/25',
-              )}
-            >
-              <Sparkles className="h-5 w-5" />
-            </div>
+            <Logo size={40} />
           )}
           {!isCollapsed && (
-            <p className={cn('text-sm font-semibold', isLight ? 'text-light-text' : 'text-text-primary')}>OmniGen Studio</p>
+            <p className={cn('text-sm font-semibold', isLight ? 'text-light-text' : 'text-foreground')}>OmniGen Studio</p>
           )}
         </div>
         {!isCollapsed && (
@@ -97,7 +76,7 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
               'hidden rounded-full border p-2 transition hover:scale-105 md:inline-flex',
               isLight
                 ? 'border-light-border bg-light-surface text-light-text hover:bg-light-accent'
-                : 'border-bg-highlight bg-bg-elevated/60 text-text-secondary hover:text-text-primary',
+                : 'border-bg-highlight bg-bg-elevated/60 text-foreground-secondary hover:text-foreground',
             )}
             aria-label="Collapse sidebar"
           >
@@ -120,8 +99,8 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
                       ? 'bg-gradient-to-r from-primary/20 to-secondary/15 text-primary'
                       : 'text-light-text-secondary hover:text-light-text hover:bg-light-accent'
                     : isActive
-                      ? 'bg-gradient-to-r from-primary/30 to-secondary/20 text-text-primary'
-                      : 'text-text-secondary hover:text-text-primary',
+                      ? 'bg-gradient-to-r from-primary/30 to-secondary/20 text-foreground'
+                      : 'text-foreground-secondary hover:text-foreground',
                 )
               }
               onClick={() => setIsMobileOpen(false)}
@@ -149,7 +128,7 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
               disabled
               className={cn(
                 'group flex items-center rounded-2xl px-3 py-3 text-sm font-medium transition',
-                isLight ? 'text-light-text-secondary/50' : 'text-text-muted',
+                isLight ? 'text-light-text-secondary/50' : 'text-foreground-muted',
               )}
             >
               <motion.span whileHover={{ rotate: 4, scale: 1.05 }}>
@@ -168,7 +147,7 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
                       <span
                         className={cn(
                           'rounded-full px-2 py-0.5 text-xs font-semibold',
-                          isLight ? 'bg-light-accent text-light-text-secondary' : 'bg-bg-highlight text-text-secondary',
+                          isLight ? 'bg-light-accent text-light-text-secondary' : 'bg-bg-highlight text-foreground-secondary',
                         )}
                       >
                         {item.badge}
@@ -182,6 +161,73 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
         )}
       </nav>
 
+      {/* Profile section at bottom */}
+      <div className="mt-auto border-t border-bg-highlight p-3">
+        {!isCollapsed && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 rounded-2xl bg-bg-highlight/50 p-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20">
+                <UserCircle2 className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <p className="truncate text-sm font-semibold text-foreground">Akhil Patel</p>
+                <p className="truncate text-xs text-foreground-muted">{planLabel[plan]}</p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition',
+                  isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
+                )}
+              >
+                <User className="h-4 w-4" />
+                <span>View profile</span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition',
+                  isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
+                )}
+              >
+                {isLight ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                <span>{isLight ? 'Switch to dark mode' : 'Switch to light mode'}</span>
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition',
+                  isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
+                )}
+              >
+                <CreditCard className="h-4 w-4" />
+                <span>Manage subscription</span>
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition',
+                  isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
+                )}
+              >
+                <Settings className="h-4 w-4" />
+                <span>Settings</span>
+              </button>
+            </div>
+          </div>
+        )}
+        {isCollapsed && (
+          <button
+            type="button"
+            className="flex w-full items-center justify-center rounded-full bg-primary/20 p-2"
+          >
+            <UserCircle2 className="h-6 w-6 text-primary" />
+          </button>
+        )}
+      </div>
     </div>
   )
 
@@ -189,7 +235,7 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
     <div
       className={cn(
         'flex min-h-screen flex-col transition-colors md:flex-row',
-        isLight ? 'bg-light-bg text-light-text' : 'bg-background text-text-primary',
+        isLight ? 'bg-light-bg text-light-text' : 'bg-background text-foreground',
       )}
     >
       <aside className="hidden md:block">
@@ -224,7 +270,7 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
               <button
                 type="button"
                 onClick={() => setIsMobileOpen(false)}
-                className="absolute right-4 top-4 z-10 rounded-full border border-bg-highlight bg-bg-elevated/60 p-2 text-text-secondary transition hover:text-text-primary"
+                className="absolute right-4 top-4 z-10 rounded-full border border-bg-highlight bg-bg-elevated/60 p-2 text-foreground-secondary transition hover:text-foreground"
                 aria-label="Close sidebar"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -239,7 +285,7 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
         <header
           className={cn(
             'flex min-h-16 items-center justify-between border-b px-4 py-3 text-sm transition-all sm:px-6 sm:text-base lg:px-8',
-            isLight ? 'border-light-border bg-light-surface/80 text-light-text' : 'border-bg-highlight bg-bg-elevated/80 text-text-primary',
+            isLight ? 'border-light-border bg-light-surface/80 text-light-text' : 'border-bg-highlight bg-bg-elevated/80 text-foreground',
           )}
         >
           <div className="flex items-center gap-3">
@@ -249,7 +295,7 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
                 'rounded-full border p-2 transition md:hidden',
                 isLight
                   ? 'border-light-border bg-light-accent text-light-text hover:bg-secondary/10'
-                  : 'border-bg-highlight bg-bg-highlight text-text-secondary hover:text-text-primary',
+                  : 'border-bg-highlight bg-bg-highlight text-foreground-secondary hover:text-foreground',
               )}
               onClick={() => setIsMobileOpen(true)}
             >
@@ -259,14 +305,14 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
               <p
                 className={cn(
                   'text-xs uppercase tracking-wide',
-                  isLight ? 'text-light-text-secondary' : 'text-text-muted',
+                  isLight ? 'text-light-text-secondary' : 'text-foreground-muted',
                 )}
               >
                 Dashboard
               </p>
-              <h1 className={cn('text-lg font-semibold', isLight ? 'text-light-text' : 'text-text-primary')}>{title}</h1>
+              <h1 className={cn('text-lg font-semibold', isLight ? 'text-light-text' : 'text-foreground')}>{title}</h1>
               {subtitle && (
-                <p className={cn('text-xs', isLight ? 'text-light-text-secondary' : 'text-text-muted')}>{subtitle}</p>
+                <p className={cn('text-xs', isLight ? 'text-light-text-secondary' : 'text-foreground-muted')}>{subtitle}</p>
               )}
             </div>
           </div>
@@ -282,85 +328,16 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
             >
               {planLabel[plan]}
             </span>
-            <div className="relative" ref={userMenuRef}>
-              <button
-                type="button"
-                onClick={() => setIsUserMenuOpen((prev) => !prev)}
-                className={cn(
-                  'flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition',
-                  isLight
-                    ? 'border-light-border bg-light-surface text-light-text hover:bg-light-accent'
-                    : 'border-bg-highlight bg-bg-highlight text-text-secondary',
-                )}
-              >
-                <UserCircle2 className="h-6 w-6" />
-                <span className="hidden md:inline">Akhil Patel</span>
-              </button>
-              <AnimatePresence>
-                {isUserMenuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                    className={cn(
-                      'absolute right-0 mt-3 w-60 rounded-3xl border p-3 shadow-[0px_24px_60px_rgba(15,15,30,0.25)]',
-                      isLight
-                        ? 'border-light-border bg-white/95 text-light-text'
-                        : 'border-bg-highlight bg-bg-elevated text-text-primary',
-                    )}
-                  >
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition',
-                        isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
-                      )}
-                      onClick={() => setIsUserMenuOpen(false)}
-                    >
-                      <User className="h-4 w-4" />
-                      View profile
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition',
-                        isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
-                      )}
-                      onClick={() => {
-                        toggleTheme()
-                        setIsUserMenuOpen(false)
-                      }}
-                    >
-                      {isLight ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                      {isLight ? 'Switch to dark mode' : 'Switch to light mode'}
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition',
-                        isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
-                      )}
-                      onClick={() => setIsUserMenuOpen(false)}
-                    >
-                      <CreditCard className="h-4 w-4" />
-                      Manage subscription
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition',
-                        isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
-                      )}
-                      onClick={() => {
-                        setIsUserMenuOpen(false)
-                      }}
-                    >
-                      <Settings className="h-4 w-4" />
-                      Settings
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div
+              className={cn(
+                'flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm',
+                isLight
+                  ? 'border-light-border bg-light-surface text-light-text'
+                  : 'border-bg-highlight bg-bg-highlight text-foreground-secondary',
+              )}
+            >
+              <UserCircle2 className="h-6 w-6" />
+              <span className="hidden md:inline">Akhil Patel</span>
             </div>
           </div>
         </header>
@@ -373,7 +350,7 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
       <nav
         className={cn(
           'fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t px-4 py-3 text-xs backdrop-blur md:hidden',
-          isLight ? 'border-light-border bg-light-surface/95 text-light-text' : 'border-bg-highlight bg-background/95 text-text-primary',
+          isLight ? 'border-light-border bg-light-surface/95 text-light-text' : 'border-bg-highlight bg-background/95 text-foreground',
         )}
       >
         {navItems.map((item) =>
@@ -389,8 +366,8 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
                       ? 'text-primary'
                       : 'text-light-text-secondary'
                     : isActive
-                      ? 'text-text-primary'
-                      : 'text-text-secondary',
+                      ? 'text-foreground'
+                      : 'text-foreground-secondary',
                 )
               }
               onClick={() => setIsMobileOpen(false)}
@@ -403,7 +380,7 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
               key={item.label}
               className={cn(
                 'flex flex-col items-center gap-1',
-                isLight ? 'text-light-text-secondary/50' : 'text-text-muted',
+                isLight ? 'text-light-text-secondary/50' : 'text-foreground-muted',
               )}
             >
               <item.icon className="h-5 w-5" />

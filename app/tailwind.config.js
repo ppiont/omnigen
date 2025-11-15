@@ -20,9 +20,11 @@ export default {
         'aurora-orange': '#ffa500',
 
         // Text Colors
-        'text-primary': '#e8edf5', // --text-primary
-        'text-secondary': '#9ca3b8', // --text-secondary
-        'text-muted': '#6b7188', // --text-muted
+        foreground: {
+          DEFAULT: '#e8edf5', // --text-primary
+          secondary: '#9ca3b8', // --text-secondary
+          muted: '#6b7188', // --text-muted
+        },
 
         // Status Colors
         success: '#7cff00',
@@ -30,13 +32,13 @@ export default {
         error: '#ff4d6a',
         info: '#00ffd1',
 
-        // Light mode colors (keeping for theme toggle support)
-        'light-bg': '#0a0e1a', // Keep dark for now, can adjust later
-        'light-surface': '#0f1420',
-        'light-border': '#1a1f33',
-        'light-text': '#e8edf5',
-        'light-text-secondary': '#9ca3b8',
-        'light-accent': '#1a1f33',
+        // Light mode colors (original light theme)
+        'light-bg': '#f0fdf4', // Very light green
+        'light-surface': '#ffffff', // White
+        'light-border': '#d1fae5', // Light green border
+        'light-text': '#1e293b', // Dark text
+        'light-text-secondary': '#64748b', // Medium gray
+        'light-accent': '#dcfce7', // Light green accent
       },
     },
   },

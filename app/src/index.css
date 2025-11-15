@@ -2,26 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light dark;
-}
-
-body {
-  @apply min-h-screen antialiased;
-}
-
 body.dark {
-  background-color: #0a0e1a;
+  @apply bg-background;
   color: #e8edf5;
 }
 
 body:not(.dark) {
   background-color: #f0fdf4;
   color: #1e293b;
-}
-
-#root {
-  @apply min-h-screen;
 }
 
 @keyframes ripple {

@@ -14,8 +14,8 @@ export const SurfaceCard = ({ children, className }: PropsWithChildren<SurfaceCa
       className={cn(
         'rounded-2xl p-5 sm:p-6 lg:p-7 backdrop-blur transition-all',
         isLight
-          ? 'border border-bg-highlight bg-bg-elevated text-text-primary shadow-lg shadow-primary/10'
-          : 'border border-bg-highlight bg-bg-elevated/90 text-text-primary shadow-2xl shadow-primary/5',
+          ? 'border border-bg-highlight bg-bg-elevated text-foreground shadow-lg shadow-primary/10'
+          : 'border border-bg-highlight bg-bg-elevated/90 text-foreground shadow-2xl shadow-primary/5',
         className,
       )}
     >

@@ -157,15 +157,15 @@ export const DashboardPage = () => {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className={cn('text-lg font-semibold sm:text-xl', isLight ? 'text-light-text' : 'text-text-primary')}>
+                  <h2 className={cn('text-lg font-semibold sm:text-xl', isLight ? 'text-light-text' : 'text-foreground')}>
                     Generate a video
                   </h2>
-                  <p className={cn('text-xs sm:text-sm', isLight ? 'text-light-text-secondary' : 'text-text-secondary')}>
+                  <p className={cn('text-xs sm:text-sm', isLight ? 'text-light-text-secondary' : 'text-foreground-secondary')}>
                     Describe the scene, mood, and style.
                   </p>
                 </div>
                 <span
-                  className={cn('text-[0.7rem] sm:text-xs', isLight ? 'text-light-text-secondary' : 'text-text-muted')}
+                  className={cn('text-[0.7rem] sm:text-xs', isLight ? 'text-light-text-secondary' : 'text-foreground-muted')}
                 >
                   {prompt.length}/{characterLimit}
                 </span>
@@ -180,15 +180,15 @@ export const DashboardPage = () => {
                   'min-h-[160px] w-full resize-none rounded-2xl border px-4 py-3 text-base outline-none transition focus:ring-2',
                   isLight
                     ? 'border-light-border bg-white text-light-text placeholder:text-light-text-secondary/60 focus:border-primary focus:ring-primary/30'
-                    : 'border-bg-highlight bg-bg-highlight text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-primary/40',
+                    : 'border-bg-highlight bg-bg-highlight text-foreground placeholder:text-foreground-muted focus:border-primary focus:ring-primary/40',
                 )}
               />
             </SurfaceCard>
 
             <SurfaceCard className="flex h-full flex-col space-y-4">
-              <div className={cn('flex items-center justify-between', isLight ? 'text-light-text' : 'text-text-primary')}>
+              <div className={cn('flex items-center justify-between', isLight ? 'text-light-text' : 'text-foreground')}>
                 <h3 className="text-base font-semibold sm:text-lg">Preview</h3>
-                <p className={cn('text-xs', isLight ? 'text-light-text-secondary' : 'text-text-secondary')}>
+                <p className={cn('text-xs', isLight ? 'text-light-text-secondary' : 'text-foreground-secondary')}>
                   {selectedAspect} • {selectedStyle}
                 </p>
               </div>
@@ -208,7 +208,7 @@ export const DashboardPage = () => {
                   <div
                     className={cn(
                       'flex min-h-[200px] items-center justify-center text-center',
-                      isLight ? 'text-light-text-secondary' : 'text-text-secondary',
+                      isLight ? 'text-light-text-secondary' : 'text-foreground-secondary',
                     )}
                   >
                     <AnimatePresence mode="wait">
@@ -227,7 +227,7 @@ export const DashboardPage = () => {
                             <div
                               className={cn(
                                 'flex items-center justify-between text-xs',
-                                isLight ? 'text-light-text-secondary' : 'text-text-secondary',
+                                isLight ? 'text-light-text-secondary' : 'text-foreground-secondary',
                               )}
                             >
                               <span>Rendering frames</span>
@@ -252,14 +252,14 @@ export const DashboardPage = () => {
                           key="idle"
                           className={cn(
                             'flex flex-col items-center justify-center gap-3 px-6 text-sm',
-                            isLight ? 'text-light-text-secondary' : 'text-text-secondary',
+                            isLight ? 'text-light-text-secondary' : 'text-foreground-secondary',
                           )}
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           exit={{ opacity: 0 }}
                         >
                           <PlayCircle
-                            className={cn('h-10 w-10', isLight ? 'text-light-text-secondary/60' : 'text-text-muted')}
+                            className={cn('h-10 w-10', isLight ? 'text-light-text-secondary/60' : 'text-foreground-muted')}
                           />
                           Your video will appear here
                         </motion.div>
@@ -274,19 +274,19 @@ export const DashboardPage = () => {
                   'grid gap-4 rounded-2xl border p-4 text-sm sm:grid-cols-2',
                   isLight
                     ? 'border-light-border bg-light-accent/30 text-light-text'
-                    : 'border-bg-highlight bg-bg-highlight text-text-secondary',
+                    : 'border-bg-highlight bg-bg-highlight text-foreground-secondary',
                 )}
               >
                 <div>
                   <p
                     className={cn(
                       'text-xs uppercase tracking-wide',
-                      isLight ? 'text-light-text-secondary' : 'text-text-muted',
+                      isLight ? 'text-light-text-secondary' : 'text-foreground-muted',
                     )}
                   >
                     Estimated time
                   </p>
-                  <p className={cn('mt-1 text-lg font-semibold', isLight ? 'text-light-text' : 'text-text-primary')}>
+                  <p className={cn('mt-1 text-lg font-semibold', isLight ? 'text-light-text' : 'text-foreground')}>
                     {estimatedTime}
                   </p>
                 </div>
@@ -294,12 +294,12 @@ export const DashboardPage = () => {
                   <p
                     className={cn(
                       'text-xs uppercase tracking-wide',
-                      isLight ? 'text-light-text-secondary' : 'text-text-muted',
+                      isLight ? 'text-light-text-secondary' : 'text-foreground-muted',
                     )}
                   >
                     Estimated cost
                   </p>
-                  <p className={cn('mt-1 text-lg font-semibold', isLight ? 'text-light-text' : 'text-text-primary')}>
+                  <p className={cn('mt-1 text-lg font-semibold', isLight ? 'text-light-text' : 'text-foreground')}>
                     {estimatedCost}
                   </p>
                 </div>
@@ -313,7 +313,7 @@ export const DashboardPage = () => {
               onClick={() => setIsAdvancedOpen((prev) => !prev)}
               className={cn(
                 'flex w-full items-center gap-3 text-left text-sm font-semibold',
-                isLight ? 'text-light-text' : 'text-text-primary',
+                isLight ? 'text-light-text' : 'text-foreground',
               )}
             >
               <span>Advanced options</span>
@@ -322,7 +322,7 @@ export const DashboardPage = () => {
                 animate={{ rotate: isAdvancedOpen ? 0 : -90 }}
                 transition={{ duration: 0.2 }}
               >
-                <ChevronDown className={cn('h-4 w-4', isLight ? 'text-light-text-secondary' : 'text-text-secondary')} />
+                <ChevronDown className={cn('h-4 w-4', isLight ? 'text-light-text-secondary' : 'text-foreground-secondary')} />
               </motion.span>
             </button>
 
@@ -339,7 +339,7 @@ export const DashboardPage = () => {
                     <p
                       className={cn(
                         'text-xs font-semibold uppercase tracking-wide',
-                        isLight ? 'text-light-text-secondary' : 'text-text-muted',
+                        isLight ? 'text-light-text-secondary' : 'text-foreground-muted',
                       )}
                     >
                       Category
@@ -353,14 +353,14 @@ export const DashboardPage = () => {
                         'mt-2 w-full rounded-2xl border px-4 py-2 text-sm outline-none transition focus:ring-2',
                         isLight
                           ? 'border-light-border bg-white text-light-text focus:border-secondary focus:ring-secondary/20'
-                          : 'border-bg-highlight bg-bg-highlight text-text-primary focus:border-secondary focus:ring-secondary/30',
+                          : 'border-bg-highlight bg-bg-highlight text-foreground focus:border-secondary focus:ring-secondary/30',
                       )}
                     >
                       {categories.map((category) => (
                         <option
                           key={category}
                           value={category}
-                          className={isLight ? 'bg-white text-light-text' : 'bg-bg-elevated text-text-primary'}
+                          className={isLight ? 'bg-white text-light-text' : 'bg-bg-elevated text-foreground'}
                         >
                           {category}
                         </option>
@@ -372,7 +372,7 @@ export const DashboardPage = () => {
                     <p
                       className={cn(
                         'text-xs font-semibold uppercase tracking-wide',
-                        isLight ? 'text-light-text-secondary' : 'text-text-muted',
+                        isLight ? 'text-light-text-secondary' : 'text-foreground-muted',
                       )}
                     >
                       Style preset
@@ -388,10 +388,10 @@ export const DashboardPage = () => {
                             selectedStyle === preset
                               ? isLight
                                 ? 'border-primary bg-primary/10 text-primary'
-                                : 'border-primary bg-primary/20 text-text-primary'
+                                : 'border-primary bg-primary/20 text-foreground'
                               : isLight
                                 ? 'border-light-border text-light-text-secondary hover:text-light-text hover:bg-light-accent'
-                                : 'border-bg-highlight text-text-secondary hover:text-text-primary',
+                                : 'border-bg-highlight text-foreground-secondary hover:text-foreground',
                           )}
                         >
                           {preset}
@@ -404,7 +404,7 @@ export const DashboardPage = () => {
                     <p
                       className={cn(
                         'text-xs font-semibold uppercase tracking-wide',
-                        isLight ? 'text-light-text-secondary' : 'text-text-muted',
+                        isLight ? 'text-light-text-secondary' : 'text-foreground-muted',
                       )}
                     >
                       Duration
@@ -422,7 +422,7 @@ export const DashboardPage = () => {
                       <div
                         className={cn(
                           'mt-2 flex justify-between text-xs',
-                          isLight ? 'text-light-text-secondary' : 'text-text-muted',
+                          isLight ? 'text-light-text-secondary' : 'text-foreground-muted',
                         )}
                       >
                         {durationOptions.map((duration, index) => (
@@ -431,7 +431,7 @@ export const DashboardPage = () => {
                             className={cn(
                               'w-10 text-center',
                               durationIndex === index &&
-                                (isLight ? 'text-light-text font-semibold' : 'text-text-primary font-semibold'),
+                                (isLight ? 'text-light-text font-semibold' : 'text-foreground font-semibold'),
                             )}
                           >
                             {duration}s
@@ -445,7 +445,7 @@ export const DashboardPage = () => {
                     <p
                       className={cn(
                         'text-xs font-semibold uppercase tracking-wide',
-                        isLight ? 'text-light-text-secondary' : 'text-text-muted',
+                        isLight ? 'text-light-text-secondary' : 'text-foreground-muted',
                       )}
                     >
                       Aspect ratio
@@ -461,10 +461,10 @@ export const DashboardPage = () => {
                             selectedAspect === ratio
                               ? isLight
                                 ? 'border-secondary bg-secondary/15 text-secondary'
-                                : 'border-secondary bg-secondary/15 text-text-primary'
+                                : 'border-secondary bg-secondary/15 text-foreground'
                               : isLight
                                 ? 'border-light-border text-light-text-secondary hover:text-light-text hover:bg-light-accent'
-                                : 'border-bg-highlight text-text-secondary hover:text-text-primary',
+                                : 'border-bg-highlight text-foreground-secondary hover:text-foreground',
                           )}
                         >
                           {ratio}
@@ -481,8 +481,8 @@ export const DashboardPage = () => {
                   >
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className={cn('font-semibold', isLight ? 'text-light-text' : 'text-text-primary')}>Auto-enhance</p>
-                        <p className={cn('text-xs', isLight ? 'text-light-text-secondary' : 'text-text-secondary')}>
+                        <p className={cn('font-semibold', isLight ? 'text-light-text' : 'text-foreground')}>Auto-enhance</p>
+                        <p className={cn('text-xs', isLight ? 'text-light-text-secondary' : 'text-foreground-secondary')}>
                           Improve details and color balance.
                         </p>
                       </div>
@@ -490,8 +490,8 @@ export const DashboardPage = () => {
                     </div>
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className={cn('font-semibold', isLight ? 'text-light-text' : 'text-text-primary')}>Loop video</p>
-                        <p className={cn('text-xs', isLight ? 'text-light-text-secondary' : 'text-text-secondary')}>
+                        <p className={cn('font-semibold', isLight ? 'text-light-text' : 'text-foreground')}>Loop video</p>
+                        <p className={cn('text-xs', isLight ? 'text-light-text-secondary' : 'text-foreground-secondary')}>
                           Perfect for hero sections.
                         </p>
                       </div>
@@ -530,10 +530,10 @@ export const DashboardPage = () => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <h3 className={cn('text-lg font-semibold', isLight ? 'text-light-text' : 'text-text-primary')}>
+              <h3 className={cn('text-lg font-semibold', isLight ? 'text-light-text' : 'text-foreground')}>
                 Recent videos
               </h3>
-              <p className={cn('text-sm', isLight ? 'text-light-text-secondary' : 'text-text-secondary')}>
+              <p className={cn('text-sm', isLight ? 'text-light-text-secondary' : 'text-foreground-secondary')}>
                 Your latest generations appear here.
               </p>
             </div>
@@ -549,11 +549,11 @@ export const DashboardPage = () => {
             <SurfaceCard
               className={cn(
                 'flex flex-col items-center gap-3 py-16 text-center',
-                isLight ? 'text-light-text-secondary' : 'text-text-secondary',
+                isLight ? 'text-light-text-secondary' : 'text-foreground-secondary',
               )}
             >
               <PlayCircle
-                className={cn('h-10 w-10', isLight ? 'text-light-text-secondary/50' : 'text-text-muted')}
+                className={cn('h-10 w-10', isLight ? 'text-light-text-secondary/50' : 'text-foreground-muted')}
               />
               <p>No videos yet. Start by generating your first video!</p>
             </SurfaceCard>
