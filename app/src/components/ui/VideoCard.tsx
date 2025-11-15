@@ -47,9 +47,9 @@ export const VideoCard = ({ thumbnail, title, duration, createdAt, onClick, clas
             <PlayCircle className="h-10 w-10" />
           </motion.div>
         </div>
-        <div className="mt-4 space-y-1 text-sm text-text-secondary">
-          <p className="line-clamp-2 font-semibold text-text-primary">{title}</p>
-          <p className="text-xs text-text-muted">{formatDate(createdAt)}</p>
+        <div className="mt-4 space-y-1 text-sm text-foreground-secondary">
+          <p className="line-clamp-2 font-semibold text-foreground">{title}</p>
+          <p className="text-xs text-foreground-muted">{formatDate(createdAt)}</p>
         </div>
       </div>
     </motion.button>

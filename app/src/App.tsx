@@ -1,40 +1,24 @@
-import { AnimatePresence, motion } from 'framer-motion'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { ThemeProvider, useTheme } from './context/ThemeContext'
+import { Routes, Route, useLocation } from 'react-router-dom'
+import { ThemeProvider } from './context/ThemeContext'
+import Navbar from './components/Navbar'
+import Landing from './pages/Landing'
+import Login from './pages/Login'
+import Signup from './pages/Signup'
 import { DashboardPage } from './pages/Dashboard'
-import { SignInPage } from './pages/SignIn'
 
-const AppRoutes = () => {
+function AppContent() {
   const location = useLocation()
-  const { theme } = useTheme()
+  const showNavbar = location.pathname !== '/dashboard'
 
   return (
-    <div
-      className={`min-h-screen transition-colors ${
-        theme === 'light' ? 'bg-light-bg text-light-text' : 'bg-background text-text-primary'
-      }`}
-    >
-      <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
-          <Route
-            path="/signin"
-            element={
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
-                <SignInPage />
-              </motion.div>
-            }
-          />
-          <Route
-            path="/dashboard"
-            element={
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
-                <DashboardPage />
-              </motion.div>
-            }
-          />
-          <Route path="*" element={<Navigate to="/signin" replace />} />
-        </Routes>
-      </AnimatePresence>
+    <div className="app-shell">
+      {showNavbar && <Navbar />}
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+      </Routes>
     </div>
   )
 }
@@ -42,7 +26,7 @@ const AppRoutes = () => {
 function App() {
   return (
     <ThemeProvider>
-      <AppRoutes />
+      <AppContent />
     </ThemeProvider>
   )
 }
