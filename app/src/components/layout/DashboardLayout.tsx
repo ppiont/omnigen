@@ -5,7 +5,6 @@ import {
   Film,
   Menu,
   Settings,
-  Sparkles,
   Sun,
   Moon,
   User,
@@ -16,6 +15,7 @@ import { PropsWithChildren, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useTheme } from '../../context/ThemeContext'
 import { cn } from '../../lib/cn'
+import Logo from '../Logo'
 
 type PlanTier = 'free' | 'pro' | 'max'
 
@@ -26,7 +26,7 @@ type DashboardLayoutProps = PropsWithChildren<{
 }>
 
 const navItems = [
-  { label: 'Generate', icon: Sparkles, to: '/dashboard', active: true },
+  { label: 'Generate', icon: Film, to: '/dashboard', active: true },
   { label: 'My Videos', icon: Film, badge: 'Soon', disabled: true },
 ]
 
@@ -64,11 +64,11 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
           ) : (
             <div
               className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-2xl text-primary',
+                'flex h-10 w-10 items-center justify-center rounded-2xl overflow-hidden',
                 isLight ? 'bg-primary/15' : 'bg-primary/25',
               )}
             >
-              <Sparkles className="h-5 w-5" />
+              <Logo size={40} className="flex-shrink-0" />
             </div>
           )}
           {!isCollapsed && (
