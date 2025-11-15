@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar.jsx";
-import StatCard from "../components/StatCard.jsx";
+import VideoCard from "../components/VideoCard.jsx";
+import ToggleSwitch from "../components/ToggleSwitch.jsx";
 import "../styles/dashboard.css";
 
 const sidebarTabs = [
   {
     id: "create",
     label: "Create",
-    description: "Launch new flows",
+    description: "Generate video ads",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path
@@ -29,74 +30,24 @@ const sidebarTabs = [
     ),
   },
   {
-    id: "dashboard",
-    label: "Dashboard",
-    description: "Monitor signals",
+    id: "videos",
+    label: "Videos",
+    description: "Browse library",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <rect
           x="4"
           y="4"
-          width="7"
-          height="7"
-          rx="1.5"
+          width="16"
+          height="16"
+          rx="2"
           stroke="currentColor"
           strokeWidth="1.5"
           fill="none"
-        />
-        <rect
-          x="13"
-          y="4"
-          width="7"
-          height="5"
-          rx="1.5"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          fill="none"
-        />
-        <rect
-          x="4"
-          y="13"
-          width="7"
-          height="7"
-          rx="1.5"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          fill="none"
-        />
-        <rect
-          x="13"
-          y="11"
-          width="7"
-          height="9"
-          rx="1.5"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          fill="none"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "projects",
-    label: "Projects",
-    description: "Organize assets",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path
-          d="M4 8.5h16v8.25A2.25 2.25 0 0117.75 19H6.25A2.25 2.25 0 014 16.75z"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
         />
         <path
-          d="M4 8.5V6.75A2.25 2.25 0 016.25 4.5H10l2 2.5h5.75A2.25 2.25 0 0120 9.25V8.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          d="M9 8l5 4-5 4V8z"
+          fill="currentColor"
         />
       </svg>
     ),
@@ -104,7 +55,7 @@ const sidebarTabs = [
   {
     id: "settings",
     label: "Settings",
-    description: "Fine-tune system",
+    description: "Configure options",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path
@@ -126,75 +77,42 @@ const sidebarTabs = [
   },
 ];
 
-const stats = [
+const recentVideos = [
   {
-    label: "Total Projects",
-    value: "24",
-    helper: "Updated 2 hours ago",
-    trend: { direction: "up", value: "+12%", caption: "this week" },
+    id: "1",
+    title: "Product Showcase - Tech Headphones",
+    format: "16:9",
+    duration: "30s",
+    cost: "$1.20",
+    timestamp: "2h ago",
+    thumbnail: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=400&fit=crop",
   },
   {
-    label: "Active Generations",
-    value: "8",
-    helper: "Across 3 agents",
-    trend: { direction: "up", value: "+3", caption: "vs yesterday" },
+    id: "2",
+    title: "Social Ad - Fashion Brand",
+    format: "9:16",
+    duration: "15s",
+    cost: "$0.80",
+    timestamp: "4h ago",
+    thumbnail: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&h=400&fit=crop",
   },
   {
-    label: "API Calls (30d)",
-    value: "1,247",
-    helper: "Through orchestrator",
-    trend: { direction: "up", value: "+18%", caption: "month over month" },
+    id: "3",
+    title: "Product Demo - Smart Watch",
+    format: "1:1",
+    duration: "30s",
+    cost: "$1.20",
+    timestamp: "1d ago",
+    thumbnail: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&h=400&fit=crop",
   },
   {
-    label: "Success Rate",
-    value: "98.4%",
-    helper: "Autonomous runs",
-    trend: { direction: "down", value: "-0.6%", caption: "variance" },
-  },
-];
-
-const activityFeed = [
-  {
-    id: "a1",
-    title: "Vision synthesis pipeline deployed",
-    description: "Create tab • Multimodal agents linked",
-    time: "2m ago",
-  },
-  {
-    id: "a2",
-    title: "Workspace “Neon Pulse” archived",
-    description: "Projects • Auto clean executed",
-    time: "18m ago",
-  },
-  {
-    id: "a3",
-    title: "Policy tuning completed",
-    description: "Settings • Risk threshold tightened",
-    time: "42m ago",
-  },
-  {
-    id: "a4",
-    title: "Prompt pack shared with Delta team",
-    description: "Dashboard • Access synced",
-    time: "1h ago",
-  },
-];
-
-const tips = [
-  {
-    id: "t1",
-    title: "Highlight Create tab",
-    body: "Pin high-priority flows so invites drop users directly into action.",
-  },
-  {
-    id: "t2",
-    title: "Balance agent load",
-    body: "Use the Projects tab to cap concurrent generations per workspace.",
-  },
-  {
-    id: "t3",
-    title: "Watch drift windows",
-    body: "Settings → Safeguards lets you automate aurora alerts for anomalies.",
+    id: "4",
+    title: "Brand Video - Minimal Aesthetic",
+    format: "16:9",
+    duration: "60s",
+    cost: "$2.10",
+    timestamp: "2d ago",
+    thumbnail: "https://images.unsplash.com/photo-1561070791-2526d30994b5?w=600&h=400&fit=crop",
   },
 ];
 
@@ -228,9 +146,40 @@ const IconMenu = () => (
   </svg>
 );
 
+const IconChevronDown = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path
+      d="M6 9l6 6 6-6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  </svg>
+);
+
 function Dashboard() {
   const [activeTab, setActiveTab] = useState("create");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("Ad Creative");
+  const [selectedStyle, setSelectedStyle] = useState("Cinematic");
+  const [selectedDuration, setSelectedDuration] = useState("30s");
+  const [selectedAspect, setSelectedAspect] = useState("16:9");
+  const [autoEnhance, setAutoEnhance] = useState(true);
+  const [loopVideo, setLoopVideo] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const closeDrawer = () => setIsDrawerOpen(false);
 
@@ -249,6 +198,51 @@ function Dashboard() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isDrawerOpen]);
 
+  const characterLimit = 2000;
+  const characterCount = prompt.length;
+
+  const getEstimatedTime = () => {
+    const durationNum = parseInt(selectedDuration);
+    if (durationNum <= 15) return "~30s";
+    if (durationNum <= 30) return "~45s";
+    if (durationNum <= 60) return "1 min";
+    return "1-2 min";
+  };
+
+  const getEstimatedCost = () => {
+    const durationNum = parseInt(selectedDuration);
+    const cost = (durationNum / 30) * 1.5;
+    return `$${cost.toFixed(2)}`;
+  };
+
+  const handleGenerate = () => {
+    if (!prompt.trim() || isGenerating) return;
+
+    setIsGenerating(true);
+    setProgress(0);
+
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsGenerating(false);
+          setProgress(0);
+          return 0;
+        }
+        return prev + 2;
+      });
+    }, 50);
+  };
+
+  const toggleAdvanced = () => {
+    setIsAdvancedOpen(!isAdvancedOpen);
+  };
+
+  const categories = ["Ad Creative", "Product Showcase", "Social Media"];
+  const styles = ["Cinematic", "Anime", "Realistic", "Abstract"];
+  const durations = ["15s", "30s", "60s", "90s"];
+  const aspects = ["16:9", "9:16", "1:1"];
+
   return (
     <main className="dashboard-page">
       <div className="dashboard-shell">
@@ -258,109 +252,362 @@ function Dashboard() {
           onSelect={setActiveTab}
           isDrawerOpen={isDrawerOpen}
           onClose={closeDrawer}
+          isCollapsed={isCollapsed}
+          onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
         />
 
         <section className="dashboard-main">
-          <header className="dashboard-topbar">
-            <div className="topbar-left">
-              <button
-                type="button"
-                className="drawer-toggle"
-                aria-label="Open sidebar"
-                onClick={() => setIsDrawerOpen(true)}
-              >
-                <IconMenu />
-              </button>
-              <div className="topbar-text">
-                <p className="page-kicker">Workspace</p>
-                <h1>Create Command Center</h1>
-              </div>
-            </div>
-
-            <div className="topbar-right">
-              <label className="search-field">
-                <span className="search-icon">
-                  <IconSearch />
-                </span>
-                <input
-                  type="search"
-                  placeholder="Search agents, projects, prompts..."
-                  aria-label="Search workspace"
-                />
-              </label>
-              <button
-                type="button"
-                className="avatar-pill"
-                aria-label="Open profile menu"
-              >
-                <span>YC</span>
-              </button>
-            </div>
-          </header>
-
-          <section className="stats-grid" aria-label="Workspace stats">
-            {stats.map((stat, index) => (
-              <StatCard
-                key={stat.label}
-                {...stat}
-                motionDelay={`${index * 0.08}s`}
-              />
-            ))}
-          </section>
-
-          <div className="panels-grid">
-            <section
-              className="dashboard-panel primary"
-              aria-label="Recent activity"
+          <div className="mobile-header">
+            <button
+              type="button"
+              className="drawer-toggle"
+              aria-label="Open sidebar"
+              onClick={() => setIsDrawerOpen(true)}
             >
-              <header className="panel-header">
-                <div>
-                  <p className="panel-kicker">Live feed</p>
-                  <h2>Recent Activity</h2>
-                </div>
-                <button type="button" className="text-link">
-                  View all
-                </button>
-              </header>
+              <IconMenu />
+            </button>
+            <h1>Ad Creative Studio</h1>
+          </div>
 
-              <ul className="activity-list">
-                {activityFeed.map((item) => (
-                  <li key={item.id} className="activity-item">
-                    <div className="activity-copy">
-                      <p className="activity-title">{item.title}</p>
-                      <p className="activity-meta">{item.description}</p>
+          <div className="dashboard-content">
+            {activeTab === "create" && (
+              <>
+                <div className="generation-grid">
+                  <section className="prompt-card">
+                    <h2 className="card-title">Generate a video</h2>
+                    <div className="prompt-section">
+                      <label className="prompt-label">
+                        Video Prompt
+                        <span className="char-counter">
+                          {characterCount} / {characterLimit}
+                        </span>
+                      </label>
+                      <textarea
+                        className="prompt-textarea"
+                        placeholder="Describe your video ad... (e.g., 'Product showcase video for wireless headphones with modern aesthetic')"
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        maxLength={characterLimit}
+                        rows={6}
+                      />
                     </div>
-                    <span className="activity-time">{item.time}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+                  </section>
 
-            <section
-              className="dashboard-panel secondary"
-              aria-label="Quick tips"
-            >
-              <header className="panel-header">
-                <div>
-                  <p className="panel-kicker">Guidance</p>
-                  <h2>Quick Tips</h2>
+                  <section className="preview-card">
+                    <h3 className="card-subtitle">Preview</h3>
+                    <div className="preview-container">
+                      {isGenerating ? (
+                        <div className="preview-generating">
+                          <div className="preview-progress-bar">
+                            <div
+                              className="preview-progress-fill"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <p className="preview-status">Generating video... {progress}%</p>
+                        </div>
+                      ) : (
+                        <div className="preview-placeholder">
+                          <div className="preview-aspect-ratio">
+                            <span className="preview-aspect-text">{selectedAspect}</span>
+                          </div>
+                          <p className="preview-placeholder-text">Your video will appear here</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="estimation-grid">
+                      <div className="estimation-item">
+                        <span className="estimation-label">Estimated time</span>
+                        <span className="estimation-value">{getEstimatedTime()}</span>
+                      </div>
+                      <div className="estimation-item">
+                        <span className="estimation-label">Estimated cost</span>
+                        <span className="estimation-value">{getEstimatedCost()}</span>
+                      </div>
+                    </div>
+                  </section>
                 </div>
-              </header>
 
-              <ul className="tips-list">
-                {tips.map((tip, index) => (
-                  <li
-                    key={tip.id}
-                    className="tip-card"
-                    data-motion="rise"
-                    style={{ "--motion-delay": `${0.15 + index * 0.05}s` }}
+                <section className="advanced-panel">
+                  <button
+                    type="button"
+                    className="advanced-toggle"
+                    onClick={toggleAdvanced}
+                    aria-expanded={isAdvancedOpen}
                   >
-                    <p className="tip-title">{tip.title}</p>
-                    <p className="tip-body">{tip.body}</p>
-                  </li>
-                ))}
-              </ul>
-            </section>
+                    <span>Advanced options</span>
+                    <span className={`advanced-chevron ${isAdvancedOpen ? "is-open" : ""}`}>
+                      <IconChevronDown />
+                    </span>
+                  </button>
+                  {isAdvancedOpen && (
+                    <div className="advanced-content">
+                      <div className="options-grid">
+                        <div className="option-group">
+                          <label className="option-label">Category</label>
+                          <select
+                            className="dropdown-field"
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                          >
+                            {categories.map((cat) => (
+                              <option key={cat} value={cat}>
+                                {cat}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="option-group">
+                          <label className="option-label">Style</label>
+                          <div className="button-group">
+                            {styles.map((style) => (
+                              <button
+                                key={style}
+                                type="button"
+                                className={`style-btn ${selectedStyle === style ? "is-active" : ""}`}
+                                onClick={() => setSelectedStyle(style)}
+                              >
+                                {style}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="option-group">
+                          <label className="option-label">Duration</label>
+                          <div className="button-group">
+                            {durations.map((dur) => (
+                              <button
+                                key={dur}
+                                type="button"
+                                className={`duration-btn ${selectedDuration === dur ? "is-active" : ""}`}
+                                onClick={() => setSelectedDuration(dur)}
+                              >
+                                {dur}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="option-group">
+                          <label className="option-label">Aspect Ratio</label>
+                          <div className="button-group">
+                            {aspects.map((aspect) => (
+                              <button
+                                key={aspect}
+                                type="button"
+                                className={`aspect-btn ${selectedAspect === aspect ? "is-active" : ""}`}
+                                onClick={() => setSelectedAspect(aspect)}
+                              >
+                                {aspect}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="option-group">
+                          <label className="option-label">Options</label>
+                          <div className="toggle-group">
+                            <div className="toggle-item">
+                              <ToggleSwitch
+                                checked={autoEnhance}
+                                onChange={() => setAutoEnhance(!autoEnhance)}
+                                label="Auto-enhance"
+                              />
+                              <span className="toggle-label">Auto-enhance</span>
+                            </div>
+                            <div className="toggle-item">
+                              <ToggleSwitch
+                                checked={loopVideo}
+                                onChange={() => setLoopVideo(!loopVideo)}
+                                label="Loop video"
+                              />
+                              <span className="toggle-label">Loop video</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </section>
+
+                <button
+                  type="button"
+                  className="generate-button"
+                  disabled={!prompt.trim() || isGenerating}
+                  onClick={handleGenerate}
+                >
+                  {isGenerating ? "Generating..." : "Generate Video"}
+                </button>
+              </>
+            )}
+
+            {activeTab === "videos" && (
+              <section className="videos-section">
+                <h2 className="section-title">Your videos</h2>
+                {recentVideos.length === 0 ? (
+                  <div className="empty-state">
+                    <p className="empty-state-text">Your generated videos will appear here</p>
+                  </div>
+                ) : (
+                  <div className="videos-grid">
+                    {recentVideos.map((video) => (
+                      <VideoCard
+                        key={video.id}
+                        thumbnail={video.thumbnail}
+                        title={video.title}
+                        format={video.format}
+                        duration={video.duration}
+                        cost={video.cost}
+                        timestamp={video.timestamp}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {activeTab === "settings" && (
+              <section className="settings-section">
+                <h2 className="section-title">Settings</h2>
+                <div className="settings-card">
+                  <h3 className="settings-subtitle">Change Password</h3>
+                  <form
+                    className="password-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setIsSaving(true);
+                      // Simulate API call
+                      setTimeout(() => {
+                        setIsSaving(false);
+                        setCurrentPassword("");
+                        setNewPassword("");
+                        setConfirmPassword("");
+                        alert("Password updated successfully!");
+                      }, 1000);
+                    }}
+                  >
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="current-password">
+                        Current Password
+                      </label>
+                      <div className="password-input-wrapper">
+                        <input
+                          id="current-password"
+                          type={showCurrentPassword ? "text" : "password"}
+                          className="form-input"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          placeholder="Enter your current password"
+                          required
+                        />
+                        <button
+                          type="button"
+                          className="password-toggle"
+                          onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                          aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                        >
+                          {showCurrentPassword ? (
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                              <line x1="1" y1="1" x2="23" y2="23" />
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="new-password">
+                        New Password
+                      </label>
+                      <div className="password-input-wrapper">
+                        <input
+                          id="new-password"
+                          type={showNewPassword ? "text" : "password"}
+                          className="form-input"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Enter your new password"
+                          required
+                          minLength={8}
+                        />
+                        <button
+                          type="button"
+                          className="password-toggle"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          aria-label={showNewPassword ? "Hide password" : "Show password"}
+                        >
+                          {showNewPassword ? (
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                              <line x1="1" y1="1" x2="23" y2="23" />
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="confirm-password">
+                        Confirm New Password
+                      </label>
+                      <div className="password-input-wrapper">
+                        <input
+                          id="confirm-password"
+                          type={showConfirmPassword ? "text" : "password"}
+                          className="form-input"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Confirm your new password"
+                          required
+                        />
+                        <button
+                          type="button"
+                          className="password-toggle"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                        >
+                          {showConfirmPassword ? (
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                              <line x1="1" y1="1" x2="23" y2="23" />
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                      {confirmPassword && newPassword !== confirmPassword && (
+                        <p className="form-error">Passwords do not match</p>
+                      )}
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="save-button"
+                      disabled={isSaving || !currentPassword || !newPassword || newPassword !== confirmPassword}
+                    >
+                      {isSaving ? "Saving..." : "Save Changes"}
+                    </button>
+                  </form>
+                </div>
+              </section>
+            )}
           </div>
         </section>
       </div>

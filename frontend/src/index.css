@@ -13,6 +13,31 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Theme Variables */
+[data-theme="dark"] {
+  --bg: #0a0e1a;
+  --bg-elevated: #0f1420;
+  --bg-highlight: #1a1f33;
+  --bg-surface: #141926;
+  --text-primary: #e8edf5;
+  --text-secondary: #9ca3b8;
+  --text-muted: #6b7188;
+}
+
+[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-elevated: #f8f9fa;
+  --bg-highlight: #e9ecef;
+  --bg-surface: #f1f3f5;
+  --text-primary: #0a0e1a;
+  --text-secondary: #495057;
+  --text-muted: #6c757d;
+}
+
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
 a {
   font-weight: 500;
   color: #646cff;

@@ -1,18 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
 :root {
-  /* Backgrounds */
-  --bg: #0a0e1a;
-  --bg-elevated: #0f1420;
-  --bg-highlight: #1a1f33;
-  --bg-surface: #141926;
-
-  /* Typography */
-  --text-primary: #e8edf5;
-  --text-secondary: #9ca3b8;
-  --text-muted: #6b7188;
-
-  /* Aurora Accents */
+  /* Aurora Accents - constant across themes */
   --aurora-green: #7cff00;
   --aurora-purple: #b44cff;
   --aurora-teal: #00ffd1;
@@ -30,6 +19,33 @@
   --error: #ff4d6a;
   --info: #00ffd1;
 
+  /* Spacing */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+  --space-64: 64px;
+
+  --radius-base: 12px;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  /* Backgrounds */
+  --bg: #0a0e1a;
+  --bg-elevated: #0f1420;
+  --bg-highlight: #1a1f33;
+  --bg-surface: #141926;
+
+  /* Typography */
+  --text-primary: #e8edf5;
+  --text-secondary: #9ca3b8;
+  --text-muted: #6b7188;
+
   /* Glow + Shadow */
   --glow-green: rgba(124, 255, 0, 0.6);
   --glow-purple: rgba(180, 76, 255, 0.5);
@@ -38,17 +54,29 @@
   --shadow-glow: 0 0 30px rgba(124, 255, 0, 0.2);
   --shadow-soft: 0 10px 45px rgba(0, 0, 0, 0.45);
   --shadow-strong: 0 12px 50px rgba(0, 0, 0, 0.6);
+}
 
-  --space-4: 4px;
-  --space-8: 8px;
-  --space-12: 12px;
-  --space-16: 16px;
-  --space-24: 24px;
-  --space-32: 32px;
-  --space-48: 48px;
-  --space-64: 64px;
+/* Light Theme */
+[data-theme="light"] {
+  /* Backgrounds */
+  --bg: #ffffff;
+  --bg-elevated: #f8f9fa;
+  --bg-highlight: #e9ecef;
+  --bg-surface: #f1f3f5;
 
-  --radius-base: 12px;
+  /* Typography */
+  --text-primary: #0a0e1a;
+  --text-secondary: #495057;
+  --text-muted: #6c757d;
+
+  /* Glow + Shadow */
+  --glow-green: rgba(124, 255, 0, 0.3);
+  --glow-purple: rgba(180, 76, 255, 0.3);
+  --glow-teal: rgba(0, 255, 209, 0.3);
+  --border-glow: rgba(124, 255, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(124, 255, 0, 0.15);
+  --shadow-soft: 0 2px 10px rgba(0, 0, 0, 0.08);
+  --shadow-strong: 0 4px 20px rgba(0, 0, 0, 0.12);
 }
 
 *,
