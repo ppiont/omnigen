@@ -33,7 +33,6 @@ const navItems = [
 export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: DashboardLayoutProps) => {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const { theme, toggleTheme } = useTheme()
 
   const sidebarWidth = useMemo(() => (isCollapsed ? 72 : 256), [isCollapsed])
@@ -43,19 +42,6 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
     pro: 'Pro plan',
     max: 'Max plan',
   }
-
-  const userMenuRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!isUserMenuOpen) return
-    const handler = (event: MouseEvent) => {
-      if (!userMenuRef.current?.contains(event.target as Node)) {
-        setIsUserMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [isUserMenuOpen])
 
   const SidebarContent = (
     <div className="relative flex h-full flex-col">
@@ -182,6 +168,73 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
         )}
       </nav>
 
+      {/* Profile section at bottom */}
+      <div className="mt-auto border-t border-bg-highlight p-3">
+        {!isCollapsed && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 rounded-2xl bg-bg-highlight/50 p-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20">
+                <UserCircle2 className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <p className="truncate text-sm font-semibold text-foreground">Akhil Patel</p>
+                <p className="truncate text-xs text-foreground-muted">{planLabel[plan]}</p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition',
+                  isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
+                )}
+              >
+                <User className="h-4 w-4" />
+                <span>View profile</span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition',
+                  isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
+                )}
+              >
+                {isLight ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                <span>{isLight ? 'Switch to dark mode' : 'Switch to light mode'}</span>
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition',
+                  isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
+                )}
+              >
+                <CreditCard className="h-4 w-4" />
+                <span>Manage subscription</span>
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition',
+                  isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
+                )}
+              >
+                <Settings className="h-4 w-4" />
+                <span>Settings</span>
+              </button>
+            </div>
+          </div>
+        )}
+        {isCollapsed && (
+          <button
+            type="button"
+            className="flex w-full items-center justify-center rounded-full bg-primary/20 p-2"
+          >
+            <UserCircle2 className="h-6 w-6 text-primary" />
+          </button>
+        )}
+      </div>
     </div>
   )
 
@@ -282,85 +335,16 @@ export const DashboardLayout = ({ title, subtitle, plan = 'max', children }: Das
             >
               {planLabel[plan]}
             </span>
-            <div className="relative" ref={userMenuRef}>
-              <button
-                type="button"
-                onClick={() => setIsUserMenuOpen((prev) => !prev)}
-                className={cn(
-                  'flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition',
-                  isLight
-                    ? 'border-light-border bg-light-surface text-light-text hover:bg-light-accent'
-                    : 'border-bg-highlight bg-bg-highlight text-foreground-secondary',
-                )}
-              >
-                <UserCircle2 className="h-6 w-6" />
-                <span className="hidden md:inline">Akhil Patel</span>
-              </button>
-              <AnimatePresence>
-                {isUserMenuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                    className={cn(
-                      'absolute right-0 mt-3 w-60 rounded-3xl border p-3 shadow-[0px_24px_60px_rgba(15,15,30,0.25)]',
-                      isLight
-                        ? 'border-light-border bg-white/95 text-light-text'
-                        : 'border-bg-highlight bg-bg-elevated text-foreground',
-                    )}
-                  >
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition',
-                        isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
-                      )}
-                      onClick={() => setIsUserMenuOpen(false)}
-                    >
-                      <User className="h-4 w-4" />
-                      View profile
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition',
-                        isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
-                      )}
-                      onClick={() => {
-                        toggleTheme()
-                        setIsUserMenuOpen(false)
-                      }}
-                    >
-                      {isLight ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                      {isLight ? 'Switch to dark mode' : 'Switch to light mode'}
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition',
-                        isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
-                      )}
-                      onClick={() => setIsUserMenuOpen(false)}
-                    >
-                      <CreditCard className="h-4 w-4" />
-                      Manage subscription
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition',
-                        isLight ? 'hover:bg-light-accent' : 'hover:bg-bg-highlight',
-                      )}
-                      onClick={() => {
-                        setIsUserMenuOpen(false)
-                      }}
-                    >
-                      <Settings className="h-4 w-4" />
-                      Settings
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div
+              className={cn(
+                'flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm',
+                isLight
+                  ? 'border-light-border bg-light-surface text-light-text'
+                  : 'border-bg-highlight bg-bg-highlight text-foreground-secondary',
+              )}
+            >
+              <UserCircle2 className="h-6 w-6" />
+              <span className="hidden md:inline">Akhil Patel</span>
             </div>
           </div>
         </header>
