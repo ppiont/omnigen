@@ -26,18 +26,15 @@ output "client_secret" {
 
 output "issuer_url" {
   description = "JWT issuer URL for token validation"
-  value       = "https://cognito-idp.${data.aws_region.current.id}.amazonaws.com/${aws_cognito_user_pool.main.id}"
+  value       = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.main.id}"
 }
 
 output "hosted_ui_domain" {
   description = "Cognito hosted UI domain"
-  value       = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${data.aws_region.current.id}.amazoncognito.com"
+  value       = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${var.aws_region}.amazoncognito.com"
 }
 
 output "jwks_uri" {
   description = "JWKS URI for JWT validation"
-  value       = "https://cognito-idp.${data.aws_region.current.id}.amazonaws.com/${aws_cognito_user_pool.main.id}/.well-known/jwks.json"
+  value       = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.main.id}/.well-known/jwks.json"
 }
-
-# Data source for current region
-data "aws_region" "current" {}

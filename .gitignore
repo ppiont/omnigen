@@ -1,12 +1,8 @@
 .env
 .env.local
 .env*
-.env
-.env.local
-.env*
 .human/
 .DS_Store
-CLAUDE.md
 
 # Dependencies
 node_modules/
@@ -41,5 +37,7 @@ lerna-debug.log*
 *.sw?
 
 AI Video Generation Pipeline.pdf
-.DS_Store
+
+# AI slop
 CLAUDE.md
+.claude/

@@ -1,0 +1,179 @@
+name: Frontend (React)
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  NODE_VERSION: '20'
+
+jobs:
+  build:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get Terraform outputs (for production build)
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        id: tf-outputs
+        run: |
+          # Configure AWS for Terraform outputs
+          pip install awscli --quiet
+          export AWS_DEFAULT_REGION=${{ env.AWS_REGION }}
+
+          # Install Terraform
+          cd ../infrastructure
+          wget -q https://releases.hashicorp.com/terraform/1.13.5/terraform_1.13.5_linux_amd64.zip
+          unzip -q terraform_1.13.5_linux_amd64.zip
+          chmod +x terraform
+
+          # Get outputs
+          ./terraform init -backend=true
+          CF_DOMAIN=$(./terraform output -raw cloudfront_domain_name)
+          USER_POOL=$(./terraform output -raw auth_user_pool_id)
+          CLIENT_ID=$(./terraform output -raw auth_client_id)
+          COGNITO_DOMAIN=$(./terraform output -raw auth_hosted_ui_domain)
+
+          echo "cf_domain=$CF_DOMAIN" >> $GITHUB_OUTPUT
+          echo "user_pool=$USER_POOL" >> $GITHUB_OUTPUT
+          echo "client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
+          echo "cognito_domain=$COGNITO_DOMAIN" >> $GITHUB_OUTPUT
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
+
+      - name: Build (PR - with mock env vars)
+        if: github.event_name == 'pull_request'
+        run: npm run build
+        env:
+          VITE_API_URL: https://example.cloudfront.net
+          VITE_COGNITO_USER_POOL_ID: us-east-1_XXXXXXXXX
+          VITE_COGNITO_CLIENT_ID: mock_client_id
+          VITE_COGNITO_DOMAIN: https://mock.auth.us-east-1.amazoncognito.com
+
+      - name: Build (Production - with real env vars)
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        run: npm run build
+        env:
+          VITE_API_URL: https://${{ steps.tf-outputs.outputs.cf_domain }}
+          VITE_COGNITO_USER_POOL_ID: ${{ steps.tf-outputs.outputs.user_pool }}
+          VITE_COGNITO_CLIENT_ID: ${{ steps.tf-outputs.outputs.client_id }}
+          VITE_COGNITO_DOMAIN: ${{ steps.tf-outputs.outputs.cognito_domain }}
+
+      - name: Upload build artifacts
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 1
+
+  deploy:
+    name: Deploy to S3 and CloudFront
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get Terraform outputs
+        id: tf-outputs
+        working-directory: infrastructure
+        run: |
+          # Install Terraform
+          wget -q https://releases.hashicorp.com/terraform/1.13.5/terraform_1.13.5_linux_amd64.zip
+          unzip -q terraform_1.13.5_linux_amd64.zip
+          chmod +x terraform
+
+          # Initialize and get outputs
+          ./terraform init -backend=true
+          BUCKET=$(./terraform output -raw frontend_bucket_name)
+          CF_ID=$(./terraform output -raw cloudfront_distribution_id)
+          CF_DOMAIN=$(./terraform output -raw cloudfront_domain_name)
+          echo "bucket=$BUCKET" >> $GITHUB_OUTPUT
+          echo "cf_id=$CF_ID" >> $GITHUB_OUTPUT
+          echo "cf_domain=$CF_DOMAIN" >> $GITHUB_OUTPUT
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync frontend/dist/ s3://${{ steps.tf-outputs.outputs.bucket }}/ \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "index.html" \
+            --exclude "*.map"
+
+          # Upload index.html separately with no-cache
+          aws s3 cp frontend/dist/index.html s3://${{ steps.tf-outputs.outputs.bucket }}/index.html \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --content-type "text/html"
+
+      - name: Invalidate CloudFront cache
+        id: invalidate
+        run: |
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.tf-outputs.outputs.cf_id }} \
+            --paths "/*" \
+            --query 'Invalidation.Id' \
+            --output text)
+          echo "invalidation_id=$INVALIDATION_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait for CloudFront invalidation
+        run: |
+          echo "Waiting for CloudFront invalidation to complete..."
+          aws cloudfront wait invalidation-completed \
+            --distribution-id ${{ steps.tf-outputs.outputs.cf_id }} \
+            --id ${{ steps.invalidate.outputs.invalidation_id }}
+
+      - name: Summary
+        run: |
+          echo "### Frontend Deployment Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**S3 Bucket:** \`${{ steps.tf-outputs.outputs.bucket }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**CloudFront Distribution:** \`${{ steps.tf-outputs.outputs.cf_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://${{ steps.tf-outputs.outputs.cf_domain }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Invalidation ID:** \`${{ steps.invalidate.outputs.invalidation_id }}\`" >> $GITHUB_STEP_SUMMARY
