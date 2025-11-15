@@ -61,3 +61,41 @@ resource "aws_dynamodb_table" "jobs" {
     Name = "${var.project_name}-jobs"
   }
 }
+
+# DynamoDB Table for Usage Tracking
+resource "aws_dynamodb_table" "usage" {
+  name         = "${var.project_name}-usage"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "user_id"
+  range_key    = "period"
+
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "period"
+    type = "S" # Format: YYYY-MM
+  }
+
+  # Time To Live configuration (optional, for cleanup of old usage records)
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
+  # Point-in-time recovery
+  point_in_time_recovery {
+    enabled = var.dynamodb_point_in_time_recovery
+  }
+
+  # Server-side encryption
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = {
+    Name = "${var.project_name}-usage"
+  }
+}
