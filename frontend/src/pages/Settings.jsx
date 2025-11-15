@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Eye, EyeOff, Check } from "lucide-react";
-import AppLayout from "../components/AppLayout.jsx";
 import PasswordStrength from "../components/PasswordStrength";
 import "../styles/settings.css";
 
@@ -144,9 +143,8 @@ function Settings() {
   };
 
   return (
-    <AppLayout>
-      <section className="settings-section">
-        <h2 className="section-title">Settings</h2>
+    <section className="settings-section">
+      <h2 className="section-title">Settings</h2>
         <div className="settings-card">
           <div className="settings-card-header">
             <h3 className="settings-subtitle">Change Password</h3>
@@ -286,8 +284,7 @@ function Settings() {
             </button>
           </form>
         </div>
-      </section>
-    </AppLayout>
+    </section>
   );
 }
 
