@@ -1,5 +1,5 @@
 import { useState } from "react";
-import AppLayout from "../components/AppLayout.jsx";
+import "../styles/dashboard.css";
 
 function Settings() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -24,7 +24,7 @@ function Settings() {
   };
 
   return (
-    <AppLayout>
+    <div className="settings-page">
       <section className="settings-section">
         <h2 className="section-title">Settings</h2>
         <div className="settings-card">
@@ -48,7 +48,9 @@ function Settings() {
                   type="button"
                   className="password-toggle"
                   onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                  aria-label={
+                    showCurrentPassword ? "Hide password" : "Show password"
+                  }
                 >
                   {showCurrentPassword ? (
                     <svg
@@ -98,7 +100,9 @@ function Settings() {
                   type="button"
                   className="password-toggle"
                   onClick={() => setShowNewPassword(!showNewPassword)}
-                  aria-label={showNewPassword ? "Hide password" : "Show password"}
+                  aria-label={
+                    showNewPassword ? "Hide password" : "Show password"
+                  }
                 >
                   {showNewPassword ? (
                     <svg
@@ -147,7 +151,9 @@ function Settings() {
                   type="button"
                   className="password-toggle"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  aria-label={
+                    showConfirmPassword ? "Hide password" : "Show password"
+                  }
                 >
                   {showConfirmPassword ? (
                     <svg
@@ -185,7 +191,10 @@ function Settings() {
               type="submit"
               className="save-button"
               disabled={
-                isSaving || !currentPassword || !newPassword || newPassword !== confirmPassword
+                isSaving ||
+                !currentPassword ||
+                !newPassword ||
+                newPassword !== confirmPassword
               }
             >
               {isSaving ? "Saving..." : "Save Changes"}
@@ -193,7 +202,7 @@ function Settings() {
           </form>
         </div>
       </section>
-    </AppLayout>
+    </div>
   );
 }
 

@@ -1,35 +1,45 @@
 import { Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
 import Navbar from "./components/Navbar.jsx";
+import AppLayout from "./components/AppLayout.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import Landing from "./pages/Landing.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
-import DashboardOverview from "./pages/DashboardOverview.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
 import Create from "./pages/Create.jsx";
-import Videos from "./pages/Videos.jsx";
+import VideoLibrary from "./pages/VideoLibrary.jsx";
+import Workspace from "./pages/Workspace.jsx";
 import Settings from "./pages/Settings.jsx";
+import NotFound from "./pages/NotFound.jsx";
 
 function App() {
   const location = useLocation();
-  const appRoutes = ["/dashboard", "/create", "/videos", "/settings"];
-  const showNavbar = !appRoutes.includes(location.pathname);
+
+  // Navbar only on public pages
+  const publicRoutes = ["/", "/login", "/signup", "/forgot-password"];
+  const showNavbar = publicRoutes.includes(location.pathname);
 
   return (
     <ThemeProvider>
       <div className="app-shell">
         {showNavbar && <Navbar />}
         <Routes>
+          {/* Public Routes */}
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+
+          {/* Protected Routes with AppLayout (Sidebar) */}
           <Route
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <DashboardOverview />
+                <AppLayout>
+                  <Dashboard />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -37,15 +47,29 @@ function App() {
             path="/create"
             element={
               <ProtectedRoute>
-                <Create />
+                <AppLayout>
+                  <Create />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
           <Route
-            path="/videos"
+            path="/library"
             element={
               <ProtectedRoute>
-                <Videos />
+                <AppLayout>
+                  <VideoLibrary />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/:videoId"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Workspace />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -53,10 +77,15 @@ function App() {
             path="/settings"
             element={
               <ProtectedRoute>
-                <Settings />
+                <AppLayout>
+                  <Settings />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
+
+          {/* 404 Catch-all */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
     </ThemeProvider>

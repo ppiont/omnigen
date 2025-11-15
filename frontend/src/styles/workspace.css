@@ -1,0 +1,146 @@
+.workspace-page {
+  width: 100%;
+  min-height: 100%;
+  padding: var(--space-32) var(--space-48);
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+.workspace-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-32);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.breadcrumb-link {
+  color: var(--aurora-green);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.breadcrumb-link:hover {
+  color: var(--aurora-teal);
+}
+
+.breadcrumb-separator {
+  color: var(--text-muted);
+}
+
+.breadcrumb-current {
+  color: var(--text-primary);
+}
+
+.workspace-main {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.workspace-title {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 700;
+  margin: 0 0 var(--space-16) 0;
+  color: var(--text-primary);
+  background: linear-gradient(135deg, var(--aurora-green), var(--aurora-teal));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.workspace-video-id {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-24);
+}
+
+.workspace-video-id code {
+  font-family: "Space Grotesk", monospace;
+  background: var(--bg-elevated);
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-base);
+  border: 1px solid var(--bg-highlight);
+  color: var(--aurora-purple);
+}
+
+.placeholder-text {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--space-32);
+  max-width: 600px;
+}
+
+.workspace-error {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-64) var(--space-32);
+  text-align: center;
+}
+
+.workspace-error h1 {
+  font-size: 2rem;
+  color: var(--error);
+  margin-bottom: var(--space-16);
+}
+
+.workspace-error p {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-32);
+}
+
+/* Button styles for workspace */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
+  padding: 0.9rem 1.75rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.btn-primary {
+  background: linear-gradient(120deg, var(--aurora-green), var(--aurora-teal));
+  color: #031108;
+  box-shadow: 0 0 20px var(--glow-green);
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible {
+  filter: brightness(1.05);
+  box-shadow: 0 0 30px var(--glow-green);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  border-color: rgba(180, 76, 255, 0.5);
+  color: var(--aurora-purple);
+  background: rgba(180, 76, 255, 0.08);
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus-visible {
+  border-color: var(--aurora-purple);
+  color: #fff;
+  box-shadow: 0 0 18px var(--glow-purple);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .workspace-page {
+    padding: var(--space-24) var(--space-16);
+  }
+}

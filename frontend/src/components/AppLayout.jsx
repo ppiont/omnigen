@@ -18,7 +18,7 @@ const sidebarTabs = [
     icon: <Sparkles size={20} />,
   },
   {
-    id: "videos",
+    id: "library",
     label: "Videos",
     description: "Browse library",
     icon: <Video size={20} />,
@@ -30,7 +30,6 @@ const sidebarTabs = [
     icon: <Settings size={20} />,
   },
 ];
-
 
 function AppLayout({ children }) {
   const location = useLocation();
@@ -59,8 +58,9 @@ function AppLayout({ children }) {
     const path = location.pathname;
     if (path === "/dashboard") return "dashboard";
     if (path === "/create") return "create";
-    if (path === "/videos") return "videos";
+    if (path === "/library") return "library";
     if (path === "/settings") return "settings";
+    if (path.startsWith("/workspace/")) return null; // Workspace doesn't have active tab
     return "dashboard";
   };
 
@@ -68,7 +68,7 @@ function AppLayout({ children }) {
     const routes = {
       dashboard: "/dashboard",
       create: "/create",
-      videos: "/videos",
+      library: "/library",
       settings: "/settings",
     };
     navigate(routes[tabId]);

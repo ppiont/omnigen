@@ -1,8 +1,16 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { v4 as uuidv4 } from "uuid";
 import ToggleSwitch from "../components/ToggleSwitch.jsx";
-import AppLayout from "../components/AppLayout.jsx";
+import "../styles/dashboard.css";
 
-const categories = ["Ad Creative", "Product Demo", "Explainer", "Social Media", "Tutorial"];
+const categories = [
+  "Ad Creative",
+  "Product Demo",
+  "Explainer",
+  "Social Media",
+  "Tutorial",
+];
 const styles = ["Cinematic", "Modern", "Minimalist", "Bold", "Playful"];
 const durations = ["15s", "30s", "60s", "90s"];
 const aspects = ["16:9", "9:16", "1:1", "4:5"];
@@ -23,6 +31,7 @@ function IconChevronDown() {
 }
 
 function Create() {
+  const navigate = useNavigate();
   const [prompt, setPrompt] = useState("");
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("Ad Creative");
@@ -62,6 +71,11 @@ function Create() {
         if (prev >= 100) {
           clearInterval(interval);
           setIsGenerating(false);
+
+          // Generate UUID for new video and redirect to workspace
+          const videoId = uuidv4();
+          navigate(`/workspace/${videoId}`);
+
           return 100;
         }
         return prev + 10;
@@ -72,7 +86,7 @@ function Create() {
   const toggleAdvanced = () => setIsAdvancedOpen(!isAdvancedOpen);
 
   return (
-    <AppLayout>
+    <>
       <div className="generation-grid">
         <section className="prompt-card">
           <h2 className="card-title">Generate a video</h2>
@@ -105,14 +119,18 @@ function Create() {
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <p className="preview-status">Generating video... {progress}%</p>
+                <p className="preview-status">
+                  Generating video... {progress}%
+                </p>
               </div>
             ) : (
               <div className="preview-placeholder">
                 <div className="preview-aspect-ratio">
                   <span className="preview-aspect-text">{selectedAspect}</span>
                 </div>
-                <p className="preview-placeholder-text">Your video will appear here</p>
+                <p className="preview-placeholder-text">
+                  Your video will appear here
+                </p>
               </div>
             )}
           </div>
@@ -137,7 +155,9 @@ function Create() {
           aria-expanded={isAdvancedOpen}
         >
           <span>Advanced options</span>
-          <span className={`advanced-chevron ${isAdvancedOpen ? "is-open" : ""}`}>
+          <span
+            className={`advanced-chevron ${isAdvancedOpen ? "is-open" : ""}`}
+          >
             <IconChevronDown />
           </span>
         </button>
@@ -166,7 +186,9 @@ function Create() {
                     <button
                       key={style}
                       type="button"
-                      className={`style-btn ${selectedStyle === style ? "is-active" : ""}`}
+                      className={`style-btn ${
+                        selectedStyle === style ? "is-active" : ""
+                      }`}
                       onClick={() => setSelectedStyle(style)}
                     >
                       {style}
@@ -182,7 +204,9 @@ function Create() {
                     <button
                       key={dur}
                       type="button"
-                      className={`duration-btn ${selectedDuration === dur ? "is-active" : ""}`}
+                      className={`duration-btn ${
+                        selectedDuration === dur ? "is-active" : ""
+                      }`}
                       onClick={() => setSelectedDuration(dur)}
                     >
                       {dur}
@@ -198,7 +222,9 @@ function Create() {
                     <button
                       key={aspect}
                       type="button"
-                      className={`aspect-btn ${selectedAspect === aspect ? "is-active" : ""}`}
+                      className={`aspect-btn ${
+                        selectedAspect === aspect ? "is-active" : ""
+                      }`}
                       onClick={() => setSelectedAspect(aspect)}
                     >
                       {aspect}
@@ -241,7 +267,7 @@ function Create() {
       >
         {isGenerating ? "Generating..." : "Generate Video"}
       </button>
-    </AppLayout>
+    </>
   );
 }
 
