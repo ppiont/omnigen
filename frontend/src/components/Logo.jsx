@@ -8,6 +8,10 @@ function Logo({ size = "default" }) {
       viewBox="0 0 84 92"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      style={{
+        willChange: 'transform',
+        transform: 'translateZ(0)', // GPU acceleration
+      }}
     >
       <defs>
         <linearGradient id="logo-aurora" x1="0" y1="0" x2="1" y2="1">
@@ -17,14 +21,16 @@ function Logo({ size = "default" }) {
           <stop offset="100%" stopColor="#ff00ff" />
         </linearGradient>
 
+        {/* Optimized filter with reduced blur for better performance */}
         <filter
           id="logo-glow"
           x="-40%"
           y="-40%"
           width="180%"
           height="180%"
+          colorInterpolationFilters="sRGB"
         >
-          <feGaussianBlur stdDeviation="10" result="coloredBlur" />
+          <feGaussianBlur stdDeviation="8" result="coloredBlur" />
           <feMerge>
             <feMergeNode in="coloredBlur" />
             <feMergeNode in="SourceGraphic" />
@@ -32,7 +38,11 @@ function Logo({ size = "default" }) {
         </filter>
       </defs>
 
-      <g transform="translate(0,10)" filter="url(#logo-glow)">
+      <g
+        transform="translate(0,10)"
+        filter="url(#logo-glow)"
+        style={{ willChange: 'filter' }}
+      >
         <path
           d="M42 0 L74 18 L74 54 L42 72 L10 54 L10 18 Z"
           fill="url(#logo-aurora)"

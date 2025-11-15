@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext.jsx";
 import FeatureCard from "../components/FeatureCard.jsx";
 import "../styles/aurora.css";
 import "../styles/landing.css";
@@ -53,23 +54,25 @@ const steps = [
 
 const stats = [
   {
-    label: "Videos generated",
-    value: "10,000+",
-    helper: "Across every ad format",
+    label: "Videos Generated",
+    value: "10K+",
+    helper: "For leading brands",
   },
   {
-    label: "Success rate",
-    value: "98.4%",
-    helper: "Consistent render quality",
+    label: "Success Rate",
+    value: "98%",
+    helper: "Across all renders",
   },
   {
-    label: "Avg cost per video",
-    value: "$1.20",
-    helper: "Optimized pipeline spend",
+    label: "Multi-Format",
+    value: "16:9 · 9:16 · 1:1",
+    helper: "Outputs in one pass",
   },
 ];
 
 function Landing() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <main className="landing-page">
       <section className="landing-section hero-shell">
@@ -80,7 +83,7 @@ function Landing() {
               data-motion="rise"
               style={{ "--motion-delay": "0.05s" }}
             >
-              <p className="hero-kicker">AI Video Generation Platform</p>
+              <p className="hero-kicker">Ad Creative Pipeline</p>
               <h1 className="hero-title">Create Video Ads at Scale.</h1>
               <p className="hero-subtitle">
                 Generate professional product videos and ad creatives in
@@ -88,12 +91,25 @@ function Landing() {
                 production ready quality every time.
               </p>
               <div className="hero-ctas">
-                <Link className="btn btn-primary" to="/signup">
-                  Get Started
-                </Link>
-                <Link className="btn btn-secondary" to="/login">
-                  Login
-                </Link>
+                {isAuthenticated ? (
+                  <>
+                    <Link className="btn btn-primary" to="/create">
+                      Try Now
+                    </Link>
+                    <Link className="btn btn-secondary" to="/dashboard">
+                      Dashboard
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link className="btn btn-primary" to="/signup">
+                      Start Creating
+                    </Link>
+                    <Link className="btn btn-secondary" to="/login">
+                      Login
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>

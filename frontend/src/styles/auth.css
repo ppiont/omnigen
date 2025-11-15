@@ -161,10 +161,78 @@
   border-color: var(--error);
 }
 
+.form-input.success {
+  border-color: var(--aurora-green);
+}
+
+.form-field {
+  position: relative;
+}
+
+.field-icon {
+  position: absolute;
+  right: 1rem;
+  top: 2.4rem;
+  pointer-events: none;
+  color: var(--aurora-green);
+  animation: checkmarkFadeIn 0.3s ease forwards;
+}
+
+@keyframes checkmarkFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .input-error {
   margin: 0;
   color: var(--error);
   font-size: 0.85rem;
+}
+
+.auth-error {
+  padding: var(--space-12) var(--space-16);
+  border-radius: 8px;
+  background: rgba(255, 100, 100, 0.1);
+  border: 1px solid rgba(255, 100, 100, 0.3);
+  color: var(--error);
+  font-size: 0.9rem;
+  margin-bottom: var(--space-16);
+}
+
+.auth-success {
+  padding: var(--space-12) var(--space-16);
+  border-radius: 8px;
+  background: rgba(124, 255, 0, 0.1);
+  border: 1px solid rgba(124, 255, 0, 0.3);
+  color: var(--aurora-green);
+  font-size: 0.9rem;
+  margin-bottom: var(--space-16);
+}
+
+.auth-link-button {
+  background: none;
+  border: none;
+  color: var(--aurora-purple);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.2s ease;
+}
+
+.auth-link-button:hover {
+  opacity: 0.8;
+}
+
+.auth-link-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .auth-submit {
@@ -216,6 +284,58 @@
 .auth-meta a {
   color: var(--aurora-purple);
   font-weight: 600;
+}
+
+.password-strength {
+  margin-top: var(--space-8);
+  font-size: 0.85rem;
+}
+
+.strength-bars {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  height: 4px;
+}
+
+.strength-bar {
+  flex: 1;
+  background: var(--bg-highlight);
+  border-radius: 2px;
+  transition: background-color 0.3s ease;
+}
+
+.strength-bar.filled {
+  background: var(--aurora-green);
+}
+
+.strength-bar.filled.weak {
+  background: var(--error);
+}
+
+.strength-bar.filled.medium {
+  background: #ffa500;
+}
+
+.strength-bar.filled.strong {
+  background: var(--aurora-green);
+}
+
+.strength-text {
+  margin-top: var(--space-4);
+  font-weight: 500;
+}
+
+.strength-text.weak {
+  color: var(--error);
+}
+
+.strength-text.medium {
+  color: #ffa500;
+}
+
+.strength-text.strong {
+  color: var(--aurora-green);
 }
 
 @keyframes authFadeUp {
