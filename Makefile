@@ -110,6 +110,23 @@ frontend-install: ## Install frontend dependencies with Bun
 	@cd frontend && bun install
 	@printf '${GREEN}Dependencies installed successfully!${NC}\n'
 
+frontend-env: ## Generate frontend .env file with production values from Terraform
+	@printf '${CYAN}Generating frontend .env file from Terraform outputs...${NC}\n'
+	$(eval CF_DOMAIN := $(shell cd $(INFRA_DIR) && terraform output -raw cloudfront_domain_name 2>/dev/null))
+	$(eval USER_POOL := $(shell cd $(INFRA_DIR) && terraform output -raw auth_user_pool_id 2>/dev/null))
+	$(eval CLIENT_ID := $(shell cd $(INFRA_DIR) && terraform output -raw auth_client_id 2>/dev/null))
+	$(eval COGNITO_DOMAIN := $(shell cd $(INFRA_DIR) && terraform output -raw auth_hosted_ui_domain 2>/dev/null))
+	@if [ -z "$(CF_DOMAIN)" ] || [ -z "$(USER_POOL)" ] || [ -z "$(CLIENT_ID)" ] || [ -z "$(COGNITO_DOMAIN)" ]; then \
+		printf '${RED}Error: Could not get all required values from Terraform. Run terraform apply first.${NC}\n'; \
+		exit 1; \
+	fi
+	@printf '# Production environment variables (auto-generated from Terraform)\n' > frontend/.env
+	@printf 'VITE_API_URL=https://$(CF_DOMAIN)\n' >> frontend/.env
+	@printf 'VITE_COGNITO_USER_POOL_ID=$(USER_POOL)\n' >> frontend/.env
+	@printf 'VITE_COGNITO_CLIENT_ID=$(CLIENT_ID)\n' >> frontend/.env
+	@printf 'VITE_COGNITO_DOMAIN=https://$(COGNITO_DOMAIN)\n' >> frontend/.env
+	@printf '${GREEN}Frontend .env file generated successfully!${NC}\n'
+
 frontend-dev: ## Run frontend development server
 	@printf '${CYAN}Starting frontend dev server...${NC}\n'
 	@cd frontend && bun run dev
