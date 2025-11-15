@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/omnigen/backend/internal/auth"
 	"github.com/omnigen/backend/internal/domain"
 	"github.com/omnigen/backend/internal/service"
 	"github.com/omnigen/backend/pkg/errors"
@@ -52,10 +53,12 @@ type GenerateResponse struct {
 // @Param request body GenerateRequest true "Generation parameters"
 // @Success 201 {object} GenerateResponse
 // @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
+// @Failure 401 {object} errors.ErrorResponse "Unauthorized - Invalid or missing JWT token"
+// @Failure 402 {object} errors.ErrorResponse "Payment Required - Monthly quota exceeded"
+// @Failure 429 {object} errors.ErrorResponse "Too Many Requests - Rate limit exceeded"
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /api/v1/generate [post]
-// @Security ApiKeyAuth
+// @Security BearerAuth
 func (h *GenerateHandler) Generate(c *gin.Context) {
 	var req GenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -71,14 +74,19 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 	// Get trace ID from context
 	traceID, _ := c.Get("trace_id")
 
+	// Get user ID from auth context
+	userID := auth.MustGetUserID(c)
+
 	h.logger.Info("Generating video",
 		zap.String("trace_id", traceID.(string)),
+		zap.String("user_id", userID),
 		zap.String("prompt", req.Prompt),
 		zap.Int("duration", req.Duration),
 	)
 
 	// Create domain request
 	domainReq := &domain.GenerateRequest{
+		UserID:      userID,
 		Prompt:      req.Prompt,
 		Duration:    req.Duration,
 		AspectRatio: req.AspectRatio,

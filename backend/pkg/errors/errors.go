@@ -50,6 +50,12 @@ var (
 	}
 
 	// Authentication errors (401)
+	ErrUnauthorized = &APIError{
+		Code:    "UNAUTHORIZED",
+		Message: "Authentication required",
+		Status:  http.StatusUnauthorized,
+	}
+
 	ErrMissingAPIKey = &APIError{
 		Code:    "MISSING_API_KEY",
 		Message: "API key is required",
@@ -60,6 +66,13 @@ var (
 		Code:    "INVALID_API_KEY",
 		Message: "Invalid API key",
 		Status:  http.StatusUnauthorized,
+	}
+
+	// Authorization errors (403)
+	ErrForbidden = &APIError{
+		Code:    "FORBIDDEN",
+		Message: "You do not have permission to access this resource",
+		Status:  http.StatusForbidden,
 	}
 
 	// Not found errors (404)
@@ -111,4 +124,16 @@ var (
 // ErrorResponse is the JSON response for errors
 type ErrorResponse struct {
 	Error *APIError `json:"error"`
+}
+
+// NewAPIError creates a new API error
+func NewAPIError(base *APIError, message string, details map[string]interface{}) *APIError {
+	err := *base
+	if message != "" {
+		err.Message = message
+	}
+	if details != nil {
+		err.Details = details
+	}
+	return &err
 }

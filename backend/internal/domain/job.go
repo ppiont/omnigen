@@ -27,6 +27,7 @@ type Scene struct {
 
 // GenerateRequest represents a video generation request
 type GenerateRequest struct {
+	UserID      string
 	Prompt      string
 	Duration    int
 	AspectRatio string
