@@ -8,15 +8,17 @@ terraform {
     }
   }
 
-  # Local backend (default)
-  # Uncomment below for S3 backend after initial setup
-  # backend "s3" {
-  #   bucket         = "omnigen-terraform-state"
-  #   key            = "infrastructure/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   encrypt        = true
-  #   dynamodb_table = "omnigen-terraform-locks"
-  # }
+  # S3 Backend Configuration
+  # Note: Bucket name must be created first with format: omnigen-terraform-state-<account-id>
+  # Run: aws sts get-caller-identity --query Account --output text
+  # Then create bucket: aws s3 mb s3://omnigen-terraform-state-<account-id>
+  backend "s3" {
+    bucket         = "omnigen-terraform-state-971422717446"
+    key            = "infrastructure/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "omnigen-terraform-locks"
+  }
 }
 
 provider "aws" {

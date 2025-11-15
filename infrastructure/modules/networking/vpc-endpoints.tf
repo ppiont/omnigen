@@ -4,7 +4,7 @@
 # S3 Gateway Endpoint (for pulling image layers from ECR)
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.${data.aws_region.current.id}.s3"
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [aws_route_table.private.id]
 
@@ -16,7 +16,7 @@ resource "aws_vpc_endpoint" "s3" {
 # DynamoDB Gateway Endpoint
 resource "aws_vpc_endpoint" "dynamodb" {
   vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.${data.aws_region.current.id}.dynamodb"
+  service_name      = "com.amazonaws.${var.aws_region}.dynamodb"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [aws_route_table.private.id]
 
@@ -28,7 +28,7 @@ resource "aws_vpc_endpoint" "dynamodb" {
 # ECR API Interface Endpoint (for ECS to pull from ECR)
 resource "aws_vpc_endpoint" "ecr_api" {
   vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${data.aws_region.current.id}.ecr.api"
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = [aws_subnet.private.id]
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
@@ -42,7 +42,7 @@ resource "aws_vpc_endpoint" "ecr_api" {
 # ECR Docker Interface Endpoint (for pulling Docker images)
 resource "aws_vpc_endpoint" "ecr_dkr" {
   vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${data.aws_region.current.id}.ecr.dkr"
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = [aws_subnet.private.id]
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
@@ -79,6 +79,3 @@ resource "aws_security_group" "vpc_endpoints" {
     Name = "${var.project_name}-vpce-sg"
   }
 }
-
-# Data source for current region
-data "aws_region" "current" {}

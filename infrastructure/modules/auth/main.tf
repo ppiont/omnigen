@@ -57,9 +57,9 @@ resource "aws_cognito_user_pool" "main" {
 
   # Custom attribute for subscription tier (for future use)
   schema {
-    name                = "subscription_tier"
-    attribute_data_type = "String"
-    mutable             = true
+    name                     = "subscription_tier"
+    attribute_data_type      = "String"
+    mutable                  = true
     developer_only_attribute = false
 
     string_attribute_constraints {
