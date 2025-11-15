@@ -32,7 +32,7 @@ resource "aws_cloudfront_distribution" "frontend" {
     custom_origin_config {
       http_port              = 80
       https_port             = 443
-      origin_protocol_policy = "http-only"  # ALB only has HTTP listener
+      origin_protocol_policy = "http-only" # ALB only has HTTP listener
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
