@@ -32,7 +32,7 @@ function Logo({ size = "default" }) {
         </filter>
       </defs>
 
-      <g transform="translate(0,20)" filter="url(#logo-glow)">
+      <g transform="translate(0,10)" filter="url(#logo-glow)">
         <path
           d="M42 0 L74 18 L74 54 L42 72 L10 54 L10 18 Z"
           fill="url(#logo-aurora)"

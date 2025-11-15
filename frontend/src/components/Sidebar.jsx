@@ -1,76 +1,6 @@
+import { ChevronLeft, ChevronRight, Sun, Moon, LogOut } from "lucide-react";
 import Logo from "./Logo.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
-
-const IconChevronLeft = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    <path
-      d="M15 18l-6-6 6-6"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill="none"
-    />
-  </svg>
-);
-
-const IconChevronRight = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    <path
-      d="M9 18l6-6-6-6"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill="none"
-    />
-  </svg>
-);
-
-const IconSun = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="18" height="18">
-    <circle
-      cx="12"
-      cy="12"
-      r="4"
-      stroke="currentColor"
-      strokeWidth="2"
-      fill="none"
-    />
-    <path
-      d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const IconMoon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="18" height="18">
-    <path
-      d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-      stroke="currentColor"
-      strokeWidth="2"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const IconLogOut = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="18" height="18">
-    <path
-      d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill="none"
-    />
-  </svg>
-);
 
 function Sidebar({
   tabs = [],
@@ -118,7 +48,7 @@ function Sidebar({
             className="collapse-toggle"
             aria-label="Expand sidebar"
           >
-            <IconChevronRight />
+            <ChevronRight size={20} />
           </button>
         ) : (
           <>
@@ -132,7 +62,7 @@ function Sidebar({
               className="collapse-toggle"
               aria-label="Collapse sidebar"
             >
-              <IconChevronLeft />
+              <ChevronLeft size={20} />
             </button>
           </>
         )}
@@ -206,7 +136,7 @@ function Sidebar({
                 aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
                 title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
               >
-                {theme === "light" ? <IconMoon /> : <IconSun />}
+                {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
               </button>
               <button
                 type="button"
@@ -215,7 +145,7 @@ function Sidebar({
                 aria-label="Sign out"
                 title="Sign out"
               >
-                <IconLogOut />
+                <LogOut size={18} />
               </button>
             </div>
           </>
