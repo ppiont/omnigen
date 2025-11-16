@@ -20,17 +20,14 @@ import (
 type ServerConfig struct {
 	Port                string
 	Environment         string
-	MockMode            bool // Enable mock responses for frontend development
 	Logger              *zap.Logger
 	JobRepo             *repository.DynamoDBRepository
 	S3Service           *repository.S3Service
 	UsageRepo           *repository.UsageRepository
 	GeneratorService    *service.GeneratorService
 	ParserService       *service.ParserService // Script generation service
-	MockService         *service.MockService   // Mock service for frontend development
 	APIKeys             []string               // Deprecated: Use JWTValidator instead
 	JWTValidator        *auth.JWTValidator
-	RateLimiter         *auth.RateLimiter
 	CookieConfig        auth.CookieConfig // Cookie configuration for httpOnly tokens
 	CloudFrontDomain    string            // For CORS in production
 	CognitoDomain       string            // Cognito hosted UI domain for CORS
@@ -140,15 +137,8 @@ func (s *Server) setupRoutes() {
 
 	// API v1 routes
 	v1 := s.router.Group("/api/v1")
-
-	// Only apply auth and rate limiting in non-mock mode
-	if !s.config.MockMode {
-		v1.Use(auth.JWTAuthMiddleware(s.config.JWTValidator, s.config.Logger))
-		v1.Use(auth.RateLimitMiddleware(s.config.RateLimiter, s.config.Logger))
-		s.config.Logger.Info("Auth and rate limiting enabled for API routes")
-	} else {
-		s.config.Logger.Warn("MOCK MODE: Auth and rate limiting disabled - API is publicly accessible")
-	}
+	v1.Use(auth.JWTAuthMiddleware(s.config.JWTValidator, s.config.Logger))
+	s.config.Logger.Info("Auth enabled for API routes")
 
 	{
 		// Initialize handlers
@@ -163,27 +153,16 @@ func (s *Server) setupRoutes() {
 			s.config.ParserService,
 			stepFunctionsService,
 			s.config.JobRepo,
-			s.config.MockService,
 			s.config.Logger,
-			s.config.MockMode,
 		)
 
 		jobsHandler := handlers.NewJobsHandler(
 			s.config.JobRepo,
 			s.config.S3Service,
-			s.config.MockService,
 			s.config.Logger,
-			s.config.MockMode,
 		)
 
 		progressHandler := handlers.NewProgressHandler(
-			s.config.MockService,
-			s.config.Logger,
-			s.config.MockMode,
-		)
-
-		presetsHandler := handlers.NewPresetsHandler(
-			s.config.MockService,
 			s.config.Logger,
 		)
 
@@ -198,23 +177,11 @@ func (s *Server) setupRoutes() {
 			lambdaClient,
 			s.config.LambdaParserARN,
 			s.config.Logger,
-			s.config.MockMode,
 		)
 
-		// Routes with quota enforcement for generation endpoint (skipped in mock mode)
-		if !s.config.MockMode {
-			v1.POST("/generate",
-				auth.QuotaEnforcementMiddleware(s.config.UsageRepo, s.config.Logger),
-				generateHandler.Generate,
-			)
-			v1.POST("/parse",
-				auth.QuotaEnforcementMiddleware(s.config.UsageRepo, s.config.Logger),
-				parserHandler.Parse,
-			)
-		} else {
-			v1.POST("/generate", generateHandler.Generate)
-			v1.POST("/parse", parserHandler.Parse)
-		}
+		// Generation routes
+		v1.POST("/generate", generateHandler.Generate)
+		v1.POST("/parse", parserHandler.Parse)
 
 		// Script routes (GET/PUT - no quota enforcement needed)
 		v1.GET("/scripts/:id", parserHandler.GetScript)
@@ -224,6 +191,5 @@ func (s *Server) setupRoutes() {
 		v1.GET("/jobs/:id", jobsHandler.GetJob)
 		v1.GET("/jobs", jobsHandler.ListJobs)
 		v1.GET("/jobs/:id/progress", progressHandler.GetProgress)
-		v1.GET("/presets", presetsHandler.GetPresets)
 	}
 }

@@ -430,26 +430,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/presets": {
-            "get": {
-                "description": "Get a list of predefined brand style presets for quick video generation",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "presets"
-                ],
-                "summary": "Get brand style presets",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.PresetsResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/scripts/{id}": {
             "get": {
                 "security": [
@@ -1505,17 +1485,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.PresetsResponse": {
-            "type": "object",
-            "properties": {
-                "presets": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.BrandPreset"
-                    }
-                }
-            }
-        },
         "handlers.ProgressResponse": {
             "type": "object",
             "properties": {
@@ -1570,32 +1539,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.BrandPreset": {
-            "type": "object",
-            "properties": {
-                "color_palette": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "music_mood": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "style": {
                     "type": "string"
                 }
             }

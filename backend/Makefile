@@ -1,4 +1,4 @@
-.PHONY: build clean deploy test local-invoke build-ParserFunction build-GeneratorFunction build-AudioGeneratorFunction build-ComposerFunction deploy-parser build-parser
+.PHONY: build clean deploy test local-invoke build-ParserFunction build-GeneratorFunction build-AudioGeneratorFunction build-ComposerFunction deploy-parser build-parser deploy-generator build-generator deploy-audio-generator build-audio-generator deploy-composer build-composer deploy-lambdas build-lambdas
 
 # SAM will call these targets automatically for each function
 build-ParserFunction:
@@ -83,7 +83,8 @@ deploy-parser:
 	aws lambda update-function-code \
 		--function-name omnigen-parser \
 		--zip-file fileb://build/parser/bootstrap.zip \
-		--region us-east-1
+		--region us-east-1 \
+		--no-cli-pager
 	@echo "Parser Lambda deployed successfully!"
 
 # Build parser only (no deploy)
@@ -93,3 +94,80 @@ build-parser:
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o build/parser/bootstrap ./cmd/lambdas/parser
 	cd build/parser && zip -q bootstrap.zip bootstrap
 	@echo "Parser Lambda built: build/parser/bootstrap.zip"
+
+# Quick build and deploy generator lambda (Terraform-managed)
+deploy-generator:
+	@echo "Building generator Lambda..."
+	@mkdir -p build/generator
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o build/generator/bootstrap ./cmd/lambdas/generator
+	@echo "Packaging Lambda..."
+	cd build/generator && zip -q bootstrap.zip bootstrap
+	@echo "Deploying to AWS Lambda..."
+	aws lambda update-function-code \
+		--function-name omnigen-generator \
+		--zip-file fileb://build/generator/bootstrap.zip \
+		--region us-east-1 \
+		--no-cli-pager
+	@echo "Generator Lambda deployed successfully!"
+
+# Build generator only (no deploy)
+build-generator:
+	@echo "Building generator Lambda..."
+	@mkdir -p build/generator
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o build/generator/bootstrap ./cmd/lambdas/generator
+	cd build/generator && zip -q bootstrap.zip bootstrap
+	@echo "Generator Lambda built: build/generator/bootstrap.zip"
+
+# Quick build and deploy audio-generator lambda (Terraform-managed)
+deploy-audio-generator:
+	@echo "Building audio-generator Lambda..."
+	@mkdir -p build/audio-generator
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o build/audio-generator/bootstrap ./cmd/lambdas/audio-generator
+	@echo "Packaging Lambda..."
+	cd build/audio-generator && zip -q bootstrap.zip bootstrap
+	@echo "Deploying to AWS Lambda..."
+	aws lambda update-function-code \
+		--function-name omnigen-audio-generator \
+		--zip-file fileb://build/audio-generator/bootstrap.zip \
+		--region us-east-1 \
+		--no-cli-pager
+	@echo "Audio-generator Lambda deployed successfully!"
+
+# Build audio-generator only (no deploy)
+build-audio-generator:
+	@echo "Building audio-generator Lambda..."
+	@mkdir -p build/audio-generator
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o build/audio-generator/bootstrap ./cmd/lambdas/audio-generator
+	cd build/audio-generator && zip -q bootstrap.zip bootstrap
+	@echo "Audio-generator Lambda built: build/audio-generator/bootstrap.zip"
+
+# Quick build and deploy composer lambda (Terraform-managed)
+deploy-composer:
+	@echo "Building composer Lambda..."
+	@mkdir -p build/composer
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o build/composer/bootstrap ./cmd/lambdas/composer
+	@echo "Packaging Lambda..."
+	cd build/composer && zip -q bootstrap.zip bootstrap
+	@echo "Deploying to AWS Lambda..."
+	aws lambda update-function-code \
+		--function-name omnigen-composer \
+		--zip-file fileb://build/composer/bootstrap.zip \
+		--region us-east-1 \
+		--no-cli-pager
+	@echo "Composer Lambda deployed successfully!"
+
+# Build composer only (no deploy)
+build-composer:
+	@echo "Building composer Lambda..."
+	@mkdir -p build/composer
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o build/composer/bootstrap ./cmd/lambdas/composer
+	cd build/composer && zip -q bootstrap.zip bootstrap
+	@echo "Composer Lambda built: build/composer/bootstrap.zip"
+
+# Build all lambdas (no deploy)
+build-lambdas: build-parser build-generator build-audio-generator build-composer
+	@echo "All Lambda functions built successfully!"
+
+# Deploy all lambdas
+deploy-lambdas: deploy-parser deploy-generator deploy-audio-generator deploy-composer
+	@echo "All Lambda functions deployed successfully!"

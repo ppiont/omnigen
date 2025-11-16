@@ -1,41 +1,32 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/omnigen/backend/internal/domain"
 	"github.com/omnigen/backend/internal/repository"
-	"github.com/omnigen/backend/internal/service"
 	"github.com/omnigen/backend/pkg/errors"
 	"go.uber.org/zap"
 )
 
 // JobsHandler handles job-related requests
 type JobsHandler struct {
-	jobRepo     *repository.DynamoDBRepository
-	s3Service   *repository.S3Service
-	mockService *service.MockService
-	logger      *zap.Logger
-	mockMode    bool
+	jobRepo   *repository.DynamoDBRepository
+	s3Service *repository.S3Service
+	logger    *zap.Logger
 }
 
 // NewJobsHandler creates a new jobs handler
 func NewJobsHandler(
 	jobRepo *repository.DynamoDBRepository,
 	s3Service *repository.S3Service,
-	mockService *service.MockService,
 	logger *zap.Logger,
-	mockMode bool,
 ) *JobsHandler {
 	return &JobsHandler{
-		jobRepo:     jobRepo,
-		s3Service:   s3Service,
-		mockService: mockService,
-		logger:      logger,
-		mockMode:    mockMode,
+		jobRepo:   jobRepo,
+		s3Service: s3Service,
+		logger:    logger,
 	}
 }
 
@@ -74,58 +65,34 @@ type ListJobsResponse struct {
 func (h *JobsHandler) GetJob(c *gin.Context) {
 	jobID := c.Param("id")
 
-	var job *domain.Job
-	var err error
-
-	// Use mock service in mock mode
-	if h.mockMode {
-		h.logger.Info("Getting job from mock service",
-			zap.String("job_id", jobID),
-		)
-		job = h.mockService.GetMockJobStatus(jobID)
-		if job == nil {
+	// Get job from DynamoDB
+	job, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
+	if err != nil {
+		if err == repository.ErrJobNotFound {
 			c.JSON(http.StatusNotFound, errors.ErrorResponse{
 				Error: errors.ErrJobNotFound,
 			})
 			return
 		}
-	} else {
-		// Get job from DynamoDB in real mode
-		job, err = h.jobRepo.GetJob(c.Request.Context(), jobID)
-		if err != nil {
-			if err == repository.ErrJobNotFound {
-				c.JSON(http.StatusNotFound, errors.ErrorResponse{
-					Error: errors.ErrJobNotFound,
-				})
-				return
-			}
 
-			h.logger.Error("Failed to get job", zap.String("job_id", jobID), zap.Error(err))
-			c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
-				Error: errors.ErrDatabaseError,
-			})
-			return
-		}
+		h.logger.Error("Failed to get job", zap.String("job_id", jobID), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
+			Error: errors.ErrDatabaseError,
+		})
+		return
 	}
 
 	// Generate presigned URL if video is completed
 	var videoURL *string
 	if job.Status == "completed" && job.VideoKey != "" {
-		if h.mockMode {
-			// In mock mode, create a mock S3 URL
-			mockURL := fmt.Sprintf("https://omnigen-assets-local.s3.amazonaws.com/%s", job.VideoKey)
-			videoURL = &mockURL
+		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), job.VideoKey, 7*24*time.Hour)
+		if err != nil {
+			h.logger.Error("Failed to generate presigned URL",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
 		} else {
-			// In real mode, generate presigned URL
-			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), job.VideoKey, 7*24*time.Hour)
-			if err != nil {
-				h.logger.Error("Failed to generate presigned URL",
-					zap.String("job_id", jobID),
-					zap.Error(err),
-				)
-			} else {
-				videoURL = &url
-			}
+			videoURL = &url
 		}
 	}
 
