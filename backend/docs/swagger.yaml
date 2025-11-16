@@ -108,6 +108,35 @@ definitions:
     - id_token
     - refresh_token
     type: object
+  handlers.PresetsResponse:
+    properties:
+      presets:
+        items:
+          $ref: '#/definitions/service.BrandPreset'
+        type: array
+    type: object
+  handlers.ProgressResponse:
+    properties:
+      current_stage:
+        type: string
+      estimated_time_remaining:
+        description: seconds
+        type: integer
+      job_id:
+        type: string
+      progress:
+        type: integer
+      stages_completed:
+        items:
+          type: string
+        type: array
+      stages_pending:
+        items:
+          type: string
+        type: array
+      status:
+        type: string
+    type: object
   handlers.UserResponse:
     properties:
       email:
@@ -115,6 +144,23 @@ definitions:
       subscription_tier:
         type: string
       user_id:
+        type: string
+    type: object
+  service.BrandPreset:
+    properties:
+      color_palette:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      id:
+        type: string
+      music_mood:
+        type: string
+      name:
+        type: string
+      style:
         type: string
     type: object
 host: localhost:8080
@@ -324,6 +370,48 @@ paths:
       summary: Get job status
       tags:
       - jobs
+  /api/v1/jobs/{id}/progress:
+    get:
+      description: Get real-time progress updates for a video generation job
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProgressResponse'
+        "404":
+          description: Job not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get detailed job progress
+      tags:
+      - jobs
+  /api/v1/presets:
+    get:
+      description: Get a list of predefined brand style presets for quick video generation
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.PresetsResponse'
+      summary: Get brand style presets
+      tags:
+      - presets
   /health:
     get:
       description: Check if the API is healthy and can connect to dependencies
