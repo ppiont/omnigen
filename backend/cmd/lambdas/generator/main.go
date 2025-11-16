@@ -23,21 +23,23 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/omnigen/backend/internal/adapters"
-	"github.com/omnigen/backend/internal/domain"
 )
 
-// GeneratorInput represents input from Step Functions map state
-// Matches workflow.asl.json Parameters structure
+// GeneratorInput represents simplified input from Step Functions
 type GeneratorInput struct {
-	JobID string       `json:"job_id"`
-	Scene domain.Scene `json:"scene"`
+	JobID         string `json:"job_id"`
+	Prompt        string `json:"prompt"`
+	Duration      int    `json:"duration"`     // 5 or 10 seconds (Kling constraint)
+	AspectRatio   string `json:"aspect_ratio"` // "16:9", "9:16", or "1:1"
+	StartImageURL string `json:"start_image_url,omitempty"`
+	ClipNumber    int    `json:"clip_number"` // For ordering and tracking
 }
 
 // GeneratorOutput represents the output with video URL and last frame for coherence
 type GeneratorOutput struct {
-	SceneNumber  int     `json:"scene_number"`
+	ClipNumber   int     `json:"clip_number"`
 	VideoURL     string  `json:"video_url"`      // S3 URL to video
-	LastFrameURL string  `json:"last_frame_url"` // S3 URL to last frame (for next scene coherence)
+	LastFrameURL string  `json:"last_frame_url"` // S3 URL to last frame (for next clip coherence)
 	Duration     float64 `json:"duration"`
 	Status       string  `json:"status"`
 }
@@ -108,30 +110,30 @@ func init() {
 }
 
 func handler(ctx context.Context, input GeneratorInput) (GeneratorOutput, error) {
-	log.Printf("Generator Lambda invoked for job %s, scene %d", input.JobID, input.Scene.SceneNumber)
+	log.Printf("Generator Lambda invoked for job %s, clip %d", input.JobID, input.ClipNumber)
 
 	// Update job progress
-	updateStageProgress(ctx, input.JobID, fmt.Sprintf("Generating video for scene %d", input.Scene.SceneNumber))
+	updateStageProgress(ctx, input.JobID, fmt.Sprintf("Generating clip %d/%d", input.ClipNumber, input.ClipNumber))
 
 	// Generate video using Kling API and extract last frame
 	videoURL, lastFrameURL, err := generateVideoClip(ctx, input)
 	if err != nil {
-		log.Printf("Failed to generate video for scene %d: %v", input.Scene.SceneNumber, err)
+		log.Printf("Failed to generate clip %d: %v", input.ClipNumber, err)
 		return GeneratorOutput{
-			SceneNumber: input.Scene.SceneNumber,
-			Status:      "failed",
+			ClipNumber: input.ClipNumber,
+			Status:     "failed",
 		}, err
 	}
 
 	output := GeneratorOutput{
-		SceneNumber:  input.Scene.SceneNumber,
+		ClipNumber:   input.ClipNumber,
 		VideoURL:     videoURL,
 		LastFrameURL: lastFrameURL,
-		Duration:     input.Scene.Duration,
+		Duration:     float64(input.Duration),
 		Status:       "completed",
 	}
 
-	log.Printf("Successfully generated video for scene %d: %s", input.Scene.SceneNumber, videoURL)
+	log.Printf("Successfully generated clip %d: %s", input.ClipNumber, videoURL)
 	return output, nil
 }
 
@@ -139,16 +141,17 @@ func handler(ctx context.Context, input GeneratorInput) (GeneratorOutput, error)
 func generateVideoClip(ctx context.Context, input GeneratorInput) (string, string, error) {
 	logger.Info("Generating video clip with Kling API",
 		zap.String("job_id", input.JobID),
-		zap.Int("scene_number", input.Scene.SceneNumber),
-		zap.String("prompt", input.Scene.GenerationPrompt),
+		zap.Int("clip_number", input.ClipNumber),
+		zap.String("prompt", input.Prompt),
+		zap.Int("duration", input.Duration),
 	)
 
-	// Build video generation request using scene's generation_prompt
+	// Build video generation request
 	req := &adapters.VideoGenerationRequest{
-		Prompt:        input.Scene.GenerationPrompt,
-		Duration:      int(input.Scene.Duration),
-		AspectRatio:   "16:9",                    // Default to 16:9 for now
-		StartImageURL: input.Scene.StartImageURL, // For visual coherence
+		Prompt:        input.Prompt,
+		Duration:      input.Duration,
+		AspectRatio:   input.AspectRatio,
+		StartImageURL: input.StartImageURL, // For visual coherence between clips
 	}
 
 	// Submit video generation request
@@ -206,26 +209,26 @@ func generateVideoClip(ctx context.Context, input GeneratorInput) (string, strin
 			defer os.RemoveAll(tmpDir)
 
 			// Download video from Replicate to temp file
-			videoPath := filepath.Join(tmpDir, fmt.Sprintf("scene-%d.mp4", input.Scene.SceneNumber))
+			videoPath := filepath.Join(tmpDir, fmt.Sprintf("clip-%d.mp4", input.ClipNumber))
 			if err := downloadVideoToFile(ctx, result.VideoURL, videoPath); err != nil {
 				return "", "", fmt.Errorf("failed to download video: %w", err)
 			}
 
 			// Extract last frame using ffmpeg
-			framePath := filepath.Join(tmpDir, fmt.Sprintf("scene-%d-last-frame.jpg", input.Scene.SceneNumber))
+			framePath := filepath.Join(tmpDir, fmt.Sprintf("clip-%d-last-frame.jpg", input.ClipNumber))
 			if err := extractLastFrame(ctx, videoPath, framePath); err != nil {
 				return "", "", fmt.Errorf("failed to extract last frame: %w", err)
 			}
 
 			// Upload video to S3
-			videoS3Key := fmt.Sprintf("scenes/%s/scene-%d.mp4", input.JobID, input.Scene.SceneNumber)
+			videoS3Key := fmt.Sprintf("clips/%s/clip-%d.mp4", input.JobID, input.ClipNumber)
 			videoS3URL, err := uploadFileToS3(ctx, videoPath, videoS3Key, "video/mp4")
 			if err != nil {
 				return "", "", fmt.Errorf("failed to upload video to S3: %w", err)
 			}
 
 			// Upload last frame to S3
-			frameS3Key := fmt.Sprintf("scenes/%s/scene-%d-last-frame.jpg", input.JobID, input.Scene.SceneNumber)
+			frameS3Key := fmt.Sprintf("clips/%s/clip-%d-last-frame.jpg", input.JobID, input.ClipNumber)
 			frameS3URL, err := uploadFileToS3(ctx, framePath, frameS3Key, "image/jpeg")
 			if err != nil {
 				return "", "", fmt.Errorf("failed to upload frame to S3: %w", err)

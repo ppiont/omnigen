@@ -1,4 +1,46 @@
-.PHONY: build clean deploy test local-invoke build-ParserFunction build-GeneratorFunction build-AudioGeneratorFunction build-ComposerFunction deploy-parser build-parser deploy-generator build-generator deploy-audio-generator build-audio-generator deploy-composer build-composer deploy-lambdas build-lambdas
+.PHONY: build clean deploy test local-invoke build-ParserFunction build-GeneratorFunction build-AudioGeneratorFunction build-ComposerFunction deploy-parser build-parser deploy-generator build-generator deploy-audio-generator build-audio-generator deploy-composer build-composer deploy-lambdas build-lambdas swagger help
+
+# Default target - show help
+.DEFAULT_GOAL := help
+
+# Help target
+help:
+	@echo "OmniGen Backend - Available Make Targets"
+	@echo ""
+	@echo "Building:"
+	@echo "  build               - Build all Lambda functions using SAM"
+	@echo "  build-fast          - Fast local build without SAM"
+	@echo "  build-lambdas       - Build all Lambda functions (no deploy)"
+	@echo "  build-parser        - Build parser Lambda only"
+	@echo "  build-generator     - Build generator Lambda only"
+	@echo "  build-audio-generator - Build audio-generator Lambda only"
+	@echo "  build-composer      - Build composer Lambda only"
+	@echo ""
+	@echo "Deploying:"
+	@echo "  deploy              - Deploy to AWS (guided)"
+	@echo "  deploy-ci           - Deploy to AWS (CI/CD mode)"
+	@echo "  deploy-lambdas      - Deploy all Lambda functions"
+	@echo "  deploy-parser       - Deploy parser Lambda only"
+	@echo "  deploy-generator    - Deploy generator Lambda only"
+	@echo "  deploy-audio-generator - Deploy audio-generator Lambda only"
+	@echo "  deploy-composer     - Deploy composer Lambda only"
+	@echo ""
+	@echo "Testing:"
+	@echo "  test                - Run all tests"
+	@echo "  test-coverage       - Run tests with coverage report"
+	@echo ""
+	@echo "Local Development:"
+	@echo "  local-api           - Start local API server"
+	@echo "  local-invoke-parser - Invoke parser Lambda locally"
+	@echo ""
+	@echo "Documentation:"
+	@echo "  swagger             - Generate/update Swagger API docs"
+	@echo ""
+	@echo "Maintenance:"
+	@echo "  clean               - Clean build artifacts"
+	@echo "  validate            - Validate SAM template"
+	@echo "  package             - Package for deployment"
+	@echo ""
 
 # SAM will call these targets automatically for each function
 build-ParserFunction:
@@ -171,3 +213,12 @@ build-lambdas: build-parser build-generator build-audio-generator build-composer
 # Deploy all lambdas
 deploy-lambdas: deploy-parser deploy-generator deploy-audio-generator deploy-composer
 	@echo "All Lambda functions deployed successfully!"
+
+# Generate/update Swagger documentation
+swagger:
+	@echo "Generating Swagger documentation..."
+	@swag init -g cmd/api/main.go --output docs
+	@echo "Swagger docs generated successfully in docs/"
+	@echo "  - docs/swagger.json"
+	@echo "  - docs/swagger.yaml"
+	@echo "  - docs/docs.go"

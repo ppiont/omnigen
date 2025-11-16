@@ -150,7 +150,6 @@ func (s *Server) setupRoutes() {
 		)
 
 		generateHandler := handlers.NewGenerateHandler(
-			s.config.ParserService,
 			stepFunctionsService,
 			s.config.JobRepo,
 			s.config.Logger,
