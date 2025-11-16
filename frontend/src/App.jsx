@@ -32,35 +32,29 @@ function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
 
-          {/* Protected Routes with AppLayout (Sidebar) */}
+          {/* Routes with AppLayout (Sidebar) */}
           <Route
             path="/dashboard"
             element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <Dashboard />
-                </AppLayout>
-              </ProtectedRoute>
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
             }
           />
           <Route
             path="/create"
             element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <Create />
-                </AppLayout>
-              </ProtectedRoute>
+              <AppLayout>
+                <Create />
+              </AppLayout>
             }
           />
           <Route
             path="/library"
             element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <VideoLibrary />
-                </AppLayout>
-              </ProtectedRoute>
+              <AppLayout>
+                <VideoLibrary />
+              </AppLayout>
             }
           />
           <Route
@@ -76,11 +70,9 @@ function App() {
           <Route
             path="/settings"
             element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <Settings />
-                </AppLayout>
-              </ProtectedRoute>
+              <AppLayout>
+                <Settings />
+              </AppLayout>
             }
           />
 

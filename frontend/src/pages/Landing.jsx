@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext.jsx";
+import { useAuth } from "../contexts/useAuth.js";
 import FeatureCard from "../components/FeatureCard.jsx";
 import "../styles/aurora.css";
 import "../styles/landing.css";

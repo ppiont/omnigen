@@ -1,29 +1,29 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import '../styles/auth.css';
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/useAuth.js";
+import "../styles/auth.css";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
   const { forgotPassword, resetPassword } = useAuth();
 
-  const [step, setStep] = useState('email'); // 'email' or 'reset'
-  const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [step, setStep] = useState("email"); // 'email' or 'reset'
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState("");
 
   const validateEmail = () => {
     const newErrors = {};
 
     if (!email) {
-      newErrors.email = 'Email is required';
+      newErrors.email = "Email is required";
     } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = 'Please enter a valid email';
+      newErrors.email = "Please enter a valid email";
     }
 
     setErrors(newErrors);
@@ -34,19 +34,19 @@ export default function ForgotPassword() {
     const newErrors = {};
 
     if (!code) {
-      newErrors.code = 'Verification code is required';
+      newErrors.code = "Verification code is required";
     }
 
     if (!newPassword) {
-      newErrors.newPassword = 'New password is required';
+      newErrors.newPassword = "New password is required";
     } else if (newPassword.length < 8) {
-      newErrors.newPassword = 'Password must be at least 8 characters';
+      newErrors.newPassword = "Password must be at least 8 characters";
     }
 
     if (!confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password';
+      newErrors.confirmPassword = "Please confirm your password";
     } else if (newPassword !== confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+      newErrors.confirmPassword = "Passwords do not match";
     }
 
     setErrors(newErrors);
@@ -60,13 +60,13 @@ export default function ForgotPassword() {
 
     setIsSubmitting(true);
     setErrors({});
-    setSuccessMessage('');
+    setSuccessMessage("");
 
     const result = await forgotPassword(email);
 
     if (result.success) {
       setSuccessMessage(result.message);
-      setStep('reset');
+      setStep("reset");
     } else {
       setErrors({ form: result.error });
     }
@@ -81,7 +81,7 @@ export default function ForgotPassword() {
 
     setIsSubmitting(true);
     setErrors({});
-    setSuccessMessage('');
+    setSuccessMessage("");
 
     const result = await resetPassword(email, code, newPassword);
 
@@ -89,7 +89,7 @@ export default function ForgotPassword() {
       setSuccessMessage(result.message);
       // Redirect to login after 2 seconds
       setTimeout(() => {
-        navigate('/login');
+        navigate("/login");
       }, 2000);
     } else {
       setErrors({ form: result.error });
@@ -104,9 +104,9 @@ export default function ForgotPassword() {
         <div className="auth-header">
           <h1>Reset Password</h1>
           <p className="auth-subtitle">
-            {step === 'email'
-              ? 'Enter your email to receive a reset code'
-              : 'Enter the code sent to your email'}
+            {step === "email"
+              ? "Enter your email to receive a reset code"
+              : "Enter the code sent to your email"}
           </p>
         </div>
 
@@ -122,7 +122,7 @@ export default function ForgotPassword() {
           </div>
         )}
 
-        {step === 'email' ? (
+        {step === "email" ? (
           <form onSubmit={handleRequestCode} className="auth-form" noValidate>
             <div className="form-group">
               <label htmlFor="email">Email Address</label>
@@ -131,10 +131,10 @@ export default function ForgotPassword() {
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className={errors.email ? 'error' : ''}
+                className={errors.email ? "error" : ""}
                 placeholder="you@example.com"
                 aria-invalid={!!errors.email}
-                aria-describedby={errors.email ? 'email-error' : undefined}
+                aria-describedby={errors.email ? "email-error" : undefined}
                 disabled={isSubmitting}
               />
               {errors.email && (
@@ -149,7 +149,7 @@ export default function ForgotPassword() {
               className="auth-submit"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Sending...' : 'Send Reset Code'}
+              {isSubmitting ? "Sending..." : "Send Reset Code"}
             </button>
           </form>
         ) : (
@@ -161,10 +161,10 @@ export default function ForgotPassword() {
                 id="code"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                className={errors.code ? 'error' : ''}
+                className={errors.code ? "error" : ""}
                 placeholder="Enter 6-digit code"
                 aria-invalid={!!errors.code}
-                aria-describedby={errors.code ? 'code-error' : undefined}
+                aria-describedby={errors.code ? "code-error" : undefined}
                 disabled={isSubmitting}
               />
               {errors.code && (
@@ -181,14 +181,20 @@ export default function ForgotPassword() {
                 id="newPassword"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className={errors.newPassword ? 'error' : ''}
+                className={errors.newPassword ? "error" : ""}
                 placeholder="Minimum 8 characters"
                 aria-invalid={!!errors.newPassword}
-                aria-describedby={errors.newPassword ? 'newPassword-error' : undefined}
+                aria-describedby={
+                  errors.newPassword ? "newPassword-error" : undefined
+                }
                 disabled={isSubmitting}
               />
               {errors.newPassword && (
-                <span className="error-message" id="newPassword-error" role="alert">
+                <span
+                  className="error-message"
+                  id="newPassword-error"
+                  role="alert"
+                >
                   {errors.newPassword}
                 </span>
               )}
@@ -201,14 +207,20 @@ export default function ForgotPassword() {
                 id="confirmPassword"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className={errors.confirmPassword ? 'error' : ''}
+                className={errors.confirmPassword ? "error" : ""}
                 placeholder="Re-enter new password"
                 aria-invalid={!!errors.confirmPassword}
-                aria-describedby={errors.confirmPassword ? 'confirmPassword-error' : undefined}
+                aria-describedby={
+                  errors.confirmPassword ? "confirmPassword-error" : undefined
+                }
                 disabled={isSubmitting}
               />
               {errors.confirmPassword && (
-                <span className="error-message" id="confirmPassword-error" role="alert">
+                <span
+                  className="error-message"
+                  id="confirmPassword-error"
+                  role="alert"
+                >
                   {errors.confirmPassword}
                 </span>
               )}
@@ -219,13 +231,13 @@ export default function ForgotPassword() {
               className="auth-submit"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Resetting...' : 'Reset Password'}
+              {isSubmitting ? "Resetting..." : "Reset Password"}
             </button>
 
             <button
               type="button"
               className="auth-link-button"
-              onClick={() => setStep('email')}
+              onClick={() => setStep("email")}
               disabled={isSubmitting}
             >
               ← Back to email entry
@@ -235,7 +247,7 @@ export default function ForgotPassword() {
 
         <div className="auth-footer">
           <p>
-            Remember your password?{' '}
+            Remember your password?{" "}
             <Link to="/login" className="auth-link">
               Sign in
             </Link>
