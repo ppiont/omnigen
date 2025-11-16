@@ -13,28 +13,3 @@ variable "ecs_log_group_name" {
   description = "Name for ECS log group"
   type        = string
 }
-
-variable "lambda_generator_log_group" {
-  description = "Name for Lambda generator log group"
-  type        = string
-}
-
-variable "lambda_composer_log_group" {
-  description = "Name for Lambda composer log group"
-  type        = string
-}
-
-variable "lambda_parser_log_group" {
-  description = "Name for Lambda parser log group"
-  type        = string
-}
-
-variable "lambda_audio_generator_log_group" {
-  description = "Name for Lambda audio generator log group"
-  type        = string
-}
-
-variable "step_functions_log_group" {
-  description = "Name for Step Functions log group"
-  type        = string
-}

@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -55,6 +57,54 @@ func (s *S3Service) GetPresignedURL(ctx context.Context, key string, duration ti
 	)
 
 	return request.URL, nil
+}
+
+// UploadFile uploads a file to S3
+func (s *S3Service) UploadFile(ctx context.Context, bucket, key, filePath string, contentType string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(bucket),
+		Key:         aws.String(key),
+		Body:        file,
+		ContentType: aws.String(contentType),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to upload file: %w", err)
+	}
+
+	// Return S3 URL
+	url := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucket, key)
+	return url, nil
+}
+
+// DownloadFile downloads a file from S3
+func (s *S3Service) DownloadFile(ctx context.Context, bucket, key, destPath string) error {
+	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get object: %w", err)
+	}
+	defer result.Body.Close()
+
+	file, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	_, err = io.Copy(file, result.Body)
+	if err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return nil
 }
 
 // HealthCheck performs a lightweight health check on S3

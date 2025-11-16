@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/omnigen/backend/internal/adapters"
 	"github.com/omnigen/backend/internal/auth"
 	"github.com/omnigen/backend/internal/domain"
 	"github.com/omnigen/backend/internal/repository"
@@ -15,34 +17,44 @@ import (
 	"go.uber.org/zap"
 )
 
-// GenerateHandler handles video generation requests
+// GenerateHandler handles video generation requests with goroutine-based async processing
 type GenerateHandler struct {
-	stepFunctions *service.StepFunctionsService
-	jobRepo       *repository.DynamoDBRepository
-	logger        *zap.Logger
+	parserService  *service.ParserService
+	klingAdapter   *adapters.KlingAdapter
+	minimaxAdapter *adapters.MinimaxAdapter
+	s3Service      *repository.S3Service
+	jobRepo        *repository.DynamoDBRepository
+	assetsBucket   string
+	logger         *zap.Logger
 }
 
 // NewGenerateHandler creates a new generate handler
 func NewGenerateHandler(
-	stepFunctions *service.StepFunctionsService,
+	parserService *service.ParserService,
+	klingAdapter *adapters.KlingAdapter,
+	minimaxAdapter *adapters.MinimaxAdapter,
+	s3Service *repository.S3Service,
 	jobRepo *repository.DynamoDBRepository,
+	assetsBucket string,
 	logger *zap.Logger,
 ) *GenerateHandler {
 	return &GenerateHandler{
-		stepFunctions: stepFunctions,
-		jobRepo:       jobRepo,
-		logger:        logger,
+		parserService:  parserService,
+		klingAdapter:   klingAdapter,
+		minimaxAdapter: minimaxAdapter,
+		s3Service:      s3Service,
+		jobRepo:        jobRepo,
+		assetsBucket:   assetsBucket,
+		logger:         logger,
 	}
 }
 
-// GenerateRequest represents a simplified video generation request
+// GenerateRequest represents a video generation request - SIMPLE interface
 type GenerateRequest struct {
 	Prompt      string `json:"prompt" binding:"required,min=10,max=2000"`
 	Duration    int    `json:"duration" binding:"required,min=10,max=60"`
 	AspectRatio string `json:"aspect_ratio" binding:"required,oneof=16:9 9:16 1:1"`
 	StartImage  string `json:"start_image,omitempty" binding:"omitempty,url"`
-	MusicMood   string `json:"music_mood,omitempty" binding:"omitempty,oneof=upbeat calm dramatic energetic"`
-	MusicStyle  string `json:"music_style,omitempty" binding:"omitempty,oneof=electronic acoustic orchestral"`
 }
 
 // GenerateResponse represents a video generation response
@@ -54,9 +66,9 @@ type GenerateResponse struct {
 	EstimatedCompletion int    `json:"estimated_completion_seconds"`
 }
 
-// Generate handles POST /api/v1/generate
-// @Summary Generate video from prompt (simplified)
-// @Description Generates video by creating multiple 5s clips and stitching them together
+// Generate handles POST /api/v1/generate - FULLY ASYNC (returns instantly)
+// @Summary Generate video from prompt with intelligent parsing
+// @Description Creates job immediately and processes video generation in background goroutine
 // @Tags jobs
 // @Accept json
 // @Produce json
@@ -79,11 +91,11 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// Validate duration is multiple of 5 (Kling constraint)
-	if req.Duration%5 != 0 {
+	// Validate duration is multiple of 10 (Kling constraint for 10s clips)
+	if req.Duration%10 != 0 {
 		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
 			Error: errors.ErrInvalidRequest.WithDetails(map[string]interface{}{
-				"error": "duration must be a multiple of 5 seconds (Kling v2.5 limitation)",
+				"error": "duration must be a multiple of 10 seconds (Kling v2.5 10s clip limitation)",
 			}),
 		})
 		return
@@ -92,27 +104,26 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 	// Get user ID from auth context
 	userID := auth.MustGetUserID(c)
 
-	// Calculate number of clips needed (each clip is 5 seconds)
-	numClips := req.Duration / 5
-
-	h.logger.Info("Starting video generation",
+	h.logger.Info("Starting fully async video generation",
 		zap.String("user_id", userID),
 		zap.String("prompt", req.Prompt),
 		zap.Int("duration", req.Duration),
-		zap.Int("num_clips", numClips),
 		zap.String("aspect_ratio", req.AspectRatio),
 	)
 
-	// Create job record
+	// Create job record IMMEDIATELY (no GPT-4o call yet - that's in the goroutine!)
 	jobID := fmt.Sprintf("job-%s", uuid.New().String())
+	now := time.Now().Unix()
 	job := &domain.Job{
 		JobID:       jobID,
 		UserID:      userID,
 		Status:      domain.StatusProcessing,
+		Stage:       "script_generating",
 		Prompt:      req.Prompt,
 		Duration:    req.Duration,
 		AspectRatio: req.AspectRatio,
-		CreatedAt:   time.Now().Unix(),
+		CreatedAt:   now,
+		UpdatedAt:   now,
 		TTL:         time.Now().Add(7 * 24 * time.Hour).Unix(),
 	}
 
@@ -125,61 +136,21 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// Default music preferences if not provided
-	musicMood := req.MusicMood
-	if musicMood == "" {
-		musicMood = "upbeat" // Default to upbeat
-	}
-	musicStyle := req.MusicStyle
-	if musicStyle == "" {
-		musicStyle = "electronic" // Default to electronic
-	}
+	// Launch async video generation in goroutine (includes GPT-4o + video generation)
+	go h.generateVideoAsync(context.Background(), job, req)
 
-	// Prepare Step Functions input
-	sfInput := &domain.StepFunctionsInput{
-		JobID:       jobID,
-		Prompt:      req.Prompt,
-		Duration:    req.Duration,
-		AspectRatio: req.AspectRatio,
-		StartImage:  req.StartImage,
-		NumClips:    numClips,
-		MusicMood:   musicMood,
-		MusicStyle:  musicStyle,
-	}
-
-	// Start Step Functions execution
-	executionARN, err := h.stepFunctions.StartExecution(c.Request.Context(), sfInput)
-	if err != nil {
-		h.logger.Error("Failed to start Step Functions execution",
-			zap.String("job_id", jobID),
-			zap.Error(err))
-
-		// Update job status to failed
-		h.jobRepo.UpdateJobStatus(c.Request.Context(), jobID, domain.StatusFailed)
-
-		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
-			Error: errors.ErrInternalServer.WithDetails(map[string]interface{}{
-				"message": "Failed to start video generation workflow",
-			}),
-		})
-		return
-	}
-
-	h.logger.Info("Step Functions execution started",
+	h.logger.Info("Job created, async generation started",
 		zap.String("job_id", jobID),
-		zap.String("execution_arn", executionARN),
-		zap.Int("num_clips", numClips),
+		zap.String("stage", "script_generating"),
 	)
 
-	// Estimate completion time: ~60s per 5s clip + 30s composition
-	estimatedSeconds := (numClips * 60) + 30
-
+	// Return immediately (<100ms response time)
 	response := GenerateResponse{
 		JobID:               jobID,
 		Status:              job.Status,
-		NumClips:            numClips,
+		NumClips:            0, // Will be set after script generation
 		CreatedAt:           job.CreatedAt,
-		EstimatedCompletion: estimatedSeconds,
+		EstimatedCompletion: 300, // ~5 minutes total
 	}
 
 	c.JSON(http.StatusAccepted, response)

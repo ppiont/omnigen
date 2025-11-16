@@ -104,32 +104,34 @@ func main() {
 	}
 	zapLogger.Info("API keys loaded successfully", zap.Int("count", len(apiKeys)))
 
-	stepFunctionsService := service.NewStepFunctionsService(
-		awsClients.StepFunctions,
-		cfg.StepFunctionsARN,
-		zapLogger,
-	)
-
+	// GeneratorService is now a stub - video generation handled by goroutines in GenerateHandler
 	generatorService := service.NewGeneratorService(
 		jobRepo,
-		stepFunctionsService,
-		// promptParser,
-		// scenePlanner,
 		zapLogger,
 	)
 
-	// Initialize parser service for script generation
-	llamaAdapter := adapters.NewLlamaAdapter(cfg.ReplicateSecretARN, awsClients.SecretsManager, zapLogger)
-	if err := llamaAdapter.Initialize(context.Background()); err != nil {
-		zapLogger.Fatal("Failed to initialize Llama adapter", zap.Error(err))
+	// Initialize parser service for script generation with GPT-4o
+	// Get the Replicate API key from Secrets Manager
+	replicateAPIKey, err := secretsService.GetReplicateAPIKey(context.Background())
+	if err != nil {
+		zapLogger.Fatal("Failed to retrieve Replicate API key", zap.Error(err))
 	}
 
+	// Create GPT-4o adapter for intelligent script generation
+	gpt4oAdapter := adapters.NewGPT4oAdapter(replicateAPIKey, zapLogger)
+
 	parserService := service.NewParserService(
-		llamaAdapter,
+		gpt4oAdapter,
 		awsClients.DynamoDB,
 		cfg.ScriptsTable,
 		zapLogger,
 	)
+	zapLogger.Info("Parser service initialized with GPT-4o")
+
+	// Initialize video and audio generation adapters
+	klingAdapter := adapters.NewKlingAdapter(replicateAPIKey, zapLogger)
+	minimaxAdapter := adapters.NewMinimaxAdapter(replicateAPIKey, zapLogger)
+	zapLogger.Info("Video and audio generation adapters initialized")
 
 	// Initialize JWT validator
 	jwksURL := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
@@ -150,27 +152,26 @@ func main() {
 		SameSite: http.SameSiteStrictMode,         // Strict CSRF protection
 	}
 
-	// Initialize HTTP server
+	// Initialize HTTP server with goroutine-based async architecture
 	server := api.NewServer(&api.ServerConfig{
-		Port:                cfg.Port,
-		Environment:         cfg.Environment,
-		Logger:              zapLogger,
-		JobRepo:             jobRepo,
-		S3Service:           s3Service,
-		UsageRepo:           usageRepo,
-		GeneratorService:    generatorService,
-		ParserService:       parserService,
-		APIKeys:             apiKeys,
-		JWTValidator:        jwtValidator,
-		CookieConfig:        cookieConfig,
-		CloudFrontDomain:    cfg.CloudFrontDomain,
-		CognitoDomain:       cfg.CognitoDomain,
-		LambdaClient:        awsClients.Lambda,
-		LambdaParserARN:     cfg.LambdaParserARN,
-		StepFunctionsClient: awsClients.StepFunctions,
-		StepFunctionsARN:    cfg.StepFunctionsARN,
-		ReadTimeout:         time.Duration(cfg.ReadTimeout) * time.Second,
-		WriteTimeout:        time.Duration(cfg.WriteTimeout) * time.Second,
+		Port:             cfg.Port,
+		Environment:      cfg.Environment,
+		Logger:           zapLogger,
+		JobRepo:          jobRepo,
+		S3Service:        s3Service,
+		UsageRepo:        usageRepo,
+		GeneratorService: generatorService,
+		ParserService:    parserService,
+		KlingAdapter:     klingAdapter,   // Video generation
+		MinimaxAdapter:   minimaxAdapter, // Audio generation
+		AssetsBucket:     cfg.AssetsBucket,
+		APIKeys:          apiKeys,
+		JWTValidator:     jwtValidator,
+		CookieConfig:     cookieConfig,
+		CloudFrontDomain: cfg.CloudFrontDomain,
+		CognitoDomain:    cfg.CognitoDomain,
+		ReadTimeout:      time.Duration(cfg.ReadTimeout) * time.Second,
+		WriteTimeout:     time.Duration(cfg.WriteTimeout) * time.Second,
 	})
 
 	httpServer := &http.Server{

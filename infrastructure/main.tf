@@ -24,22 +24,18 @@ module "networking" {
   container_port      = local.container_port
 }
 
-# IAM Module - Roles and Policies for ECS, Lambda, Step Functions
+# IAM Module - Roles and Policies for ECS
 module "iam" {
   source = "./modules/iam"
 
-  project_name                  = var.project_name
-  assets_bucket_arn             = module.storage.assets_bucket_arn
-  frontend_bucket_arn           = module.storage.frontend_bucket_arn
-  dynamodb_table_arn            = module.storage.dynamodb_table_arn
-  dynamodb_usage_table_arn      = module.storage.dynamodb_usage_table_arn
-  dynamodb_scripts_table_arn    = module.storage.dynamodb_scripts_table_arn
-  step_functions_arn            = module.serverless.step_functions_arn
-  replicate_secret_arn          = var.replicate_api_key_secret_arn
-  ecr_repository_arn            = module.compute.ecr_repository_arn
-  lambda_generator_function_arn = module.serverless.lambda_generator_arn
-  lambda_composer_function_arn  = module.serverless.lambda_composer_arn
-  lambda_parser_function_arn    = module.serverless.lambda_parser_arn
+  project_name               = var.project_name
+  assets_bucket_arn          = module.storage.assets_bucket_arn
+  frontend_bucket_arn        = module.storage.frontend_bucket_arn
+  dynamodb_table_arn         = module.storage.dynamodb_table_arn
+  dynamodb_usage_table_arn   = module.storage.dynamodb_usage_table_arn
+  dynamodb_scripts_table_arn = module.storage.dynamodb_scripts_table_arn
+  replicate_secret_arn       = var.replicate_api_key_secret_arn
+  ecr_repository_arn         = module.compute.ecr_repository_arn
 }
 
 # Storage Module - S3 Buckets and DynamoDB Table
@@ -59,83 +55,44 @@ module "storage" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  project_name                     = var.project_name
-  log_retention_days               = var.cloudwatch_log_retention_days
-  ecs_log_group_name               = local.ecs_log_group_name
-  lambda_generator_log_group       = local.lambda_generator_log_group
-  lambda_composer_log_group        = local.lambda_composer_log_group
-  lambda_parser_log_group          = local.lambda_parser_log_group
-  lambda_audio_generator_log_group = local.lambda_audio_generator_log_group
-  step_functions_log_group         = local.step_functions_log_group
+  project_name       = var.project_name
+  log_retention_days = var.cloudwatch_log_retention_days
+  ecs_log_group_name = local.ecs_log_group_name
 }
 
 # Compute Module - ECS Fargate, ECR, Task Definition, Service, Auto-Scaling
 module "compute" {
   source = "./modules/compute"
 
-  project_name              = var.project_name
-  environment               = var.environment
-  vpc_id                    = module.networking.vpc_id
-  private_subnet_ids        = [module.networking.private_subnet_id]
-  ecs_security_group_id     = module.networking.ecs_security_group_id
-  alb_target_group_arn      = module.loadbalancer.target_group_arn
-  task_execution_role_arn   = module.iam.ecs_task_execution_role_arn
-  task_role_arn             = module.iam.ecs_task_role_arn
-  cpu                       = var.ecs_cpu
-  memory                    = var.ecs_memory
-  min_tasks                 = var.ecs_min_tasks
-  max_tasks                 = var.ecs_max_tasks
-  target_cpu_utilization    = var.ecs_target_cpu_utilization
-  container_name            = local.container_name
-  container_port            = local.container_port
-  log_group_name            = module.monitoring.ecs_log_group_name
-  aws_region                = var.aws_region
+  project_name                = var.project_name
+  environment                 = var.environment
+  vpc_id                      = module.networking.vpc_id
+  private_subnet_ids          = [module.networking.private_subnet_id]
+  ecs_security_group_id       = module.networking.ecs_security_group_id
+  alb_target_group_arn        = module.loadbalancer.target_group_arn
+  task_execution_role_arn     = module.iam.ecs_task_execution_role_arn
+  task_role_arn               = module.iam.ecs_task_role_arn
+  cpu                         = var.ecs_cpu
+  memory                      = var.ecs_memory
+  min_tasks                   = var.ecs_min_tasks
+  max_tasks                   = var.ecs_max_tasks
+  target_cpu_utilization      = var.ecs_target_cpu_utilization
+  container_name              = local.container_name
+  container_port              = local.container_port
+  log_group_name              = module.monitoring.ecs_log_group_name
+  aws_region                  = var.aws_region
   assets_bucket_name          = module.storage.assets_bucket_name
   dynamodb_table_name         = module.storage.dynamodb_table_name
   dynamodb_usage_table_name   = module.storage.dynamodb_usage_table_name
   dynamodb_scripts_table_name = module.storage.dynamodb_scripts_table_name
-  step_functions_arn          = module.serverless.step_functions_arn
-  lambda_parser_arn           = module.serverless.lambda_parser_arn
-  replicate_secret_arn      = var.replicate_api_key_secret_arn
-  cognito_user_pool_id      = module.auth.user_pool_id
-  cognito_client_id         = module.auth.client_id
-  jwt_issuer                = module.auth.issuer_url
-  cognito_domain            = module.auth.hosted_ui_domain
-  cloudfront_domain         = module.cdn.cloudfront_domain_name
+  replicate_secret_arn        = var.replicate_api_key_secret_arn
+  cognito_user_pool_id        = module.auth.user_pool_id
+  cognito_client_id           = module.auth.client_id
+  jwt_issuer                  = module.auth.issuer_url
+  cognito_domain              = module.auth.hosted_ui_domain
+  cloudfront_domain           = module.cdn.cloudfront_domain_name
 
   depends_on = [module.monitoring, module.auth]
-}
-
-# Serverless Module - Lambda Functions and Step Functions
-module "serverless" {
-  source = "./modules/serverless"
-
-  project_name                     = var.project_name
-  vpc_id                           = module.networking.vpc_id
-  private_subnet_ids               = [module.networking.private_subnet_id]
-  lambda_security_group_id         = module.networking.lambda_security_group_id
-  lambda_execution_role_arn        = module.iam.lambda_execution_role_arn
-  step_functions_role_arn          = module.iam.step_functions_role_arn
-  generator_memory                 = var.lambda_generator_memory
-  composer_memory                  = var.lambda_composer_memory
-  timeout                          = var.lambda_timeout
-  generator_concurrency            = var.lambda_generator_concurrency
-  composer_concurrency             = var.lambda_composer_concurrency
-  audio_generator_memory           = 512 # Temporary: TODO add to variables
-  audio_generator_concurrency      = 5   # Temporary: TODO add to variables
-  assets_bucket_name               = module.storage.assets_bucket_name
-  dynamodb_table_name              = module.storage.dynamodb_table_name
-  replicate_secret_arn             = var.replicate_api_key_secret_arn
-  aws_region                       = var.aws_region
-  scripts_table_name               = module.storage.dynamodb_scripts_table_name
-  generator_log_group_name         = module.monitoring.lambda_generator_log_group_name
-  composer_log_group_name          = module.monitoring.lambda_composer_log_group_name
-  audio_generator_log_group_name   = module.monitoring.lambda_audio_generator_log_group_name
-  parser_log_group_name            = module.monitoring.lambda_parser_log_group_name
-  step_functions_log_group_name    = module.monitoring.step_functions_log_group_name
-  step_functions_log_group_arn     = module.monitoring.step_functions_log_group_arn
-
-  depends_on = [module.monitoring]
 }
 
 # Load Balancer Module - Application Load Balancer

@@ -28,11 +28,6 @@ variable "dynamodb_scripts_table_arn" {
   type        = string
 }
 
-variable "step_functions_arn" {
-  description = "ARN of the Step Functions state machine"
-  type        = string
-}
-
 variable "replicate_secret_arn" {
   description = "ARN of the Replicate API key secret"
   type        = string
@@ -40,20 +35,5 @@ variable "replicate_secret_arn" {
 
 variable "ecr_repository_arn" {
   description = "ARN of the ECR repository"
-  type        = string
-}
-
-variable "lambda_generator_function_arn" {
-  description = "ARN of the generator Lambda function"
-  type        = string
-}
-
-variable "lambda_composer_function_arn" {
-  description = "ARN of the composer Lambda function"
-  type        = string
-}
-
-variable "lambda_parser_function_arn" {
-  description = "ARN of the parser Lambda function"
   type        = string
 }

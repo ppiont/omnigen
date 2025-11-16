@@ -48,14 +48,6 @@ resource "aws_ecs_task_definition" "api" {
           value = var.dynamodb_scripts_table_name
         },
         {
-          name  = "STEP_FUNCTIONS_ARN"
-          value = var.step_functions_arn
-        },
-        {
-          name  = "LAMBDA_PARSER_ARN"
-          value = var.lambda_parser_arn
-        },
-        {
           name  = "REPLICATE_SECRET_ARN"
           value = var.replicate_secret_arn
         },

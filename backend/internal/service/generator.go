@@ -9,30 +9,21 @@ import (
 	"go.uber.org/zap"
 )
 
-// GeneratorService is a stub - being refactored to work with script-based flow
-// TODO: Update to accept script_id instead of raw prompts
+// GeneratorService is a stub - DEPRECATED: Video generation now handled by goroutines in GenerateHandler
+// This service is kept for backwards compatibility but should not be used
 type GeneratorService struct {
-	jobRepo       *repository.DynamoDBRepository
-	stepFunctions *StepFunctionsService
-	// promptParser  *PromptParser
-	// scenePlanner  *ScenePlanner
-	logger *zap.Logger
+	jobRepo *repository.DynamoDBRepository
+	logger  *zap.Logger
 }
 
 // NewGeneratorService creates a new generator service stub
 func NewGeneratorService(
 	jobRepo *repository.DynamoDBRepository,
-	stepFunctions *StepFunctionsService,
-	// promptParser *PromptParser,
-	// scenePlanner *ScenePlanner,
 	logger *zap.Logger,
 ) *GeneratorService {
 	return &GeneratorService{
-		jobRepo:       jobRepo,
-		stepFunctions: stepFunctions,
-		// promptParser:  promptParser,
-		// scenePlanner:  scenePlanner,
-		logger: logger,
+		jobRepo: jobRepo,
+		logger:  logger,
 	}
 }
 

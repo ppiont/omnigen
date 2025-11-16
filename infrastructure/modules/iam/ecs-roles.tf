@@ -78,7 +78,8 @@ resource "aws_iam_role" "ecs_task" {
   }
 }
 
-# ECS Task Policy - S3, DynamoDB, Step Functions, Secrets Manager
+# ECS Task Policy - S3, DynamoDB, Secrets Manager, CloudWatch Logs
+# This role has all permissions needed for goroutine-based video processing
 resource "aws_iam_role_policy" "ecs_task" {
   name = "${var.project_name}-ecs-task-policy"
   role = aws_iam_role.ecs_task.id
@@ -115,26 +116,6 @@ resource "aws_iam_role_policy" "ecs_task" {
           var.dynamodb_usage_table_arn,
           var.dynamodb_scripts_table_arn,
           "${var.dynamodb_scripts_table_arn}/index/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "states:StartExecution",
-          "states:DescribeExecution",
-          "states:StopExecution"
-        ]
-        Resource = var.step_functions_arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "lambda:InvokeFunction"
-        ]
-        Resource = [
-          var.lambda_parser_function_arn,
-          var.lambda_generator_function_arn,
-          var.lambda_composer_function_arn
         ]
       },
       {
