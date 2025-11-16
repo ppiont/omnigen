@@ -36,10 +36,12 @@ func NewGenerateHandler(
 
 // GenerateRequest represents a video generation request
 type GenerateRequest struct {
-	Prompt      string `json:"prompt" binding:"required,min=10,max=1000"`
-	Duration    int    `json:"duration" binding:"required,min=15,max=180"`
-	AspectRatio string `json:"aspect_ratio" binding:"omitempty,oneof=16:9 9:16 1:1"`
-	Style       string `json:"style" binding:"omitempty,max=200"`
+	Prompt        string `json:"prompt" binding:"required,min=10,max=1000"`
+	Duration      int    `json:"duration" binding:"required,min=15,max=180"`
+	AspectRatio   string `json:"aspect_ratio" binding:"omitempty,oneof=16:9 9:16 1:1"`
+	Style         string `json:"style" binding:"omitempty,max=200"`
+	StartImageURL string `json:"start_image_url" binding:"omitempty,url"`
+	EnableAudio   *bool  `json:"enable_audio,omitempty"` // Optional, defaults to true if not specified
 }
 
 // GenerateResponse represents a video generation response
@@ -107,13 +109,21 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		)
 		job = h.mockService.CreateMockJob(userID, req.Prompt, req.Duration, req.AspectRatio)
 	} else {
+		// Default to true if not specified
+		enableAudio := true
+		if req.EnableAudio != nil {
+			enableAudio = *req.EnableAudio
+		}
+
 		// Create domain request
 		domainReq := &domain.GenerateRequest{
-			UserID:      userID,
-			Prompt:      req.Prompt,
-			Duration:    req.Duration,
-			AspectRatio: req.AspectRatio,
-			Style:       req.Style,
+			UserID:        userID,
+			Prompt:        req.Prompt,
+			Duration:      req.Duration,
+			AspectRatio:   req.AspectRatio,
+			Style:         req.Style,
+			StartImageURL: req.StartImageURL,
+			EnableAudio:   enableAudio,
 		}
 
 		// Generate video using real pipeline

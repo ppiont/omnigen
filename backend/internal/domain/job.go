@@ -16,22 +16,15 @@ type Job struct {
 	TTL          int64   `dynamodbav:"ttl" json:"ttl"` // Unix timestamp for auto-deletion
 }
 
-// Scene represents a single scene in the video
-type Scene struct {
-	Number     int     `json:"number"`
-	Duration   float64 `json:"duration"` // seconds
-	Prompt     string  `json:"prompt"`
-	Style      string  `json:"style"`
-	Transition string  `json:"transition"` // fade, cut, dissolve
-}
-
 // GenerateRequest represents a video generation request
 type GenerateRequest struct {
-	UserID      string
-	Prompt      string
-	Duration    int
-	AspectRatio string
-	Style       string
+	UserID        string
+	Prompt        string
+	Duration      int
+	AspectRatio   string
+	Style         string
+	StartImageURL string
+	EnableAudio   bool // Whether to generate audio for this video
 }
 
 // ParsedPrompt represents the parsed components of a prompt
@@ -46,11 +39,12 @@ type ParsedPrompt struct {
 
 // StepFunctionsInput represents the input to Step Functions workflow
 type StepFunctionsInput struct {
-	JobID    string   `json:"job_id"`
-	Prompt   string   `json:"prompt"`
-	Duration int      `json:"duration"`
-	Style    string   `json:"style"`
-	Scenes   []Scene  `json:"scenes"`
+	JobID       string  `json:"job_id"`
+	Prompt      string  `json:"prompt"`
+	Duration    int     `json:"duration"`
+	Style       string  `json:"style"`
+	Scenes      []Scene `json:"scenes"`
+	EnableAudio bool    `json:"enable_audio"` // Whether to generate audio
 }
 
 // JobStatus constants

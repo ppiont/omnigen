@@ -12,6 +12,7 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	_ "github.com/omnigen/backend/docs" // Import generated docs
+	"github.com/omnigen/backend/internal/adapters"
 	"github.com/omnigen/backend/internal/api"
 	"github.com/omnigen/backend/internal/auth"
 	"github.com/omnigen/backend/internal/aws"
@@ -33,7 +34,6 @@ import (
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
 
-// @host localhost:8080
 // @BasePath /
 
 // @securityDefinitions.apikey BearerAuth
@@ -114,14 +114,30 @@ func main() {
 		zapLogger,
 	)
 
-	promptParser := service.NewPromptParser(zapLogger)
-	scenePlanner := service.NewScenePlanner(zapLogger)
-
 	generatorService := service.NewGeneratorService(
 		jobRepo,
 		stepFunctionsService,
-		promptParser,
-		scenePlanner,
+		// promptParser,
+		// scenePlanner,
+		zapLogger,
+	)
+
+	// Initialize parser service for script generation
+	// Only initialize LlamaAdapter in non-mock mode (mock mode doesn't need real API calls)
+	var llamaAdapter *adapters.LlamaAdapter
+	if !cfg.MockMode {
+		llamaAdapter = adapters.NewLlamaAdapter(cfg.ReplicateSecretARN, awsClients.SecretsManager, zapLogger)
+		if err := llamaAdapter.Initialize(context.Background()); err != nil {
+			zapLogger.Fatal("Failed to initialize Llama adapter", zap.Error(err))
+		}
+	} else {
+		zapLogger.Info("Mock mode enabled - skipping Llama adapter initialization")
+	}
+
+	parserService := service.NewParserService(
+		llamaAdapter,
+		awsClients.DynamoDB,
+		cfg.ScriptsTable,
 		zapLogger,
 	)
 
@@ -151,7 +167,7 @@ func main() {
 	// Cookie configuration for httpOnly tokens
 	cookieConfig := auth.CookieConfig{
 		Secure:   cfg.Environment == "production", // HTTPS only in production
-		Domain:   "",                               // Empty for same-origin cookies
+		Domain:   "",                              // Empty for same-origin cookies
 		SameSite: http.SameSiteStrictMode,         // Strict CSRF protection
 	}
 
@@ -165,6 +181,7 @@ func main() {
 		S3Service:        s3Service,
 		UsageRepo:        usageRepo,
 		GeneratorService: generatorService,
+		ParserService:    parserService,
 		MockService:      mockService,
 		APIKeys:          apiKeys,
 		JWTValidator:     jwtValidator,
@@ -172,6 +189,8 @@ func main() {
 		CookieConfig:     cookieConfig,
 		CloudFrontDomain: cfg.CloudFrontDomain,
 		CognitoDomain:    cfg.CognitoDomain,
+		LambdaClient:     awsClients.Lambda,
+		LambdaParserARN:  cfg.LambdaParserARN,
 		ReadTimeout:      time.Duration(cfg.ReadTimeout) * time.Second,
 		WriteTimeout:     time.Duration(cfg.WriteTimeout) * time.Second,
 	})
@@ -216,14 +235,16 @@ type Config struct {
 	Environment  string `envconfig:"ENVIRONMENT" default:"production"`
 	ReadTimeout  int    `envconfig:"READ_TIMEOUT" default:"30"`
 	WriteTimeout int    `envconfig:"WRITE_TIMEOUT" default:"30"`
-	MockMode     bool   `envconfig:"MOCK_MODE" default:"true"` // Enable mock responses for frontend development
+	MockMode     bool   `envconfig:"MOCK_MODE" default:"false"` // Enable mock responses for frontend development
 
 	// AWS configuration
 	AWSRegion          string `envconfig:"AWS_REGION" required:"true"`
 	AssetsBucket       string `envconfig:"ASSETS_BUCKET" required:"true"`
 	JobTable           string `envconfig:"JOB_TABLE" required:"true"`
 	UsageTable         string `envconfig:"USAGE_TABLE" required:"true"`
+	ScriptsTable       string `envconfig:"SCRIPTS_TABLE" required:"true"`
 	StepFunctionsARN   string `envconfig:"STEP_FUNCTIONS_ARN" required:"true"`
+	LambdaParserARN    string `envconfig:"LAMBDA_PARSER_ARN"`
 	ReplicateSecretARN string `envconfig:"REPLICATE_SECRET_ARN" required:"true"`
 
 	// Authentication configuration

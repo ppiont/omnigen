@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/sfn"
@@ -28,6 +29,7 @@ type Clients struct {
 	S3             *s3.Client
 	SecretsManager *secretsmanager.Client
 	StepFunctions  *sfn.Client
+	Lambda         *lambda.Client
 }
 
 // Config is a placeholder for config that might be needed in the future
@@ -42,5 +44,6 @@ func NewClients(cfg aws.Config, appConfig interface{}) *Clients {
 		S3:             s3.NewFromConfig(cfg),
 		SecretsManager: secretsmanager.NewFromConfig(cfg),
 		StepFunctions:  sfn.NewFromConfig(cfg),
+		Lambda:         lambda.NewFromConfig(cfg),
 	}
 }
