@@ -23,44 +23,38 @@ function App() {
 
   return (
     <ThemeProvider>
-    <div className="app-shell">
+      <div className="app-shell">
         {showNavbar && <Navbar />}
-      <Routes>
+        <Routes>
           {/* Public Routes */}
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
 
           {/* Routes with AppLayout (Sidebar) */}
           <Route
             path="/dashboard"
             element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <Dashboard />
-                </AppLayout>
-              </ProtectedRoute>
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
             }
           />
           <Route
             path="/create"
             element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <Create />
-                </AppLayout>
-              </ProtectedRoute>
+              <AppLayout>
+                <Create />
+              </AppLayout>
             }
           />
           <Route
             path="/library"
             element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <VideoLibrary />
-                </AppLayout>
-              </ProtectedRoute>
+              <AppLayout>
+                <VideoLibrary />
+              </AppLayout>
             }
           />
           <Route
@@ -84,8 +78,8 @@ function App() {
 
           {/* 404 Catch-all */}
           <Route path="*" element={<NotFound />} />
-      </Routes>
-    </div>
+        </Routes>
+      </div>
     </ThemeProvider>
   );
 }

@@ -31,33 +31,17 @@ function Workspace() {
    * false when enforcing strict routing requirements.
    */
   const SKIP_UUID_VALIDATION = false;
-  const LOCAL_DEV_MODE = import.meta.env.VITE_LOCAL_DEV_MODE === "true";
-  const USE_MOCK_WORKSPACE_ON_AUTH_ERROR = LOCAL_DEV_MODE;
-  const MOCK_WORKSPACE_JOB = {
-    job_id: "job-local-dev-placeholder",
-    title: "Sample Video Workspace",
-    prompt: "Product showcase video for wireless headphones with modern aesthetic",
-    status: "completed",
-    duration: 30,
-    aspect_ratio: "16:9",
-    created_at: Math.floor(Date.now() / 1000),
-    completed_at: Math.floor(Date.now() / 1000),
-    video_url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-    style: "Cinematic",
-    error_message: null,
-    progress_percentage: 100,
-  };
 
   /**
-   * Validates whether the provided ID string is a valid job ID (job-<uuid> format).
+   * Validates whether the provided ID string is a UUID.
    *
    * @param {string} id - Identifier to validate
-   * @returns {boolean} True when the id matches job ID formatting
+   * @returns {boolean} True when the id matches UUID formatting
    */
-  const isValidJobID = (id) => {
-    const jobIDRegex =
-      /^job-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return jobIDRegex.test(id);
+  const isValidUUID = (id) => {
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(id);
   };
 
   /**
@@ -172,14 +156,6 @@ function Workspace() {
         }
 
         if (err.status === 401) {
-          if (USE_MOCK_WORKSPACE_ON_AUTH_ERROR) {
-            console.warn("[WORKSPACE] ⚠️ Auth error. Loading mock workspace job for local dev.");
-            setJobData(MOCK_WORKSPACE_JOB);
-            setErrorState(null);
-            setLoading(false);
-            return MOCK_WORKSPACE_JOB;
-          }
-
           setErrorState({
             type: "unauthorized",
             title: "Session Expired",
@@ -669,7 +645,7 @@ function Workspace() {
     );
   };
 
-  if (!videoId || (!SKIP_UUID_VALIDATION && !isValidJobID(videoId))) {
+  if (!videoId || (!SKIP_UUID_VALIDATION && !isValidUUID(videoId))) {
     return renderErrorView({
       type: "invalid_video_id",
       title: "Invalid Video ID",
