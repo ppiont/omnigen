@@ -98,8 +98,18 @@ variable "dynamodb_usage_table_name" {
   type        = string
 }
 
+variable "dynamodb_scripts_table_name" {
+  description = "Name of the DynamoDB scripts table"
+  type        = string
+}
+
 variable "step_functions_arn" {
   description = "ARN of the Step Functions state machine"
+  type        = string
+}
+
+variable "lambda_parser_arn" {
+  description = "ARN of the Parser Lambda function"
   type        = string
 }
 

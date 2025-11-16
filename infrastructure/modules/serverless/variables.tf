@@ -53,6 +53,16 @@ variable "composer_concurrency" {
   type        = number
 }
 
+variable "audio_generator_memory" {
+  description = "Memory allocation for audio generator Lambda in MB"
+  type        = number
+}
+
+variable "audio_generator_concurrency" {
+  description = "Reserved concurrent executions for audio generator Lambda"
+  type        = number
+}
+
 variable "assets_bucket_name" {
   description = "Name of the assets S3 bucket"
   type        = string
@@ -83,6 +93,11 @@ variable "composer_log_group_name" {
   type        = string
 }
 
+variable "audio_generator_log_group_name" {
+  description = "CloudWatch log group name for audio generator Lambda"
+  type        = string
+}
+
 variable "step_functions_log_group_name" {
   description = "CloudWatch log group name for Step Functions"
   type        = string
@@ -90,5 +105,15 @@ variable "step_functions_log_group_name" {
 
 variable "step_functions_log_group_arn" {
   description = "ARN of Step Functions CloudWatch log group"
+  type        = string
+}
+
+variable "scripts_table_name" {
+  description = "Name of the DynamoDB scripts table"
+  type        = string
+}
+
+variable "parser_log_group_name" {
+  description = "CloudWatch log group name for parser Lambda"
   type        = string
 }

@@ -27,3 +27,13 @@ output "step_functions_name" {
   description = "Name of the Step Functions state machine"
   value       = aws_sfn_state_machine.video_pipeline.name
 }
+
+output "lambda_parser_arn" {
+  description = "ARN of the parser Lambda function"
+  value       = aws_lambda_function.parser.arn
+}
+
+output "lambda_parser_name" {
+  description = "Name of the parser Lambda function"
+  value       = aws_lambda_function.parser.function_name
+}

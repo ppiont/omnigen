@@ -16,3 +16,15 @@ data "archive_file" "lambda_composer_placeholder" {
   source_file = "${path.module}/lambda-placeholders/composer.js"
   output_path = "${path.module}/lambda-placeholders/composer.zip"
 }
+
+data "archive_file" "lambda_audio_generator_placeholder" {
+  type        = "zip"
+  source_file = "${path.module}/lambda-placeholders/audio-generator.js"
+  output_path = "${path.module}/lambda-placeholders/audio-generator.zip"
+}
+
+data "archive_file" "lambda_parser_placeholder" {
+  type        = "zip"
+  source_file = "${path.module}/lambda-placeholders/parser.js"
+  output_path = "${path.module}/lambda-placeholders/parser.zip"
+}

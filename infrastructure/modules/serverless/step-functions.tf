@@ -27,11 +27,52 @@ resource "aws_sfn_state_machine" "video_pipeline" {
             "style.$"    = "$.style"
           }
         }
-        Next = "ComposeVideo"
+        Next = "CheckAudioEnabled"
         Retry = [
           {
             ErrorEquals     = ["States.ALL"]
             IntervalSeconds = 2
+            MaxAttempts     = 2
+            BackoffRate     = 2.0
+          }
+        ]
+        Catch = [
+          {
+            ErrorEquals = ["States.ALL"]
+            Next        = "MarkFailed"
+            ResultPath  = "$.error"
+          }
+        ]
+      }
+
+      CheckAudioEnabled = {
+        Type = "Choice"
+        Choices = [
+          {
+            Variable      = "$.enable_audio"
+            BooleanEquals = true
+            Next          = "GenerateAudio"
+          }
+        ]
+        Default = "ComposeVideo"
+      }
+
+      GenerateAudio = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::lambda:invoke"
+        Parameters = {
+          FunctionName = aws_lambda_function.audio_generator.arn
+          Payload = {
+            "job_id.$"   = "$.job_id"
+            "duration.$" = "$.duration"
+            "mood.$"     = "$.style"
+          }
+        }
+        Next = "ComposeVideo"
+        Retry = [
+          {
+            ErrorEquals     = ["States.ALL"]
+            IntervalSeconds = 5
             MaxAttempts     = 2
             BackoffRate     = 2.0
           }

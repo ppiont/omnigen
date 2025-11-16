@@ -1,17 +1,17 @@
-# Lambda Function - Generator (Scene generation and Replicate API orchestration)
+# Lambda Function - AudioGenerator (Music and voiceover generation)
 
-resource "aws_lambda_function" "generator" {
-  filename         = data.archive_file.lambda_generator_placeholder.output_path
-  function_name    = "${var.project_name}-generator"
+resource "aws_lambda_function" "audio_generator" {
+  filename         = data.archive_file.lambda_audio_generator_placeholder.output_path
+  function_name    = "${var.project_name}-audio-generator"
   role             = var.lambda_execution_role_arn
   handler          = "bootstrap"
-  source_code_hash = data.archive_file.lambda_generator_placeholder.output_base64sha256
+  source_code_hash = data.archive_file.lambda_audio_generator_placeholder.output_base64sha256
   runtime          = "provided.al2023"
   timeout          = var.timeout
-  memory_size      = var.generator_memory
+  memory_size      = var.audio_generator_memory
   architectures    = ["arm64"]
 
-  reserved_concurrent_executions = var.generator_concurrency
+  reserved_concurrent_executions = var.audio_generator_concurrency
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
@@ -28,21 +28,21 @@ resource "aws_lambda_function" "generator" {
 
   logging_config {
     log_format = "JSON"
-    log_group  = var.generator_log_group_name
+    log_group  = var.audio_generator_log_group_name
   }
 
   tags = {
-    Name = "${var.project_name}-generator"
+    Name = "${var.project_name}-audio-generator"
   }
 
-  depends_on = [var.generator_log_group_name]
+  depends_on = [var.audio_generator_log_group_name]
 }
 
 # Lambda Permission for Step Functions
-resource "aws_lambda_permission" "generator_step_functions" {
+resource "aws_lambda_permission" "audio_generator_step_functions" {
   statement_id  = "AllowExecutionFromStepFunctions"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.generator.function_name
+  function_name = aws_lambda_function.audio_generator.function_name
   principal     = "states.amazonaws.com"
   source_arn    = aws_sfn_state_machine.video_pipeline.arn
 }

@@ -63,7 +63,9 @@ resource "aws_iam_role_policy" "lambda_execution" {
         ]
         Resource = [
           var.dynamodb_table_arn,
-          "${var.dynamodb_table_arn}/index/*"
+          "${var.dynamodb_table_arn}/index/*",
+          var.dynamodb_scripts_table_arn,
+          "${var.dynamodb_scripts_table_arn}/index/*"
         ]
       },
       {
