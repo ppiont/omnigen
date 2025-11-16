@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -47,8 +48,16 @@ func NewLlamaAdapter(secretARN string, sm *secretsmanager.Client, logger *zap.Lo
 	}
 }
 
-// Initialize loads the Replicate API token from Secrets Manager
+// Initialize loads the Replicate API token from environment or Secrets Manager
 func (a *LlamaAdapter) Initialize(ctx context.Context) error {
+	// Check for environment variable first (for local development)
+	if apiKey := os.Getenv("REPLICATE_API_KEY"); apiKey != "" {
+		a.apiToken = apiKey
+		a.logger.Info("Llama adapter initialized with environment variable")
+		return nil
+	}
+
+	// Fall back to Secrets Manager (for production)
 	output, err := a.secretManager.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
 		SecretId: &a.secretARN,
 	})
@@ -59,7 +68,7 @@ func (a *LlamaAdapter) Initialize(ctx context.Context) error {
 	// Assume secret is stored as plain text token
 	a.apiToken = *output.SecretString
 
-	a.logger.Info("Llama adapter initialized successfully")
+	a.logger.Info("Llama adapter initialized successfully from Secrets Manager")
 	return nil
 }
 

@@ -2,9 +2,11 @@ package aws
 
 import (
 	"context"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -14,9 +16,20 @@ import (
 
 // NewConfig creates a new AWS SDK configuration
 func NewConfig(region string) (aws.Config, error) {
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(region),
-	)
+	// Check for local DynamoDB endpoint
+	endpointURL := os.Getenv("AWS_ENDPOINT_URL")
+
+	var opts []func(*config.LoadOptions) error
+	opts = append(opts, config.WithRegion(region))
+
+	// If using local DynamoDB, use static credentials
+	if endpointURL != "" {
+		opts = append(opts, config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider("dummy", "dummy", ""),
+		))
+	}
+
+	cfg, err := config.LoadDefaultConfig(context.TODO(), opts...)
 	if err != nil {
 		return aws.Config{}, err
 	}
@@ -39,8 +52,21 @@ type Config interface {
 
 // NewClients creates all AWS service clients
 func NewClients(cfg aws.Config, appConfig interface{}) *Clients {
+	// Check for local DynamoDB endpoint
+	endpointURL := os.Getenv("AWS_ENDPOINT_URL")
+
+	var dynamoClient *dynamodb.Client
+	if endpointURL != "" {
+		// Use custom endpoint for DynamoDB Local
+		dynamoClient = dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
+			o.BaseEndpoint = &endpointURL
+		})
+	} else {
+		dynamoClient = dynamodb.NewFromConfig(cfg)
+	}
+
 	return &Clients{
-		DynamoDB:       dynamodb.NewFromConfig(cfg),
+		DynamoDB:       dynamoClient,
 		S3:             s3.NewFromConfig(cfg),
 		SecretsManager: secretsmanager.NewFromConfig(cfg),
 		StepFunctions:  sfn.NewFromConfig(cfg),

@@ -255,6 +255,7 @@
   letter-spacing: 0.2em;
   opacity: 0;
   transition: opacity 0.2s ease;
+  padding-right: 1rem;
 }
 
 .video-card:hover .thumbnail-overlay,

@@ -137,11 +137,16 @@ func main() {
 
 	jwtValidator := auth.NewJWTValidator(jwksURL, cfg.JWTIssuer, cfg.CognitoClientID, zapLogger)
 
-	// Fetch JWKS keys at startup
+	// Fetch JWKS keys at startup (optional in development)
 	if err := jwtValidator.FetchJWKS(); err != nil {
-		zapLogger.Fatal("Failed to fetch JWKS", zap.Error(err))
+		if cfg.Environment == "production" {
+			zapLogger.Fatal("Failed to fetch JWKS", zap.Error(err))
+		} else {
+			zapLogger.Warn("Failed to fetch JWKS (continuing in development mode)", zap.Error(err))
+		}
+	} else {
+		zapLogger.Info("JWT validator initialized successfully")
 	}
-	zapLogger.Info("JWT validator initialized successfully")
 
 	// Cookie configuration for httpOnly tokens
 	cookieConfig := auth.CookieConfig{

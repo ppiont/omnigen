@@ -4,6 +4,9 @@ import * as cognito from "../services/cognito";
 import { auth as authAPI } from "../utils/api";
 import { AuthContext } from "./authContext.js";
 
+// Development mode flag - bypass authentication for local UI development
+const IS_DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,6 +21,18 @@ export function AuthProvider({ children }) {
   const checkAuth = async () => {
     try {
       setLoading(true);
+
+      // Dev mode: use mock authentication
+      if (IS_DEV_MODE) {
+        const devUser = localStorage.getItem('dev_user');
+        if (devUser) {
+          setUser(JSON.parse(devUser));
+        } else {
+          setUser(null);
+        }
+        return;
+      }
+
       // Try to get user info from backend (checks httpOnly cookie)
       const userData = await authAPI.me();
       setUser(userData);
@@ -36,6 +51,19 @@ export function AuthProvider({ children }) {
     try {
       setError(null);
       setLoading(true);
+
+      // Dev mode: mock authentication
+      if (IS_DEV_MODE) {
+        const mockUser = {
+          user_id: 'dev-user-123',
+          email: email,
+          name: 'Dev User',
+          subscription_tier: 'free', // Default to free plan
+        };
+        localStorage.setItem('dev_user', JSON.stringify(mockUser));
+        setUser(mockUser);
+        return { success: true };
+      }
 
       // Authenticate with Cognito
       const tokens = await cognito.loginUser(email, password);
@@ -232,6 +260,14 @@ export function AuthProvider({ children }) {
    */
   const logout = async () => {
     try {
+      // Dev mode: clear mock user
+      if (IS_DEV_MODE) {
+        localStorage.removeItem('dev_user');
+        setUser(null);
+        navigate('/login');
+        return;
+      }
+
       // Sign out from Cognito
       cognito.signOut();
 

@@ -112,6 +112,64 @@ func (r *DynamoDBRepository) UpdateJobStatus(ctx context.Context, jobID string, 
 	return nil
 }
 
+// ListJobsByUser retrieves jobs for a specific user with pagination
+func (r *DynamoDBRepository) ListJobsByUser(ctx context.Context, userID string, limit int, lastEvaluatedKey map[string]types.AttributeValue) ([]domain.Job, map[string]types.AttributeValue, error) {
+	input := &dynamodb.QueryInput{
+		TableName:              aws.String(r.tableName),
+		IndexName:              aws.String("user-jobs-index"),
+		KeyConditionExpression: aws.String("user_id = :user_id"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":user_id": &types.AttributeValueMemberS{Value: userID},
+		},
+		ScanIndexForward: aws.Bool(false), // Sort descending (newest first)
+		Limit:            aws.Int32(int32(limit)),
+	}
+
+	if lastEvaluatedKey != nil {
+		input.ExclusiveStartKey = lastEvaluatedKey
+	}
+
+	result, err := r.client.Query(ctx, input)
+	if err != nil {
+		r.logger.Error("Failed to query jobs",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		return nil, nil, fmt.Errorf("failed to query jobs: %w", err)
+	}
+
+	var jobs []domain.Job
+	if err := attributevalue.UnmarshalListOfMaps(result.Items, &jobs); err != nil {
+		r.logger.Error("Failed to unmarshal jobs",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		return nil, nil, fmt.Errorf("failed to unmarshal jobs: %w", err)
+	}
+
+	return jobs, result.LastEvaluatedKey, nil
+}
+
+// DeleteJob deletes a job from DynamoDB
+func (r *DynamoDBRepository) DeleteJob(ctx context.Context, jobID string) error {
+	_, err := r.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(r.tableName),
+		Key: map[string]types.AttributeValue{
+			"job_id": &types.AttributeValueMemberS{Value: jobID},
+		},
+	})
+	if err != nil {
+		r.logger.Error("Failed to delete job",
+			zap.String("job_id", jobID),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to delete job: %w", err)
+	}
+
+	r.logger.Info("Job deleted successfully", zap.String("job_id", jobID))
+	return nil
+}
+
 // HealthCheck performs a lightweight health check on DynamoDB
 func (r *DynamoDBRepository) HealthCheck(ctx context.Context) error {
 	_, err := r.client.DescribeTable(ctx, &dynamodb.DescribeTableInput{

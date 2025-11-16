@@ -190,6 +190,7 @@ func (s *Server) setupRoutes() {
 		// Job routes
 		v1.GET("/jobs/:id", jobsHandler.GetJob)
 		v1.GET("/jobs", jobsHandler.ListJobs)
+		v1.DELETE("/jobs/:id", jobsHandler.DeleteJob)
 		v1.GET("/jobs/:id/progress", progressHandler.GetProgress)
 	}
 }
