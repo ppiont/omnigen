@@ -160,7 +160,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Starts Step Functions workflow to generate video from an approved script",
+                "description": "Generates video by creating multiple 5s clips and stitching them together",
                 "consumes": [
                     "application/json"
                 ],
@@ -170,10 +170,10 @@ const docTemplate = `{
                 "tags": [
                     "jobs"
                 ],
-                "summary": "Start video generation from approved script",
+                "summary": "Generate video from prompt (simplified)",
                 "parameters": [
                     {
-                        "description": "Script ID to generate video from",
+                        "description": "Video generation parameters",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -196,25 +196,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Unauthorized - Invalid or missing JWT token",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "402": {
-                        "description": "Payment Required - Monthly quota exceeded",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Script not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests - Rate limit exceeded",
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1319,10 +1301,47 @@ const docTemplate = `{
         "handlers.GenerateRequest": {
             "type": "object",
             "required": [
-                "script_id"
+                "aspect_ratio",
+                "duration",
+                "prompt"
             ],
             "properties": {
-                "script_id": {
+                "aspect_ratio": {
+                    "type": "string",
+                    "enum": [
+                        "16:9",
+                        "9:16",
+                        "1:1"
+                    ]
+                },
+                "duration": {
+                    "type": "integer",
+                    "maximum": 60,
+                    "minimum": 10
+                },
+                "music_mood": {
+                    "type": "string",
+                    "enum": [
+                        "upbeat",
+                        "calm",
+                        "dramatic",
+                        "energetic"
+                    ]
+                },
+                "music_style": {
+                    "type": "string",
+                    "enum": [
+                        "electronic",
+                        "acoustic",
+                        "orchestral"
+                    ]
+                },
+                "prompt": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "minLength": 10
+                },
+                "start_image": {
                     "type": "string"
                 }
             }
@@ -1333,12 +1352,14 @@ const docTemplate = `{
                 "created_at": {
                     "type": "integer"
                 },
-                "estimated_completion": {
-                    "description": "in seconds",
+                "estimated_completion_seconds": {
                     "type": "integer"
                 },
                 "job_id": {
                     "type": "string"
+                },
+                "num_clips": {
+                    "type": "integer"
                 },
                 "status": {
                     "type": "string"

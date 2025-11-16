@@ -38,11 +38,16 @@ type ParsedPrompt struct {
 	TextOverlays []string `json:"text_overlays"`
 }
 
-// StepFunctionsInput represents the input to Step Functions workflow
-// Matches the structure expected by workflow.asl.json
+// StepFunctionsInput represents the simplified input to Step Functions workflow
 type StepFunctionsInput struct {
-	JobID  string  `json:"job_id"`
-	Script *Script `json:"script"`
+	JobID       string `json:"job_id"`
+	Prompt      string `json:"prompt"`
+	Duration    int    `json:"duration"`     // Total duration in seconds
+	AspectRatio string `json:"aspect_ratio"` // "16:9", "9:16", or "1:1"
+	StartImage  string `json:"start_image,omitempty"`
+	NumClips    int    `json:"num_clips"`   // Calculated: duration / 10
+	MusicMood   string `json:"music_mood"`  // upbeat, calm, dramatic, energetic
+	MusicStyle  string `json:"music_style"` // electronic, acoustic, orchestral
 }
 
 // JobStatus constants

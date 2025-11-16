@@ -2,85 +2,53 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
-	"strings"
+	"path/filepath"
+	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"go.uber.org/zap"
 
-	"github.com/omnigen/backend/internal/domain"
+	"github.com/omnigen/backend/internal/adapters"
 )
 
-// AudioGeneratorInput represents input from Step Functions
-// Matches workflow.asl.json Parameters structure
+// AudioGeneratorInput represents simplified input from Step Functions
 type AudioGeneratorInput struct {
-	JobID         string           `json:"job_id"`
-	TotalDuration int              `json:"total_duration"` // Total video duration in seconds
-	AudioSpec     domain.AudioSpec `json:"audio_spec"`
+	JobID      string `json:"job_id"`
+	Prompt     string `json:"prompt"`      // Video prompt (to derive music from)
+	Duration   int    `json:"duration"`    // Total video duration in seconds
+	MusicMood  string `json:"music_mood"`  // upbeat, calm, dramatic, energetic
+	MusicStyle string `json:"music_style"` // electronic, acoustic, orchestral
 }
 
-// AudioGeneratorOutput represents the output with audio URLs
+// AudioGeneratorOutput represents the output with audio URL
 type AudioGeneratorOutput struct {
-	JobID      string     `json:"job_id"`
-	AudioFiles AudioFiles `json:"audio_files"`
-	Status     string     `json:"status"`
-}
-
-// AudioFiles contains S3 URLs for audio tracks
-type AudioFiles struct {
-	Music     string `json:"music,omitempty"`
-	Voiceover string `json:"voiceover,omitempty"`
+	JobID    string `json:"job_id"`
+	MusicURL string `json:"music_url"` // S3 URL to generated music
+	Status   string `json:"status"`
 }
 
 var (
-	dynamoClient *dynamodb.Client
-	jobTable     string
-	assetsBucket string
-	logger       *zap.Logger
+	dynamoClient   *dynamodb.Client
+	s3Client       *s3.Client
+	secretsClient  *secretsmanager.Client
+	minimaxAdapter *adapters.MinimaxAdapter
+	jobTable       string
+	assetsBucket   string
+	logger         *zap.Logger
+	httpClient     *http.Client
 )
-
-// Music library mapping: mood + style -> S3 key
-// In production, these would be pre-uploaded royalty-free music tracks
-var musicLibrary = map[string]string{
-	// Upbeat tracks
-	"upbeat-electronic": "music-library/upbeat-electronic-1.mp3",
-	"upbeat-acoustic":   "music-library/upbeat-acoustic-1.mp3",
-	"upbeat-orchestral": "music-library/upbeat-orchestral-1.mp3",
-	"upbeat-pop":        "music-library/upbeat-pop-1.mp3",
-	"upbeat-rock":       "music-library/upbeat-rock-1.mp3",
-
-	// Calm tracks
-	"calm-electronic": "music-library/calm-electronic-1.mp3",
-	"calm-acoustic":   "music-library/calm-acoustic-1.mp3",
-	"calm-orchestral": "music-library/calm-orchestral-1.mp3",
-	"calm-ambient":    "music-library/calm-ambient-1.mp3",
-	"calm-piano":      "music-library/calm-piano-1.mp3",
-
-	// Dramatic tracks
-	"dramatic-electronic": "music-library/dramatic-electronic-1.mp3",
-	"dramatic-orchestral": "music-library/dramatic-orchestral-1.mp3",
-	"dramatic-cinematic":  "music-library/dramatic-cinematic-1.mp3",
-	"dramatic-epic":       "music-library/dramatic-epic-1.mp3",
-
-	// Energetic tracks
-	"energetic-electronic": "music-library/energetic-electronic-1.mp3",
-	"energetic-rock":       "music-library/energetic-rock-1.mp3",
-	"energetic-hip-hop":    "music-library/energetic-hip-hop-1.mp3",
-
-	// Corporate/Professional tracks
-	"professional-electronic": "music-library/professional-electronic-1.mp3",
-	"professional-acoustic":   "music-library/professional-acoustic-1.mp3",
-	"professional-corporate":  "music-library/professional-corporate-1.mp3",
-
-	// Default fallback
-	"default": "music-library/default-background-1.mp3",
-}
 
 func init() {
 	// Initialize logger
@@ -90,10 +58,16 @@ func init() {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
 
+	// Initialize HTTP client for downloads
+	httpClient = &http.Client{
+		Timeout: 10 * time.Minute, // Music files can be large
+	}
+
 	jobTable = os.Getenv("JOB_TABLE")
 	assetsBucket = os.Getenv("ASSETS_BUCKET")
+	replicateSecretArn := os.Getenv("REPLICATE_SECRET_ARN")
 
-	if jobTable == "" || assetsBucket == "" {
+	if jobTable == "" || assetsBucket == "" || replicateSecretArn == "" {
 		log.Fatal("Required environment variables not set")
 	}
 
@@ -103,101 +77,222 @@ func init() {
 	}
 
 	dynamoClient = dynamodb.NewFromConfig(cfg)
+	s3Client = s3.NewFromConfig(cfg)
+	secretsClient = secretsmanager.NewFromConfig(cfg)
 
-	logger.Info("AudioGenerator Lambda initialized (music library mode)",
+	// Fetch Replicate API key from Secrets Manager
+	result, err := secretsClient.GetSecretValue(context.TODO(), &secretsmanager.GetSecretValueInput{
+		SecretId: &replicateSecretArn,
+	})
+	if err != nil {
+		log.Fatalf("Failed to fetch Replicate secret: %v", err)
+	}
+
+	var secretData map[string]string
+	if err := json.Unmarshal([]byte(*result.SecretString), &secretData); err != nil {
+		log.Fatalf("Failed to parse secret: %v", err)
+	}
+
+	replicateKey := secretData["api_key"]
+
+	// Initialize Minimax adapter
+	minimaxAdapter = adapters.NewMinimaxAdapter(replicateKey, logger)
+
+	logger.Info("AudioGenerator Lambda initialized (Minimax music-1.5)",
 		zap.String("job_table", jobTable),
 		zap.String("assets_bucket", assetsBucket),
-		zap.Int("library_size", len(musicLibrary)),
 	)
 }
 
 func handler(ctx context.Context, input AudioGeneratorInput) (AudioGeneratorOutput, error) {
-	log.Printf("AudioGenerator Lambda invoked for job %s", input.JobID)
+	log.Printf("AudioGenerator Lambda invoked for job %s (mood: %s, style: %s)",
+		input.JobID, input.MusicMood, input.MusicStyle)
 
 	// Update job progress
-	updateStageProgress(ctx, input.JobID, "Selecting background music from library")
+	updateStageProgress(ctx, input.JobID, "Generating background music with AI")
 
-	// Select background music from library
-	musicURL := ""
-	if input.AudioSpec.EnableAudio {
-		var err error
-		musicURL, err = selectMusicFromLibrary(input.AudioSpec, input.TotalDuration)
-		if err != nil {
-			log.Printf("Failed to select music: %v", err)
-			return AudioGeneratorOutput{
-				JobID:  input.JobID,
-				Status: "failed",
-			}, err
-		}
-	}
-
-	// Voiceover is optional and not implemented for MVP
-	// In production, this would call a TTS API like ElevenLabs or Bark
-	var voiceoverURL string
-	if input.AudioSpec.VoiceoverText != "" {
-		log.Printf("Voiceover requested but not implemented for MVP: %s", input.AudioSpec.VoiceoverText)
-		// voiceoverURL would be set here in production
+	// Generate music using Minimax
+	musicURL, err := generateMusic(ctx, input)
+	if err != nil {
+		log.Printf("Failed to generate music: %v", err)
+		return AudioGeneratorOutput{
+			JobID:  input.JobID,
+			Status: "failed",
+		}, err
 	}
 
 	output := AudioGeneratorOutput{
-		JobID: input.JobID,
-		AudioFiles: AudioFiles{
-			Music:     musicURL,
-			Voiceover: voiceoverURL,
-		},
-		Status: "completed",
+		JobID:    input.JobID,
+		MusicURL: musicURL,
+		Status:   "completed",
 	}
 
-	log.Printf("Successfully selected audio for job %s: music=%s", input.JobID, musicURL)
+	log.Printf("Successfully generated music for job %s: %s", input.JobID, musicURL)
 	return output, nil
 }
 
-// selectMusicFromLibrary selects a music track from the pre-uploaded library
-// based on mood and style preferences
-func selectMusicFromLibrary(audioSpec domain.AudioSpec, duration int) (string, error) {
-	logger.Info("Selecting music from library",
-		zap.String("mood", audioSpec.MusicMood),
-		zap.String("style", audioSpec.MusicStyle),
-		zap.Int("duration", duration),
+// generateMusic generates music using Minimax and uploads to S3
+func generateMusic(ctx context.Context, input AudioGeneratorInput) (string, error) {
+	logger.Info("Generating music with Minimax",
+		zap.String("job_id", input.JobID),
+		zap.String("prompt", input.Prompt),
+		zap.String("mood", input.MusicMood),
+		zap.String("style", input.MusicStyle),
+		zap.Int("duration", input.Duration),
 	)
 
-	// Normalize mood and style to lowercase
-	mood := strings.ToLower(strings.TrimSpace(audioSpec.MusicMood))
-	style := strings.ToLower(strings.TrimSpace(audioSpec.MusicStyle))
+	// Submit music generation request
+	req := &adapters.MusicGenerationRequest{
+		Prompt:     input.Prompt,
+		Duration:   input.Duration,
+		MusicMood:  input.MusicMood,
+		MusicStyle: input.MusicStyle,
+	}
 
-	// Build lookup key
-	lookupKey := fmt.Sprintf("%s-%s", mood, style)
+	result, err := minimaxAdapter.GenerateMusic(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("failed to submit music generation: %w", err)
+	}
 
-	// Try exact match first
-	s3Key, found := musicLibrary[lookupKey]
-	if !found {
-		// Try mood-only fallback
-		for key := range musicLibrary {
-			if strings.HasPrefix(key, mood+"-") {
-				s3Key = musicLibrary[key]
-				found = true
-				logger.Info("Using mood fallback", zap.String("key", key))
-				break
+	logger.Info("Music generation submitted",
+		zap.String("prediction_id", result.PredictionID),
+		zap.String("status", result.Status),
+	)
+
+	// Poll for completion (max 5 minutes)
+	maxAttempts := 60 // 60 * 5s = 5 minutes max
+	pollInterval := 5 * time.Second
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		// Check if context is cancelled
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("context cancelled while polling: %w", ctx.Err())
+		default:
+		}
+
+		// Wait before polling (except first attempt where we already have result)
+		if attempt > 0 {
+			time.Sleep(pollInterval)
+			result, err = minimaxAdapter.GetStatus(ctx, result.PredictionID)
+			if err != nil {
+				logger.Warn("Failed to get status, retrying",
+					zap.Error(err),
+					zap.Int("attempt", attempt),
+				)
+				continue
 			}
+		}
+
+		logger.Debug("Polling music generation status",
+			zap.String("status", result.Status),
+			zap.Int("attempt", attempt),
+		)
+
+		switch result.Status {
+		case "succeeded":
+			logger.Info("Music generation completed",
+				zap.String("audio_url", result.AudioURL),
+			)
+
+			// Download music from Replicate
+			tmpDir := filepath.Join("/tmp", input.JobID)
+			if err := os.MkdirAll(tmpDir, 0755); err != nil {
+				return "", fmt.Errorf("failed to create temp dir: %w", err)
+			}
+			defer os.RemoveAll(tmpDir)
+
+			musicPath := filepath.Join(tmpDir, "music.mp3")
+			if err := downloadMusicToFile(ctx, result.AudioURL, musicPath); err != nil {
+				return "", fmt.Errorf("failed to download music: %w", err)
+			}
+
+			// Upload music to S3
+			musicS3Key := fmt.Sprintf("music/%s/music.mp3", input.JobID)
+			musicS3URL, err := uploadFileToS3(ctx, musicPath, musicS3Key, "audio/mpeg")
+			if err != nil {
+				return "", fmt.Errorf("failed to upload music to S3: %w", err)
+			}
+
+			logger.Info("Music uploaded to S3",
+				zap.String("music_url", musicS3URL),
+			)
+
+			return musicS3URL, nil
+
+		case "failed":
+			return "", fmt.Errorf("music generation failed: %s", result.Error)
+
+		case "processing", "starting":
+			// Continue polling
+			continue
+
+		default:
+			logger.Warn("Unknown status", zap.String("status", result.Status))
 		}
 	}
 
-	// Use default if no match found
-	if !found {
-		s3Key = musicLibrary["default"]
-		logger.Warn("No matching music found, using default",
-			zap.String("requested_mood", mood),
-			zap.String("requested_style", style),
-		)
+	return "", fmt.Errorf("music generation timed out after %d attempts", maxAttempts)
+}
+
+// downloadMusicToFile downloads music from a URL to a local file
+func downloadMusicToFile(ctx context.Context, url, localPath string) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to download: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed with status %d", resp.StatusCode)
+	}
+
+	file, err := os.Create(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	written, err := io.Copy(file, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to write music data: %w", err)
+	}
+
+	logger.Info("Music downloaded to file",
+		zap.String("path", localPath),
+		zap.Int64("size_bytes", written),
+	)
+
+	return nil
+}
+
+// uploadFileToS3 uploads a local file to S3 and returns the S3 URL
+func uploadFileToS3(ctx context.Context, localPath, s3Key, contentType string) (string, error) {
+	file, err := os.Open(localPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	_, err = s3Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(assetsBucket),
+		Key:         aws.String(s3Key),
+		Body:        file,
+		ContentType: aws.String(contentType),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to upload to S3: %w", err)
 	}
 
 	// Return S3 URL
-	// Note: In production, we would check if the file exists in S3
-	// For MVP, we assume all library files are pre-uploaded
 	s3URL := fmt.Sprintf("s3://%s/%s", assetsBucket, s3Key)
 
-	logger.Info("Music selected from library",
-		zap.String("lookup_key", lookupKey),
+	logger.Info("File uploaded to S3",
 		zap.String("s3_key", s3Key),
 		zap.String("s3_url", s3URL),
 	)
