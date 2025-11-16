@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/omnigen/backend/internal/domain"
+	"github.com/omnigen/backend/pkg/retry"
 	"go.uber.org/zap"
 )
 
@@ -32,43 +34,91 @@ type JWKS struct {
 
 // JWTValidator handles JWT token validation
 type JWTValidator struct {
-	jwksURL      string
-	issuer       string
-	clientID     string
-	logger       *zap.Logger
-	keys         map[string]*rsa.PublicKey
-	keysMu       sync.RWMutex
+	jwksURL       string
+	issuer        string
+	clientID      string
+	logger        *zap.Logger
+	keys          map[string]*rsa.PublicKey
+	keysMu        sync.RWMutex
 	lastFetchTime time.Time
+	stopRefresh   chan struct{}
 }
 
 // NewJWTValidator creates a new JWT validator
 func NewJWTValidator(jwksURL, issuer, clientID string, logger *zap.Logger) *JWTValidator {
-	return &JWTValidator{
-		jwksURL:  jwksURL,
-		issuer:   issuer,
-		clientID: clientID,
-		logger:   logger,
-		keys:     make(map[string]*rsa.PublicKey),
+	v := &JWTValidator{
+		jwksURL:     jwksURL,
+		issuer:      issuer,
+		clientID:    clientID,
+		logger:      logger,
+		keys:        make(map[string]*rsa.PublicKey),
+		stopRefresh: make(chan struct{}),
+	}
+
+	// Start background JWKS refresh goroutine
+	go v.backgroundRefresh()
+
+	return v
+}
+
+// backgroundRefresh periodically refreshes JWKS in the background
+func (v *JWTValidator) backgroundRefresh() {
+	// Initial fetch
+	if err := v.FetchJWKS(); err != nil {
+		v.logger.Error("Initial JWKS fetch failed", zap.Error(err))
+	}
+
+	// Refresh every 30 minutes
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := v.FetchJWKS(); err != nil {
+				v.logger.Error("Background JWKS refresh failed", zap.Error(err))
+			} else {
+				v.logger.Info("JWKS refreshed successfully")
+			}
+		case <-v.stopRefresh:
+			v.logger.Info("Stopping JWKS background refresh")
+			return
+		}
 	}
 }
 
-// FetchJWKS fetches the JWKS from Cognito
+// Stop stops the background refresh goroutine
+func (v *JWTValidator) Stop() {
+	close(v.stopRefresh)
+}
+
+// FetchJWKS fetches the JWKS from Cognito with retry logic
 func (v *JWTValidator) FetchJWKS() error {
 	v.logger.Info("Fetching JWKS", zap.String("url", v.jwksURL))
 
-	resp, err := http.Get(v.jwksURL)
-	if err != nil {
-		return fmt.Errorf("failed to fetch JWKS: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("JWKS endpoint returned status %d", resp.StatusCode)
-	}
-
 	var jwks JWKS
-	if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {
-		return fmt.Errorf("failed to decode JWKS: %w", err)
+
+	// Retry fetch with exponential backoff
+	err := retry.Do(context.Background(), retry.DefaultConfig(), func() error {
+		resp, err := http.Get(v.jwksURL)
+		if err != nil {
+			return fmt.Errorf("failed to fetch JWKS: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("JWKS endpoint returned status %d", resp.StatusCode)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {
+			return fmt.Errorf("failed to decode JWKS: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
 	}
 
 	v.keysMu.Lock()
@@ -128,14 +178,17 @@ func (v *JWTValidator) jwkToRSAPublicKey(jwk JWK) (*rsa.PublicKey, error) {
 func (v *JWTValidator) getPublicKey(kid string) (*rsa.PublicKey, error) {
 	v.keysMu.RLock()
 	key, exists := v.keys[kid]
+	lastFetch := v.lastFetchTime
 	v.keysMu.RUnlock()
 
 	if exists {
 		return key, nil
 	}
 
-	// Key not found, try refreshing JWKS if it's been a while
-	if time.Since(v.lastFetchTime) > 5*time.Minute {
+	// Key not found, try refreshing JWKS if it's been a while (fallback for key rotation)
+	// Background refresh should handle most cases, but this covers edge cases
+	if time.Since(lastFetch) > 1*time.Hour {
+		v.logger.Warn("Public key not found, forcing JWKS refresh", zap.String("kid", kid))
 		if err := v.FetchJWKS(); err != nil {
 			return nil, fmt.Errorf("failed to refresh JWKS: %w", err)
 		}

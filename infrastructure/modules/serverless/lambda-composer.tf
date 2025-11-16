@@ -4,11 +4,12 @@ resource "aws_lambda_function" "composer" {
   filename         = data.archive_file.lambda_composer_placeholder.output_path
   function_name    = "${var.project_name}-composer"
   role             = var.lambda_execution_role_arn
-  handler          = "composer.handler"
+  handler          = "bootstrap"
   source_code_hash = data.archive_file.lambda_composer_placeholder.output_base64sha256
-  runtime          = "nodejs20.x"
+  runtime          = "provided.al2023"
   timeout          = var.timeout
   memory_size      = var.composer_memory
+  architectures    = ["arm64"]
 
   reserved_concurrent_executions = var.composer_concurrency
 

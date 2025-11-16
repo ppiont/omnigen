@@ -28,10 +28,12 @@ locals {
   lambda_sg_name = "${local.name_prefix}-lambda-sg"
 
   # CloudWatch log group names
-  ecs_log_group_name         = "/ecs/${local.name_prefix}"
-  lambda_generator_log_group = "/aws/lambda/${local.lambda_generator_name}"
-  lambda_composer_log_group  = "/aws/lambda/${local.lambda_composer_name}"
-  step_functions_log_group   = "/aws/states/${local.step_functions_name}"
+  ecs_log_group_name              = "/ecs/${local.name_prefix}"
+  lambda_generator_log_group      = "/aws/lambda/${local.lambda_generator_name}"
+  lambda_composer_log_group       = "/aws/lambda/${local.lambda_composer_name}"
+  lambda_parser_log_group         = "/aws/lambda/${local.name_prefix}-parser"
+  lambda_audio_generator_log_group = "/aws/lambda/${local.name_prefix}-audio-generator"
+  step_functions_log_group        = "/aws/states/${local.step_functions_name}"
 
   # IAM role names
   ecs_task_execution_role_name = "${local.name_prefix}-ecs-task-execution"

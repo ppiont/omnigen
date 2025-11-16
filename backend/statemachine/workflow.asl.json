@@ -1,0 +1,70 @@
+{
+  "Comment": "OmniGen Video Generation Pipeline",
+  "StartAt": "GenerateScenes",
+  "States": {
+    "GenerateScenes": {
+      "Type": "Map",
+      "ItemsPath": "$.script.scenes",
+      "MaxConcurrency": 3,
+      "ItemProcessor": {
+        "StartAt": "GenerateVideoClip",
+        "States": {
+          "GenerateVideoClip": {
+            "Type": "Task",
+            "Resource": "${GeneratorFunctionArn}",
+            "Parameters": {
+              "job_id.$": "$$.Execution.Name",
+              "scene.$": "$$.Map.Item.Value"
+            },
+            "End": true
+          }
+        }
+      },
+      "ResultPath": "$.videos",
+      "Next": "GenerateAudio"
+    },
+    "GenerateAudio": {
+      "Type": "Task",
+      "Resource": "${AudioGeneratorFunctionArn}",
+      "Parameters": {
+        "job_id.$": "$.job_id",
+        "script.$": "$.script"
+      },
+      "ResultPath": "$.audio",
+      "Next": "Composer"
+    },
+    "Composer": {
+      "Type": "Task",
+      "Resource": "${ComposerFunctionArn}",
+      "Parameters": {
+        "job_id.$": "$.job_id",
+        "scene_videos.$": "$.videos[*]",
+        "audio_files.$": "$.audio.audio_files"
+      },
+      "ResultPath": "$.final",
+      "Next": "UpdateJobComplete"
+    },
+    "UpdateJobComplete": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${JobTable}",
+        "Key": {
+          "job_id": {
+            "S.$": "$.job_id"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, video_key = :video_key, completed_at = :timestamp",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": { "S": "completed" },
+          ":video_key": { "S.$": "$.final.video_key" },
+          ":timestamp": { "N.$": "$$.State.EnteredTime" }
+        }
+      },
+      "End": true
+    }
+  }
+}

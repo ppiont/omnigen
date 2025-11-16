@@ -15,7 +15,6 @@
         },
         "version": "1.0"
     },
-    "host": "localhost:8080",
     "basePath": "/",
     "paths": {
         "/api/v1/auth/login": {
@@ -154,7 +153,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new video generation job for an ad creative",
+                "description": "Starts Step Functions workflow to generate video from an approved script",
                 "consumes": [
                     "application/json"
                 ],
@@ -164,10 +163,10 @@
                 "tags": [
                     "jobs"
                 ],
-                "summary": "Submit video generation job",
+                "summary": "Start video generation from approved script",
                 "parameters": [
                     {
-                        "description": "Generation parameters",
+                        "description": "Script ID to generate video from",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -177,8 +176,8 @@
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Created",
+                    "202": {
+                        "description": "Accepted",
                         "schema": {
                             "$ref": "#/definitions/handlers.GenerateResponse"
                         }
@@ -197,6 +196,12 @@
                     },
                     "402": {
                         "description": "Payment Required - Monthly quota exceeded",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Script not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -361,6 +366,63 @@
                 }
             }
         },
+        "/api/v1/parse": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Start async script generation using Lambda. Returns immediately with script_id for polling.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scripts"
+                ],
+                "summary": "Generate ad script from user input (async)",
+                "parameters": [
+                    {
+                        "description": "Script generation parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ParseRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Script generation started",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ParseResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - Invalid or missing JWT token",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/presets": {
             "get": {
                 "description": "Get a list of predefined brand style presets for quick video generation",
@@ -376,6 +438,126 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.PresetsResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/scripts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get a previously generated script for review or editing",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scripts"
+                ],
+                "summary": "Retrieve a script by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Script ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Script"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - Invalid or missing JWT token",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Script not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update a script after user review/editing",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scripts"
+                ],
+                "summary": "Update an existing script",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Script ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated script",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateScriptRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Script"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - Invalid or missing JWT token",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Script not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -409,6 +591,721 @@
         }
     },
     "definitions": {
+        "domain.AudioSpec": {
+            "type": "object",
+            "properties": {
+                "enable_audio": {
+                    "type": "boolean"
+                },
+                "music_mood": {
+                    "description": "\"upbeat\", \"calm\", \"dramatic\", etc.",
+                    "type": "string"
+                },
+                "music_style": {
+                    "description": "\"electronic\", \"acoustic\", \"orchestral\", etc.",
+                    "type": "string"
+                },
+                "sync_points": {
+                    "description": "Audio-visual synchronization markers",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.SyncPoint"
+                    }
+                },
+                "voiceover_text": {
+                    "description": "Optional voiceover script",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.CameraAngle": {
+            "type": "string",
+            "enum": [
+                "eye_level",
+                "high_angle",
+                "low_angle",
+                "dutch_angle",
+                "birds_eye",
+                "worms_eye",
+                "shoulder_level"
+            ],
+            "x-enum-comments": {
+                "AngleBirdsEye": "Directly overhead (map view)",
+                "AngleDutch": "Tilted frame (tension, unease)",
+                "AngleEyeLevel": "Standard, neutral perspective",
+                "AngleHigh": "Camera above subject (diminutive)",
+                "AngleLow": "Camera below subject (powerful)",
+                "AngleShoulder": "Over-the-shoulder height",
+                "AngleWorms": "Directly below looking up"
+            },
+            "x-enum-descriptions": [
+                "Standard, neutral perspective",
+                "Camera above subject (diminutive)",
+                "Camera below subject (powerful)",
+                "Tilted frame (tension, unease)",
+                "Directly overhead (map view)",
+                "Directly below looking up",
+                "Over-the-shoulder height"
+            ],
+            "x-enum-varnames": [
+                "AngleEyeLevel",
+                "AngleHigh",
+                "AngleLow",
+                "AngleDutch",
+                "AngleBirdsEye",
+                "AngleWorms",
+                "AngleShoulder"
+            ]
+        },
+        "domain.CameraMove": {
+            "type": "string",
+            "enum": [
+                "static",
+                "pan_left",
+                "pan_right",
+                "tilt_up",
+                "tilt_down",
+                "dolly_in",
+                "dolly_out",
+                "dolly_left",
+                "dolly_right",
+                "zoom_in",
+                "zoom_out",
+                "handheld",
+                "steadycam",
+                "arc",
+                "tracking",
+                "crane_up",
+                "crane_down",
+                "drone_aerial"
+            ],
+            "x-enum-comments": {
+                "MoveArc": "Circular movement around subject",
+                "MoveCrane": "Vertical crane movement up",
+                "MoveCraneDown": "Vertical crane movement down",
+                "MoveDollyIn": "Push in toward subject",
+                "MoveDollyLeft": "Lateral movement left (truck left)",
+                "MoveDollyOut": "Pull back from subject",
+                "MoveDollyRight": "Lateral movement right (truck right)",
+                "MoveDrone": "Aerial drone movement",
+                "MoveHandheld": "Organic, shaky movement",
+                "MovePanLeft": "Horizontal rotation left",
+                "MovePanRight": "Horizontal rotation right",
+                "MoveStatic": "Locked-off camera, no movement",
+                "MoveSteadycam": "Smooth handheld",
+                "MoveTiltDown": "Vertical rotation downward",
+                "MoveTiltUp": "Vertical rotation upward",
+                "MoveTracking": "Follow subject movement",
+                "MoveZoomIn": "Lens zoom in (not dolly)",
+                "MoveZoomOut": "Lens zoom out"
+            },
+            "x-enum-descriptions": [
+                "Locked-off camera, no movement",
+                "Horizontal rotation left",
+                "Horizontal rotation right",
+                "Vertical rotation upward",
+                "Vertical rotation downward",
+                "Push in toward subject",
+                "Pull back from subject",
+                "Lateral movement left (truck left)",
+                "Lateral movement right (truck right)",
+                "Lens zoom in (not dolly)",
+                "Lens zoom out",
+                "Organic, shaky movement",
+                "Smooth handheld",
+                "Circular movement around subject",
+                "Follow subject movement",
+                "Vertical crane movement up",
+                "Vertical crane movement down",
+                "Aerial drone movement"
+            ],
+            "x-enum-varnames": [
+                "MoveStatic",
+                "MovePanLeft",
+                "MovePanRight",
+                "MoveTiltUp",
+                "MoveTiltDown",
+                "MoveDollyIn",
+                "MoveDollyOut",
+                "MoveDollyLeft",
+                "MoveDollyRight",
+                "MoveZoomIn",
+                "MoveZoomOut",
+                "MoveHandheld",
+                "MoveSteadycam",
+                "MoveArc",
+                "MoveTracking",
+                "MoveCrane",
+                "MoveCraneDown",
+                "MoveDrone"
+            ]
+        },
+        "domain.ColorGrade": {
+            "type": "string",
+            "enum": [
+                "natural",
+                "warm_tones",
+                "cool_tones",
+                "teal_orange",
+                "desaturated",
+                "vibrant",
+                "monochrome",
+                "sepia",
+                "bleach_bypass",
+                "cinematic",
+                "pastel",
+                "noir",
+                "retro_film"
+            ],
+            "x-enum-comments": {
+                "GradeBleach": "High contrast, low saturation",
+                "GradeCinematic": "Film-like contrast curves",
+                "GradeCool": "Blue/teal push (modern)",
+                "GradeDesaturated": "Muted, washed-out colors",
+                "GradeMonochrome": "Black and white",
+                "GradeNatural": "Realistic, true-to-life colors",
+                "GradeNoir": "High contrast B\u0026W",
+                "GradePastel": "Soft, muted pastels",
+                "GradeRetro": "Vintage film emulation",
+                "GradeSepia": "Vintage brown tone",
+                "GradeTealOrange": "Hollywood blockbuster look",
+                "GradeVibrant": "Saturated, punchy colors",
+                "GradeWarm": "Orange/yellow push (cozy)"
+            },
+            "x-enum-descriptions": [
+                "Realistic, true-to-life colors",
+                "Orange/yellow push (cozy)",
+                "Blue/teal push (modern)",
+                "Hollywood blockbuster look",
+                "Muted, washed-out colors",
+                "Saturated, punchy colors",
+                "Black and white",
+                "Vintage brown tone",
+                "High contrast, low saturation",
+                "Film-like contrast curves",
+                "Soft, muted pastels",
+                "High contrast B\u0026W",
+                "Vintage film emulation"
+            ],
+            "x-enum-varnames": [
+                "GradeNatural",
+                "GradeWarm",
+                "GradeCool",
+                "GradeTealOrange",
+                "GradeDesaturated",
+                "GradeVibrant",
+                "GradeMonochrome",
+                "GradeSepia",
+                "GradeBleach",
+                "GradeCinematic",
+                "GradePastel",
+                "GradeNoir",
+                "GradeRetro"
+            ]
+        },
+        "domain.Lighting": {
+            "type": "string",
+            "enum": [
+                "natural_light",
+                "golden_hour",
+                "blue_hour",
+                "studio_lighting",
+                "dramatic_lighting",
+                "soft_lighting",
+                "hard_light",
+                "backlit",
+                "rim_lighting",
+                "low_key",
+                "high_key",
+                "neon_lighting",
+                "practical_lighting",
+                "silhouette"
+            ],
+            "x-enum-comments": {
+                "LightBacklit": "Light from behind subject",
+                "LightBlueHour": "Twilight, cool ambient",
+                "LightDramatic": "High contrast, shadows",
+                "LightGoldenHour": "Sunrise/sunset warm light",
+                "LightHardLight": "Direct, sharp shadows",
+                "LightHighKey": "Bright, minimal shadows",
+                "LightLowKey": "Dark, moody (film noir)",
+                "LightNatural": "Daylight, window light",
+                "LightNeon": "Artificial neon/LED colors",
+                "LightPractical": "In-scene light sources",
+                "LightRimLight": "Edge lighting",
+                "LightSilhouette": "Subject as dark shape",
+                "LightSoft": "Diffused, even illumination",
+                "LightStudio": "Controlled 3-point lighting"
+            },
+            "x-enum-descriptions": [
+                "Daylight, window light",
+                "Sunrise/sunset warm light",
+                "Twilight, cool ambient",
+                "Controlled 3-point lighting",
+                "High contrast, shadows",
+                "Diffused, even illumination",
+                "Direct, sharp shadows",
+                "Light from behind subject",
+                "Edge lighting",
+                "Dark, moody (film noir)",
+                "Bright, minimal shadows",
+                "Artificial neon/LED colors",
+                "In-scene light sources",
+                "Subject as dark shape"
+            ],
+            "x-enum-varnames": [
+                "LightNatural",
+                "LightGoldenHour",
+                "LightBlueHour",
+                "LightStudio",
+                "LightDramatic",
+                "LightSoft",
+                "LightHardLight",
+                "LightBacklit",
+                "LightRimLight",
+                "LightLowKey",
+                "LightHighKey",
+                "LightNeon",
+                "LightPractical",
+                "LightSilhouette"
+            ]
+        },
+        "domain.Metadata": {
+            "type": "object",
+            "properties": {
+                "brand_guideline": {
+                    "description": "Brand colors, tone, values",
+                    "type": "string"
+                },
+                "call_to_action": {
+                    "description": "Final message/CTA",
+                    "type": "string"
+                },
+                "keywords": {
+                    "description": "Key themes/concepts",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "target_audience": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.Mood": {
+            "type": "string",
+            "enum": [
+                "energetic",
+                "calm",
+                "dramatic",
+                "inspiring",
+                "mysterious",
+                "playful",
+                "sophisticated",
+                "nostalgic",
+                "urgent",
+                "luxurious",
+                "intimate",
+                "epic"
+            ],
+            "x-enum-comments": {
+                "MoodCalm": "Peaceful, serene",
+                "MoodDramatic": "Intense, emotional",
+                "MoodEnergetic": "High energy, exciting",
+                "MoodEpic": "Grand, awe-inspiring",
+                "MoodInspiring": "Uplifting, motivational",
+                "MoodIntimate": "Close, personal",
+                "MoodLuxurious": "Premium, high-end",
+                "MoodMysterious": "Enigmatic, intriguing",
+                "MoodNostalgic": "Sentimental, reminiscent",
+                "MoodPlayful": "Fun, lighthearted",
+                "MoodSophisticated": "Elegant, refined",
+                "MoodUrgent": "Fast-paced, pressing"
+            },
+            "x-enum-descriptions": [
+                "High energy, exciting",
+                "Peaceful, serene",
+                "Intense, emotional",
+                "Uplifting, motivational",
+                "Enigmatic, intriguing",
+                "Fun, lighthearted",
+                "Elegant, refined",
+                "Sentimental, reminiscent",
+                "Fast-paced, pressing",
+                "Premium, high-end",
+                "Close, personal",
+                "Grand, awe-inspiring"
+            ],
+            "x-enum-varnames": [
+                "MoodEnergetic",
+                "MoodCalm",
+                "MoodDramatic",
+                "MoodInspiring",
+                "MoodMysterious",
+                "MoodPlayful",
+                "MoodSophisticated",
+                "MoodNostalgic",
+                "MoodUrgent",
+                "MoodLuxurious",
+                "MoodIntimate",
+                "MoodEpic"
+            ]
+        },
+        "domain.Scene": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "What happens in this scene (2-3 sentences)",
+                    "type": "string"
+                },
+                "camera_angle": {
+                    "description": "Eye-level, high angle, low angle, etc.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CameraAngle"
+                        }
+                    ]
+                },
+                "camera_move": {
+                    "description": "Static, dolly, pan, tilt, etc.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CameraMove"
+                        }
+                    ]
+                },
+                "color_grade": {
+                    "description": "Warm, cool, desaturated, etc.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ColorGrade"
+                        }
+                    ]
+                },
+                "duration": {
+                    "description": "scene length in seconds",
+                    "type": "number"
+                },
+                "generation_prompt": {
+                    "description": "AI Generation",
+                    "type": "string"
+                },
+                "lighting": {
+                    "description": "Lighting \u0026 Mood",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.Lighting"
+                        }
+                    ]
+                },
+                "location": {
+                    "description": "Screenplay elements",
+                    "type": "string"
+                },
+                "mood": {
+                    "description": "Energetic, calm, dramatic, etc.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.Mood"
+                        }
+                    ]
+                },
+                "scene_number": {
+                    "type": "integer"
+                },
+                "shot_type": {
+                    "description": "Visual Direction (Cinematography)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ShotType"
+                        }
+                    ]
+                },
+                "start_image_url": {
+                    "description": "For visual continuity between scenes",
+                    "type": "string"
+                },
+                "start_time": {
+                    "description": "seconds from start",
+                    "type": "number"
+                },
+                "transition_in": {
+                    "description": "Transitions",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.Transition"
+                        }
+                    ]
+                },
+                "transition_out": {
+                    "description": "How to exit this scene",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.Transition"
+                        }
+                    ]
+                },
+                "visual_style": {
+                    "description": "Style \u0026 Aesthetic",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.VisualStyle"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.Script": {
+            "type": "object",
+            "properties": {
+                "audio_spec": {
+                    "$ref": "#/definitions/domain.AudioSpec"
+                },
+                "created_at": {
+                    "description": "Unix timestamp",
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "description": "TTL timestamp",
+                    "type": "integer"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/domain.Metadata"
+                },
+                "scenes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.Scene"
+                    }
+                },
+                "script_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "\"draft\", \"approved\", \"generating\", \"completed\"",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "total_duration": {
+                    "description": "seconds",
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "description": "Unix timestamp",
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.ShotType": {
+            "type": "string",
+            "enum": [
+                "extreme_wide_shot",
+                "wide_shot",
+                "full_shot",
+                "cowboy_shot",
+                "medium_shot",
+                "medium_close_up",
+                "close_up",
+                "extreme_close_up",
+                "over_shoulder_shot",
+                "two_shot",
+                "insert_shot"
+            ],
+            "x-enum-comments": {
+                "ShotCloseUp": "Head and shoulders",
+                "ShotCowboy": "Mid-thighs up (American shot)",
+                "ShotExtremeClose": "Eyes, hands, product details",
+                "ShotExtremeWide": "Establishing shot, shows environment",
+                "ShotFull": "Subject fills frame head to toe",
+                "ShotInsert": "Detail shot of object/action",
+                "ShotMedium": "Waist up",
+                "ShotMediumClose": "Chest up",
+                "ShotOverShoulder": "OTS for dialogue/interaction",
+                "ShotTwoShot": "Two subjects in frame",
+                "ShotWide": "Shows full subject and surroundings"
+            },
+            "x-enum-descriptions": [
+                "Establishing shot, shows environment",
+                "Shows full subject and surroundings",
+                "Subject fills frame head to toe",
+                "Mid-thighs up (American shot)",
+                "Waist up",
+                "Chest up",
+                "Head and shoulders",
+                "Eyes, hands, product details",
+                "OTS for dialogue/interaction",
+                "Two subjects in frame",
+                "Detail shot of object/action"
+            ],
+            "x-enum-varnames": [
+                "ShotExtremeWide",
+                "ShotWide",
+                "ShotFull",
+                "ShotCowboy",
+                "ShotMedium",
+                "ShotMediumClose",
+                "ShotCloseUp",
+                "ShotExtremeClose",
+                "ShotOverShoulder",
+                "ShotTwoShot",
+                "ShotInsert"
+            ]
+        },
+        "domain.SyncPoint": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "description": "e.g., \"Product reveal on beat drop\"",
+                    "type": "string"
+                },
+                "scene_number": {
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "description": "Time in seconds",
+                    "type": "number"
+                },
+                "type": {
+                    "description": "\"beat\", \"voiceover\", \"sfx\", \"transition\"",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.Transition": {
+            "type": "string",
+            "enum": [
+                "cut",
+                "fade",
+                "cross_fade",
+                "wipe_left",
+                "wipe_right",
+                "iris_in",
+                "iris_out",
+                "match_cut",
+                "jump_cut",
+                "smash_cut",
+                "whip_pan",
+                "zoom_transition",
+                "none"
+            ],
+            "x-enum-comments": {
+                "TransitionCrossFade": "Dissolve between scenes",
+                "TransitionCut": "Instant change (standard)",
+                "TransitionFade": "Fade to black",
+                "TransitionIrisIn": "Circular reveal",
+                "TransitionIrisOut": "Circular close",
+                "TransitionJumpCut": "Jarring time skip",
+                "TransitionMatchCut": "Visual/motion match",
+                "TransitionNone": "First/last scene",
+                "TransitionSmashCut": "Abrupt contrast cut",
+                "TransitionWhip": "Fast camera whip",
+                "TransitionWipeLeft": "Wipe transition left",
+                "TransitionWipeRight": "Wipe transition right",
+                "TransitionZoom": "Zoom blur"
+            },
+            "x-enum-descriptions": [
+                "Instant change (standard)",
+                "Fade to black",
+                "Dissolve between scenes",
+                "Wipe transition left",
+                "Wipe transition right",
+                "Circular reveal",
+                "Circular close",
+                "Visual/motion match",
+                "Jarring time skip",
+                "Abrupt contrast cut",
+                "Fast camera whip",
+                "Zoom blur",
+                "First/last scene"
+            ],
+            "x-enum-varnames": [
+                "TransitionCut",
+                "TransitionFade",
+                "TransitionCrossFade",
+                "TransitionWipeLeft",
+                "TransitionWipeRight",
+                "TransitionIrisIn",
+                "TransitionIrisOut",
+                "TransitionMatchCut",
+                "TransitionJumpCut",
+                "TransitionSmashCut",
+                "TransitionWhip",
+                "TransitionZoom",
+                "TransitionNone"
+            ]
+        },
+        "domain.VisualStyle": {
+            "type": "string",
+            "enum": [
+                "cinematic",
+                "documentary",
+                "minimalist",
+                "maximalist",
+                "commercial",
+                "editorial",
+                "lifestyle",
+                "product_focused",
+                "abstract",
+                "vintage",
+                "futuristic",
+                "gritty",
+                "dreamy"
+            ],
+            "x-enum-comments": {
+                "StyleAbstract": "Artistic, conceptual",
+                "StyleCinematic": "Film-like, narrative driven",
+                "StyleCommercial": "Polished, advertising aesthetic",
+                "StyleDocumentary": "Realistic, authentic",
+                "StyleDreamy": "Soft focus, ethereal",
+                "StyleEditorial": "Fashion magazine style",
+                "StyleFuturistic": "Modern, tech-forward",
+                "StyleGritty": "Raw, textured",
+                "StyleLifestyle": "Everyday, relatable",
+                "StyleMaximalist": "Rich, detailed, layered",
+                "StyleMinimalist": "Clean, simple, uncluttered",
+                "StyleProduct": "Product hero shots",
+                "StyleVintage": "Retro, period-specific"
+            },
+            "x-enum-descriptions": [
+                "Film-like, narrative driven",
+                "Realistic, authentic",
+                "Clean, simple, uncluttered",
+                "Rich, detailed, layered",
+                "Polished, advertising aesthetic",
+                "Fashion magazine style",
+                "Everyday, relatable",
+                "Product hero shots",
+                "Artistic, conceptual",
+                "Retro, period-specific",
+                "Modern, tech-forward",
+                "Raw, textured",
+                "Soft focus, ethereal"
+            ],
+            "x-enum-varnames": [
+                "StyleCinematic",
+                "StyleDocumentary",
+                "StyleMinimalist",
+                "StyleMaximalist",
+                "StyleCommercial",
+                "StyleEditorial",
+                "StyleLifestyle",
+                "StyleProduct",
+                "StyleAbstract",
+                "StyleVintage",
+                "StyleFuturistic",
+                "StyleGritty",
+                "StyleDreamy"
+            ]
+        },
         "errors.APIError": {
             "type": "object",
             "properties": {
@@ -435,31 +1332,11 @@
         "handlers.GenerateRequest": {
             "type": "object",
             "required": [
-                "duration",
-                "prompt"
+                "script_id"
             ],
             "properties": {
-                "aspect_ratio": {
-                    "type": "string",
-                    "enum": [
-                        "16:9",
-                        "9:16",
-                        "1:1"
-                    ]
-                },
-                "duration": {
-                    "type": "integer",
-                    "maximum": 180,
-                    "minimum": 15
-                },
-                "prompt": {
-                    "type": "string",
-                    "maxLength": 1000,
-                    "minLength": 10
-                },
-                "style": {
-                    "type": "string",
-                    "maxLength": 200
+                "script_id": {
+                    "type": "string"
                 }
             }
         },
@@ -569,6 +1446,58 @@
                 }
             }
         },
+        "handlers.ParseRequest": {
+            "type": "object",
+            "required": [
+                "duration",
+                "product_name",
+                "prompt",
+                "target_audience"
+            ],
+            "properties": {
+                "brand_vibe": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "duration": {
+                    "type": "integer",
+                    "enum": [
+                        15,
+                        30,
+                        60
+                    ]
+                },
+                "product_name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                },
+                "prompt": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "minLength": 10
+                },
+                "target_audience": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 2
+                }
+            }
+        },
+        "handlers.ParseResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "script_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.PresetsResponse": {
             "type": "object",
             "properties": {
@@ -610,6 +1539,17 @@
                 },
                 "status": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateScriptRequest": {
+            "type": "object",
+            "required": [
+                "script"
+            ],
+            "properties": {
+                "script": {
+                    "$ref": "#/definitions/domain.Script"
                 }
             }
         },

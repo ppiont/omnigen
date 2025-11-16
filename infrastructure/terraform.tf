@@ -13,11 +13,11 @@ terraform {
   # Run: aws sts get-caller-identity --query Account --output text
   # Then create bucket: aws s3 mb s3://omnigen-terraform-state-<account-id>
   backend "s3" {
-    bucket         = "omnigen-terraform-state-971422717446"
-    key            = "infrastructure/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "omnigen-terraform-locks"
+    bucket       = "omnigen-terraform-state-971422717446"
+    key          = "infrastructure/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
   }
 }
 

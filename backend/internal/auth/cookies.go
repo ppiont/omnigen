@@ -28,38 +28,40 @@ type CookieConfig struct {
 // SetAuthCookies sets httpOnly cookies for all auth tokens
 func SetAuthCookies(c *gin.Context, accessToken, idToken, refreshToken string, config CookieConfig) {
 	// Set access token cookie (1 hour expiry)
-	c.SetCookie(
-		AccessTokenCookie,
-		accessToken,
-		int(AccessTokenExpiry.Seconds()),
-		"/",
-		config.Domain,
-		config.Secure,
-		true, // httpOnly
-	)
-	c.SetSameSite(config.SameSite)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     AccessTokenCookie,
+		Value:    accessToken,
+		MaxAge:   int(AccessTokenExpiry.Seconds()),
+		Path:     "/",
+		Domain:   config.Domain,
+		Secure:   config.Secure,
+		HttpOnly: true,
+		SameSite: config.SameSite,
+	})
 
 	// Set ID token cookie (1 hour expiry)
-	c.SetCookie(
-		IDTokenCookie,
-		idToken,
-		int(IDTokenExpiry.Seconds()),
-		"/",
-		config.Domain,
-		config.Secure,
-		true, // httpOnly
-	)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     IDTokenCookie,
+		Value:    idToken,
+		MaxAge:   int(IDTokenExpiry.Seconds()),
+		Path:     "/",
+		Domain:   config.Domain,
+		Secure:   config.Secure,
+		HttpOnly: true,
+		SameSite: config.SameSite,
+	})
 
 	// Set refresh token cookie (30 days expiry)
-	c.SetCookie(
-		RefreshTokenCookie,
-		refreshToken,
-		int(RefreshTokenExpiry.Seconds()),
-		"/",
-		config.Domain,
-		config.Secure,
-		true, // httpOnly
-	)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     RefreshTokenCookie,
+		Value:    refreshToken,
+		MaxAge:   int(RefreshTokenExpiry.Seconds()),
+		Path:     "/",
+		Domain:   config.Domain,
+		Secure:   config.Secure,
+		HttpOnly: true,
+		SameSite: config.SameSite,
+	})
 }
 
 // ClearAuthCookies removes all auth cookies

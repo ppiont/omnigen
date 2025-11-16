@@ -4,34 +4,28 @@ package domain
 type Job struct {
 	JobID        string  `dynamodbav:"job_id" json:"job_id"`
 	UserID       string  `dynamodbav:"user_id" json:"user_id"`
-	Status       string  `dynamodbav:"status" json:"status"` // pending, processing, completed, failed
-	Prompt       string  `dynamodbav:"prompt" json:"prompt"`
-	Duration     int     `dynamodbav:"duration" json:"duration"`
-	Style        string  `dynamodbav:"style" json:"style"`
-	AspectRatio  string  `dynamodbav:"aspect_ratio" json:"aspect_ratio"`
-	VideoKey     string  `dynamodbav:"video_key" json:"video_key"` // S3 key
+	ScriptID     string  `dynamodbav:"script_id,omitempty" json:"script_id,omitempty"` // Optional script ID (for new workflow)
+	Status       string  `dynamodbav:"status" json:"status"`                           // pending, processing, completed, failed
+	Prompt       string  `dynamodbav:"prompt,omitempty" json:"prompt,omitempty"`       // Legacy field
+	Duration     int     `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
+	Style        string  `dynamodbav:"style,omitempty" json:"style,omitempty"`
+	AspectRatio  string  `dynamodbav:"aspect_ratio,omitempty" json:"aspect_ratio,omitempty"`
+	VideoKey     string  `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"` // S3 key
 	CreatedAt    int64   `dynamodbav:"created_at" json:"created_at"`
 	CompletedAt  *int64  `dynamodbav:"completed_at,omitempty" json:"completed_at,omitempty"`
 	ErrorMessage *string `dynamodbav:"error_message,omitempty" json:"error_message,omitempty"`
 	TTL          int64   `dynamodbav:"ttl" json:"ttl"` // Unix timestamp for auto-deletion
 }
 
-// Scene represents a single scene in the video
-type Scene struct {
-	Number     int     `json:"number"`
-	Duration   float64 `json:"duration"` // seconds
-	Prompt     string  `json:"prompt"`
-	Style      string  `json:"style"`
-	Transition string  `json:"transition"` // fade, cut, dissolve
-}
-
 // GenerateRequest represents a video generation request
 type GenerateRequest struct {
-	UserID      string
-	Prompt      string
-	Duration    int
-	AspectRatio string
-	Style       string
+	UserID        string
+	Prompt        string
+	Duration      int
+	AspectRatio   string
+	Style         string
+	StartImageURL string
+	EnableAudio   bool // Whether to generate audio for this video
 }
 
 // ParsedPrompt represents the parsed components of a prompt
@@ -45,12 +39,10 @@ type ParsedPrompt struct {
 }
 
 // StepFunctionsInput represents the input to Step Functions workflow
+// Matches the structure expected by workflow.asl.json
 type StepFunctionsInput struct {
-	JobID    string   `json:"job_id"`
-	Prompt   string   `json:"prompt"`
-	Duration int      `json:"duration"`
-	Style    string   `json:"style"`
-	Scenes   []Scene  `json:"scenes"`
+	JobID  string  `json:"job_id"`
+	Script *Script `json:"script"`
 }
 
 // JobStatus constants

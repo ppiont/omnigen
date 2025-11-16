@@ -112,7 +112,9 @@ resource "aws_iam_role_policy" "ecs_task" {
         Resource = [
           var.dynamodb_table_arn,
           "${var.dynamodb_table_arn}/index/*",
-          var.dynamodb_usage_table_arn
+          var.dynamodb_usage_table_arn,
+          var.dynamodb_scripts_table_arn,
+          "${var.dynamodb_scripts_table_arn}/index/*"
         ]
       },
       {
@@ -123,6 +125,17 @@ resource "aws_iam_role_policy" "ecs_task" {
           "states:StopExecution"
         ]
         Resource = var.step_functions_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = [
+          var.lambda_parser_function_arn,
+          var.lambda_generator_function_arn,
+          var.lambda_composer_function_arn
+        ]
       },
       {
         Effect = "Allow"
