@@ -84,10 +84,11 @@ function Create() {
   };
 
   const handleGenerate = async () => {
-    console.log("=".repeat(60));
-    console.log("[CREATE] 🎬 User clicked Generate Video button");
-    console.log("[CREATE] Prompt:", prompt);
-    console.log("[CREATE] Config:", {
+    console.log("=".repeat(80));
+    console.log("🎬 [CREATE] VIDEO GENERATION PIPELINE STARTED");
+    console.log("=".repeat(80));
+    console.log("[CREATE] 📝 User Input:", {
+      prompt: prompt.trim(),
       category: selectedCategory,
       style: selectedStyle,
       duration: selectedDuration,
@@ -174,11 +175,32 @@ function Create() {
         "[STAGE 3] 🎬 Number of clips:",
         generateResponse.num_clips || numClips
       );
+
+      // ============================================
+      // STAGE 3: VIDEO GENERATION (VideoGenerator)
+      // ============================================
+      console.log("\n" + "=".repeat(80));
       console.log(
         "[STAGE 3] ⏱️ Estimated completion:",
         generateResponse.estimated_completion_seconds || "N/A",
         "seconds"
       );
+      console.log("=".repeat(80));
+      console.log(
+        "[STAGE 3] Purpose: Generate video clips with visual continuity"
+      );
+      console.log("[STAGE 3] Process: For each scene:");
+      console.log(
+        "[STAGE 3]   1. Determine input image (last frame from previous clip)"
+      );
+      console.log("[STAGE 3]   2. Call Replicate API (Minimax/PixVerse/etc.)");
+      console.log("[STAGE 3]   3. Poll for completion (~60-180s per clip)");
+      console.log("[STAGE 3]   4. Extract last frame for next clip");
+
+      console.log("[STAGE 3] 📡 API Call: POST /api/v1/generate");
+      console.log("[STAGE 3] 📦 Request payload:", {
+        script_id: scriptId,
+      });
 
       setGeneratedJobId(jobId);
       setGenerationProgress(40);
@@ -210,28 +232,81 @@ function Create() {
       console.log("[STAGE 7] Metadata Export: Export scene structure");
       console.log("[POLLING] Starting progress polling...");
       let pollCount = 0;
-      const progressPollInterval = 7000; // 7 seconds between polls (stays under 10/min limit)
+      const progressPollInterval = 7000;
       let progressPollTimeoutRef = null;
 
       const pollProgress = async () => {
         pollCount++;
         try {
           console.log(
-            `[CREATE] 🔄 Polling job progress (poll #${pollCount})...`
+            `\n[POLLING] 🔄 Poll #${pollCount} - GET /api/v1/jobs/${jobId}/progress`
           );
-          const progress = await jobs.progress(jobId);
-          console.log(`[CREATE] 📊 Progress update:`, {
+
+          // Try progress endpoint first, fall back to job status
+          let progress;
+          try {
+            progress = await jobs.progress(jobId);
+          } catch (error) {
+            if (error.status === 501) {
+              console.log(
+                "[POLLING] 📊 Progress endpoint not implemented, using job status"
+              );
+              const job = await jobs.get(jobId);
+              progress = {
+                job_id: job.job_id,
+                status: job.status,
+                progress:
+                  job.status === "completed"
+                    ? 100
+                    : job.status === "processing"
+                    ? 50
+                    : 0,
+                current_stage:
+                  job.status === "completed"
+                    ? "completed"
+                    : job.status === "processing"
+                    ? "rendering"
+                    : "pending",
+                stages_completed: [],
+                stages_pending: [],
+              };
+            } else {
+              throw error;
+            }
+          }
+
+          console.log(`[POLLING] 📊 Progress update:`, {
             status: progress.status,
-            progress: progress.progress,
+            progress: `${progress.progress}%`,
             current_stage: progress.current_stage,
-            stages_completed: progress.stages_completed,
-            stages_pending: progress.stages_pending,
+            stages_completed: progress.stages_completed || [],
+            stages_pending: progress.stages_pending || [],
+            estimated_time_remaining:
+              progress.estimated_time_remaining || "N/A",
           });
 
-          setGenerationProgress(Math.min(70 + progress.progress * 0.3, 100));
+          // Map backend stages to GENERATE_README.md stages
+          const stageMapping = {
+            pending: "STAGE 3: Video Generation (Queued)",
+            parsing: "STAGE 1: Content Planning",
+            generating_videos: "STAGE 3: Video Generation",
+            generating_audio: "STAGE 4: Voiceover Generation",
+            composing: "STAGE 6: Video Stitching",
+            completed: "STAGE 7: Complete",
+            failed: "Failed",
+          };
+
+          const currentStageName =
+            stageMapping[progress.current_stage] || progress.current_stage;
+          console.log(`[POLLING] 🎯 Current Stage: ${currentStageName}`);
+
+          setGenerationProgress(Math.min(40 + progress.progress * 0.6, 100));
 
           // Update scene statuses based on progress
-          if (progress.current_stage === "rendering") {
+          if (
+            progress.current_stage === "rendering" ||
+            progress.current_stage === "generating_videos"
+          ) {
             const updatedScenes = scenes.map((scene, idx) => {
               const sceneProgress = (idx + 1) / scenes.length;
               if (progress.progress / 100 >= sceneProgress) {
@@ -245,26 +320,37 @@ function Create() {
           }
 
           if (progress.status === "completed" || progress.status === "ready") {
-            console.log("[CREATE] ✅ Video generation completed!");
+            console.log("\n" + "=".repeat(80));
+            console.log("✅ [COMPLETE] VIDEO GENERATION PIPELINE FINISHED");
+            console.log("=".repeat(80));
+            console.log("[COMPLETE] All stages completed successfully!");
+
             if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
             setGenerationState("ready");
             setGenerationProgress(100);
 
             // Get final job to get video URL
-            console.log("[CREATE] 📥 Fetching final job details...");
+            console.log("[COMPLETE] 📥 Fetching final job details...");
             const job = await jobs.get(jobId);
-            console.log("[CREATE] 📥 Final job data:", job);
+            console.log("[COMPLETE] 📥 Final job data:", {
+              job_id: job.job_id,
+              status: job.status,
+              video_url: job.video_url ? "✅ Present" : "❌ Missing",
+              video_key: job.video_key || "N/A",
+            });
 
             if (job.video_url || job.video_key) {
               const videoUrl =
                 job.video_url ||
                 `https://your-s3-bucket.s3.amazonaws.com/${job.video_key}`;
-              console.log("[CREATE] 🎬 Video URL:", videoUrl);
+              console.log("[COMPLETE] 🎬 Video URL:", videoUrl);
               setVideoPreview(videoUrl);
             }
             setIsGenerating(false);
           } else if (progress.status === "failed") {
-            console.error("[CREATE] ❌ Video generation failed");
+            console.error("\n" + "=".repeat(80));
+            console.error("❌ [FAILED] VIDEO GENERATION PIPELINE FAILED");
+            console.error("=".repeat(80));
             if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
             setGenerationState("error");
             setGenerationError("Video generation failed");
@@ -277,13 +363,11 @@ function Create() {
             );
           }
         } catch (error) {
-          // Handle rate limit errors
           if (error.status === 429) {
             const retryAfter = error.details?.reset_in || 60;
             console.warn(
-              `[CREATE] ⚠️ Rate limit hit during progress polling. Waiting ${retryAfter} seconds...`
+              `[POLLING] ⚠️ Rate limit hit. Waiting ${retryAfter}s...`
             );
-            // Wait and retry
             progressPollTimeoutRef = setTimeout(
               pollProgress,
               retryAfter * 1000
@@ -292,10 +376,9 @@ function Create() {
           }
 
           console.error(
-            `[CREATE] ⚠️ Error polling progress (poll #${pollCount}):`,
+            `[POLLING] ⚠️ Error polling progress (poll #${pollCount}):`,
             error
           );
-          // Continue polling on other errors after delay
           progressPollTimeoutRef = setTimeout(
             pollProgress,
             progressPollInterval
@@ -307,13 +390,16 @@ function Create() {
       progressPollTimeoutRef = setTimeout(pollProgress, progressPollInterval);
       window._createPollTimeout = progressPollTimeoutRef;
     } catch (error) {
-      console.error("[CREATE] ❌ Generation failed:", error);
+      console.error("\n" + "=".repeat(80));
+      console.error("❌ [ERROR] VIDEO GENERATION PIPELINE ERROR");
+      console.error("=".repeat(80));
+      console.error("[ERROR] Generation failed:", error);
       setGenerationState("error");
       setGenerationError(error.message || "Generation failed");
       setIsGenerating(false);
     }
 
-    console.log("=".repeat(60));
+    console.log("=".repeat(80));
   };
 
   // Get character counter class based on count
