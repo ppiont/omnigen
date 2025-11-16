@@ -131,8 +131,13 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 	// Get user ID from context (set by auth middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
-		// In mock mode, use default user
-		userID = "mock-user-local-dev"
+		h.logger.Error("User ID not found in context")
+		c.JSON(http.StatusUnauthorized, errors.ErrorResponse{
+			Error: errors.ErrUnauthorized.WithDetails(map[string]interface{}{
+				"message": "Authentication required",
+			}),
+		})
+		return
 	}
 
 	// Parse page size
@@ -265,7 +270,13 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 	// Get user ID from context
 	userID, exists := c.Get("user_id")
 	if !exists {
-		userID = "mock-user-local-dev"
+		h.logger.Error("User ID not found in context")
+		c.JSON(http.StatusUnauthorized, errors.ErrorResponse{
+			Error: errors.ErrUnauthorized.WithDetails(map[string]interface{}{
+				"message": "Authentication required",
+			}),
+		})
+		return
 	}
 
 	h.logger.Info("Deleting job",
