@@ -26,6 +26,16 @@ export class APIError extends Error {
  */
 export async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
+  const method = options.method || 'GET';
+  const timestamp = new Date().toISOString();
+
+  // Log API request
+  console.log(`[API] ${timestamp} → ${method} ${endpoint}`, {
+    url,
+    method,
+    hasBody: !!options.body,
+    body: options.body ? JSON.parse(options.body) : undefined,
+  });
 
   const defaultOptions = {
     credentials: 'include', // Include httpOnly cookies
@@ -45,15 +55,20 @@ export async function apiRequest(endpoint, options = {}) {
   };
 
   try {
+    const startTime = performance.now();
     const response = await fetch(url, config);
+    const duration = Math.round(performance.now() - startTime);
 
     // Handle successful responses
     if (response.ok) {
       // Check if response has content
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
-        return await response.json();
+        const data = await response.json();
+        console.log(`[API] ${new Date().toISOString()} ← ${method} ${endpoint} (${response.status}) [${duration}ms]`, data);
+        return data;
       }
+      console.log(`[API] ${new Date().toISOString()} ← ${method} ${endpoint} (${response.status}) [${duration}ms] (no content)`);
       return null;
     }
 
@@ -73,12 +88,14 @@ export async function apiRequest(endpoint, options = {}) {
 
     // Extract error details from response
     const error = errorData.error || errorData;
-    throw new APIError(
+    const apiError = new APIError(
       error.message || error.Message || 'Request failed',
       response.status,
       error.code || error.Code || 'UNKNOWN_ERROR',
       error.details || error.Details || null
     );
+    console.error(`[API] ${new Date().toISOString()} ✗ ${method} ${endpoint} (${response.status}) [${duration}ms]`, apiError);
+    throw apiError;
   } catch (error) {
     // Re-throw API errors
     if (error instanceof APIError) {
@@ -86,12 +103,14 @@ export async function apiRequest(endpoint, options = {}) {
     }
 
     // Network errors or other exceptions
-    throw new APIError(
+    const networkError = new APIError(
       error.message || 'Network error',
       0,
       'NETWORK_ERROR',
       null
     );
+    console.error(`[API] ${new Date().toISOString()} ✗ ${method} ${endpoint} (NETWORK_ERROR)`, networkError);
+    throw networkError;
   }
 }
 
@@ -197,6 +216,34 @@ export const generate = {
       method: 'POST',
       body: JSON.stringify(params),
     }),
+};
+
+/**
+ * Scripts/Parser API endpoints
+ */
+export const scripts = {
+  /**
+   * Generate a script from user input
+   * @param {Object} params - Script generation parameters
+   * @param {string} params.prompt - Video description
+   * @param {number} params.duration - Duration in seconds (15, 30, or 60)
+   * @param {string} params.product_name - Product name
+   * @param {string} params.target_audience - Target audience
+   * @param {string} params.brand_vibe - Optional brand vibe/style
+   * @returns {Promise<{script_id: string, status: string, message: string}>}
+   */
+  parse: (params) =>
+    apiRequest('/api/v1/parse', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  /**
+   * Get a script by ID
+   * @param {string} id - Script ID
+   * @returns {Promise<Object>}
+   */
+  get: (id) => apiRequest(`/api/v1/scripts/${id}`),
 };
 
 /**

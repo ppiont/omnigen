@@ -370,8 +370,12 @@ function Create() {
 
   // Handle viewing in workspace
   const handleViewWorkspace = () => {
-    if (!generatedJobId) return;
+    if (!generatedJobId) {
+      console.warn("[CREATE] ⚠️ Cannot navigate to workspace: No job ID");
+      return;
+    }
 
+    console.log("[CREATE] 🚀 Navigating to workspace:", generatedJobId);
     navigate(`/workspace/${generatedJobId}`, {
       state: {
         prompt,
