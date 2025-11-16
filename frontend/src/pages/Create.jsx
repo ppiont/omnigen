@@ -120,11 +120,12 @@ function Create() {
       setGenerationState("planning");
       setGenerationProgress(10);
 
-      // Extract product name and audience from prompt (simple extraction)
-      // In a real app, you might want to use an LLM or have separate fields
-      const productMatch = prompt.match(/\b(for|of|featuring|showcasing)\s+([a-z\s]+)/i);
+      // Extract product name and audience from prompt
+      const productMatch = prompt.match(
+        /\b(for|of|featuring|showcasing)\s+([a-z\s]+)/i
+      );
       const productName = productMatch ? productMatch[2].trim() : "Product";
-      const targetAudience = "General audience"; // Could be extracted or made a field
+      const targetAudience = "General audience";
 
       const parseParams = {
         prompt: prompt.trim(),
@@ -134,7 +135,10 @@ function Create() {
         brand_vibe: selectedStyle,
       };
 
-      console.log("[CREATE] 📝 Calling POST /api/v1/parse with params:", parseParams);
+      console.log(
+        "[CREATE] 📝 Calling POST /api/v1/parse with params:",
+        parseParams
+      );
       const parseResponse = await scripts.parse(parseParams);
       console.log("[CREATE] ✅ Script generation started:", parseResponse);
 
@@ -148,17 +152,20 @@ function Create() {
       console.log("\n[CREATE] 🔄 STEP 2: Polling for script completion");
       let script = null;
       let attempts = 0;
-      const maxAttempts = 30; // 30 seconds max wait
+      const maxAttempts = 30; // 30 attempts max
+      const scriptPollInterval = 7000; // 7 seconds between polls (stays under 10/min limit)
 
       while (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, scriptPollInterval));
         attempts++;
-        console.log(`[CREATE] 🔄 Polling script status (attempt ${attempts}/${maxAttempts})...`);
-        
+        console.log(
+          `[CREATE] 🔄 Polling script status (attempt ${attempts}/${maxAttempts})...`
+        );
+
         try {
           script = await scripts.get(scriptId);
           console.log(`[CREATE] 📄 Script status: ${script.status}`, script);
-          
+
           if (script.status === "draft" || script.status === "ready") {
             console.log("[CREATE] ✅ Script generation completed!");
             break;
@@ -168,7 +175,24 @@ function Create() {
             throw new Error("Script generation failed");
           }
         } catch (error) {
-          console.warn(`[CREATE] ⚠️ Error fetching script (attempt ${attempts}):`, error);
+          // Handle rate limit errors specifically
+          if (error.status === 429) {
+            const retryAfter = error.details?.reset_in || 60; // Default to 60 seconds
+            console.warn(
+              `[CREATE] ⚠️ Rate limit hit. Waiting ${retryAfter} seconds before retry...`
+            );
+            await new Promise((resolve) =>
+              setTimeout(resolve, retryAfter * 1000)
+            );
+            // Don't increment attempts on rate limit - retry this attempt
+            attempts--;
+            continue;
+          }
+
+          console.warn(
+            `[CREATE] ⚠️ Error fetching script (attempt ${attempts}):`,
+            error
+          );
           // Continue polling on transient errors
           if (attempts >= maxAttempts) {
             throw error;
@@ -187,7 +211,10 @@ function Create() {
         description: scene.description || scene.prompt || `Scene ${idx + 1}`,
         status: "pending",
         thumbnailUrl: null,
-        duration: `${scene.duration || Math.floor(parseInt(selectedDuration) / script.scenes.length)}s`,
+        duration: `${
+          scene.duration ||
+          Math.floor(parseInt(selectedDuration) / script.scenes.length)
+        }s`,
       }));
 
       console.log("[CREATE] 🎬 Scenes extracted:", scenes);
@@ -199,17 +226,25 @@ function Create() {
       // ============================================
       // STEP 3: Generate video from script
       // ============================================
-      console.log("\n[CREATE] 🎥 STEP 3: Starting video generation from script");
-      console.log("[CREATE] 🎥 Calling POST /api/v1/generate with script_id:", scriptId);
-      
+      console.log(
+        "\n[CREATE] 🎥 STEP 3: Starting video generation from script"
+      );
+      console.log(
+        "[CREATE] 🎥 Calling POST /api/v1/generate with script_id:",
+        scriptId
+      );
+
       const generateResponse = await generate.create({
         script_id: scriptId,
       });
 
       const jobId = generateResponse.job_id;
-      console.log("[CREATE] ✅ Video generation job created:", generateResponse);
+      console.log(
+        "[CREATE] ✅ Video generation job created:",
+        generateResponse
+      );
       console.log("[CREATE] 🎥 Job ID:", jobId);
-      
+
       setGeneratedJobId(jobId);
       setGenerationProgress(70);
 
@@ -218,10 +253,15 @@ function Create() {
       // ============================================
       console.log("\n[CREATE] 🔄 STEP 4: Polling for job progress");
       let pollCount = 0;
-      const pollInterval = setInterval(async () => {
+      const progressPollInterval = 7000; // 7 seconds between polls (stays under 10/min limit)
+      let progressPollTimeoutRef = null;
+
+      const pollProgress = async () => {
         pollCount++;
         try {
-          console.log(`[CREATE] 🔄 Polling job progress (poll #${pollCount})...`);
+          console.log(
+            `[CREATE] 🔄 Polling job progress (poll #${pollCount})...`
+          );
           const progress = await jobs.progress(jobId);
           console.log(`[CREATE] 📊 Progress update:`, {
             status: progress.status,
@@ -230,9 +270,9 @@ function Create() {
             stages_completed: progress.stages_completed,
             stages_pending: progress.stages_pending,
           });
-          
-          setGenerationProgress(Math.min(70 + (progress.progress * 0.3), 100));
-          
+
+          setGenerationProgress(Math.min(70 + progress.progress * 0.3, 100));
+
           // Update scene statuses based on progress
           if (progress.current_stage === "rendering") {
             const updatedScenes = scenes.map((scene, idx) => {
@@ -249,44 +289,73 @@ function Create() {
 
           if (progress.status === "completed" || progress.status === "ready") {
             console.log("[CREATE] ✅ Video generation completed!");
-            clearInterval(pollInterval);
+            if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
             setGenerationState("ready");
             setGenerationProgress(100);
-            
+
             // Get final job to get video URL
             console.log("[CREATE] 📥 Fetching final job details...");
             const job = await jobs.get(jobId);
             console.log("[CREATE] 📥 Final job data:", job);
-            
+
             if (job.video_url || job.video_key) {
-              const videoUrl = job.video_url || `https://your-s3-bucket.s3.amazonaws.com/${job.video_key}`;
+              const videoUrl =
+                job.video_url ||
+                `https://your-s3-bucket.s3.amazonaws.com/${job.video_key}`;
               console.log("[CREATE] 🎬 Video URL:", videoUrl);
               setVideoPreview(videoUrl);
             }
             setIsGenerating(false);
           } else if (progress.status === "failed") {
             console.error("[CREATE] ❌ Video generation failed");
-            clearInterval(pollInterval);
+            if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
             setGenerationState("error");
             setGenerationError("Video generation failed");
             setIsGenerating(false);
+          } else {
+            // Continue polling
+            progressPollTimeoutRef = setTimeout(
+              pollProgress,
+              progressPollInterval
+            );
           }
         } catch (error) {
-          console.error(`[CREATE] ⚠️ Error polling progress (poll #${pollCount}):`, error);
-          // Continue polling on error
+          // Handle rate limit errors
+          if (error.status === 429) {
+            const retryAfter = error.details?.reset_in || 60;
+            console.warn(
+              `[CREATE] ⚠️ Rate limit hit during progress polling. Waiting ${retryAfter} seconds...`
+            );
+            // Wait and retry
+            progressPollTimeoutRef = setTimeout(
+              pollProgress,
+              retryAfter * 1000
+            );
+            return;
+          }
+
+          console.error(
+            `[CREATE] ⚠️ Error polling progress (poll #${pollCount}):`,
+            error
+          );
+          // Continue polling on other errors after delay
+          progressPollTimeoutRef = setTimeout(
+            pollProgress,
+            progressPollInterval
+          );
         }
-      }, 2000); // Poll every 2 seconds
+      };
 
-      // Store interval reference for cleanup
-      window._createPollInterval = pollInterval;
-
+      // Start polling
+      progressPollTimeoutRef = setTimeout(pollProgress, progressPollInterval);
+      window._createPollTimeout = progressPollTimeoutRef;
     } catch (error) {
       console.error("[CREATE] ❌ Generation failed:", error);
       setGenerationState("error");
       setGenerationError(error.message || "Generation failed");
       setIsGenerating(false);
     }
-    
+
     console.log("=".repeat(60));
   };
 
@@ -331,13 +400,13 @@ function Create() {
   // Handle retry/generate another
   const handleRetry = () => {
     console.log("[CREATE] 🔄 Resetting generation state");
-    
-    // Clear any polling intervals
-    if (window._createPollInterval) {
-      clearInterval(window._createPollInterval);
-      window._createPollInterval = null;
+
+    // Clear any polling timeouts
+    if (window._createPollTimeout) {
+      clearTimeout(window._createPollTimeout);
+      window._createPollTimeout = null;
     }
-    
+
     setGenerationState("idle");
     setGenerationProgress(0);
     setScenes([]);
@@ -408,9 +477,12 @@ function Create() {
             {/* Scene Preview Grid - show during PLANNING, RENDERING, STITCHING, READY */}
             <ScenePreviewGrid
               scenes={scenes}
-              isVisible={["planning", "rendering", "stitching", "ready"].includes(
-                generationState
-              )}
+              isVisible={[
+                "planning",
+                "rendering",
+                "stitching",
+                "ready",
+              ].includes(generationState)}
             />
           </div>
 
