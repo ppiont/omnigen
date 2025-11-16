@@ -3,6 +3,7 @@ package api
 import (
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/sfn"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/omnigen/backend/internal/api/handlers"
@@ -17,26 +18,28 @@ import (
 
 // ServerConfig holds the server configuration
 type ServerConfig struct {
-	Port             string
-	Environment      string
-	MockMode         bool // Enable mock responses for frontend development
-	Logger           *zap.Logger
-	JobRepo          *repository.DynamoDBRepository
-	S3Service        *repository.S3Service
-	UsageRepo        *repository.UsageRepository
-	GeneratorService *service.GeneratorService
-	ParserService    *service.ParserService // Script generation service
-	MockService      *service.MockService   // Mock service for frontend development
-	APIKeys          []string               // Deprecated: Use JWTValidator instead
-	JWTValidator     *auth.JWTValidator
-	RateLimiter      *auth.RateLimiter
-	CookieConfig     auth.CookieConfig // Cookie configuration for httpOnly tokens
-	CloudFrontDomain string            // For CORS in production
-	CognitoDomain    string            // Cognito hosted UI domain for CORS
-	LambdaClient     interface{}       // Lambda client for async script generation
-	LambdaParserARN  string            // Parser Lambda ARN
-	ReadTimeout      time.Duration
-	WriteTimeout     time.Duration
+	Port                string
+	Environment         string
+	MockMode            bool // Enable mock responses for frontend development
+	Logger              *zap.Logger
+	JobRepo             *repository.DynamoDBRepository
+	S3Service           *repository.S3Service
+	UsageRepo           *repository.UsageRepository
+	GeneratorService    *service.GeneratorService
+	ParserService       *service.ParserService // Script generation service
+	MockService         *service.MockService   // Mock service for frontend development
+	APIKeys             []string               // Deprecated: Use JWTValidator instead
+	JWTValidator        *auth.JWTValidator
+	RateLimiter         *auth.RateLimiter
+	CookieConfig        auth.CookieConfig // Cookie configuration for httpOnly tokens
+	CloudFrontDomain    string            // For CORS in production
+	CognitoDomain       string            // Cognito hosted UI domain for CORS
+	LambdaClient        interface{}       // Lambda client for async script generation
+	LambdaParserARN     string            // Parser Lambda ARN
+	StepFunctionsClient interface{}       // Step Functions client
+	StepFunctionsARN    string            // Step Functions state machine ARN
+	ReadTimeout         time.Duration
+	WriteTimeout        time.Duration
 }
 
 // Server represents the HTTP server
@@ -59,6 +62,7 @@ func NewServer(config *ServerConfig) *Server {
 	// Add middlewares
 	router.Use(gin.Recovery())
 	router.Use(middleware.Logger(config.Logger))
+	router.Use(middleware.MaxRequestBodySize(10 * 1024 * 1024)) // 10MB limit
 
 	// CORS configuration
 	// Build allowed origins list
@@ -148,8 +152,17 @@ func (s *Server) setupRoutes() {
 
 	{
 		// Initialize handlers
+		// Step Functions service
+		stepFunctionsService := service.NewStepFunctionsService(
+			s.config.StepFunctionsClient.(*sfn.Client),
+			s.config.StepFunctionsARN,
+			s.config.Logger,
+		)
+
 		generateHandler := handlers.NewGenerateHandler(
-			s.config.GeneratorService,
+			s.config.ParserService,
+			stepFunctionsService,
+			s.config.JobRepo,
 			s.config.MockService,
 			s.config.Logger,
 			s.config.MockMode,

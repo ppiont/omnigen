@@ -28,10 +28,10 @@ type RateLimiter struct {
 
 // userRateLimit tracks rate limit state for a single user
 type userRateLimit struct {
-	count      int
-	resetAt    time.Time
-	tier       string
-	mu         sync.Mutex
+	count   int
+	resetAt time.Time
+	tier    string
+	mu      sync.Mutex
 }
 
 // NewRateLimiter creates a new rate limiter with specified window duration
@@ -58,7 +58,7 @@ func (rl *RateLimiter) cleanup() {
 		now := time.Now()
 		for userID, limit := range rl.requests {
 			limit.mu.Lock()
-			if now.After(limit.resetAt.Add(time.Minute)) {
+			if now.After(limit.resetAt) {
 				delete(rl.requests, userID)
 			}
 			limit.mu.Unlock()
@@ -158,10 +158,10 @@ func RateLimitMiddleware(rateLimiter *RateLimiter, logger *zap.Logger) gin.Handl
 				},
 				fmt.Sprintf("Rate limit of %d requests per minute exceeded", limit),
 				map[string]interface{}{
-					"limit":     limit,
-					"reset_in":  resetIn.Seconds(),
-					"tier":      tier,
-					"upgrade":   "Upgrade your subscription for higher rate limits",
+					"limit":    limit,
+					"reset_in": resetIn.Seconds(),
+					"tier":     tier,
+					"upgrade":  "Upgrade your subscription for higher rate limits",
 				},
 			))
 			c.Abort()

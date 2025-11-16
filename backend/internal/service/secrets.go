@@ -12,9 +12,9 @@ import (
 
 // SecretsService handles Secrets Manager operations
 type SecretsService struct {
-	client               *secretsmanager.Client
-	replicateSecretARN   string
-	logger               *zap.Logger
+	client             *secretsmanager.Client
+	replicateSecretARN string
+	logger             *zap.Logger
 }
 
 // NewSecretsService creates a new Secrets Manager service
@@ -36,9 +36,7 @@ type APIKeysSecret struct {
 }
 
 // GetAPIKeys retrieves API keys from Secrets Manager
-func (s *SecretsService) GetAPIKeys() ([]string, error) {
-	ctx := context.Background()
-
+func (s *SecretsService) GetAPIKeys(ctx context.Context) ([]string, error) {
 	// For MVP, we'll use a hardcoded secret name for API keys
 	// In production, this should be configurable
 	secretName := "omnigen/api-keys"
@@ -69,9 +67,7 @@ func (s *SecretsService) GetAPIKeys() ([]string, error) {
 }
 
 // GetReplicateAPIKey retrieves the Replicate API key
-func (s *SecretsService) GetReplicateAPIKey() (string, error) {
-	ctx := context.Background()
-
+func (s *SecretsService) GetReplicateAPIKey(ctx context.Context) (string, error) {
 	s.logger.Info("Retrieving Replicate API key from Secrets Manager",
 		zap.String("secret_arn", s.replicateSecretARN),
 	)

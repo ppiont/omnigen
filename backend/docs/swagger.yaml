@@ -611,31 +611,10 @@ definitions:
     type: object
   handlers.GenerateRequest:
     properties:
-      aspect_ratio:
-        enum:
-        - "16:9"
-        - "9:16"
-        - "1:1"
-        type: string
-      duration:
-        maximum: 180
-        minimum: 15
-        type: integer
-      enable_audio:
-        description: Optional, defaults to true if not specified
-        type: boolean
-      prompt:
-        maxLength: 1000
-        minLength: 10
-        type: string
-      start_image_url:
-        type: string
-      style:
-        maxLength: 200
+      script_id:
         type: string
     required:
-    - duration
-    - prompt
+    - script_id
     type: object
   handlers.GenerateResponse:
     properties:
@@ -910,9 +889,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a new video generation job for an ad creative
+      description: Starts Step Functions workflow to generate video from an approved
+        script
       parameters:
-      - description: Generation parameters
+      - description: Script ID to generate video from
         in: body
         name: request
         required: true
@@ -921,8 +901,8 @@ paths:
       produces:
       - application/json
       responses:
-        "201":
-          description: Created
+        "202":
+          description: Accepted
           schema:
             $ref: '#/definitions/handlers.GenerateResponse'
         "400":
@@ -937,6 +917,10 @@ paths:
           description: Payment Required - Monthly quota exceeded
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Script not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
         "429":
           description: Too Many Requests - Rate limit exceeded
           schema:
@@ -947,7 +931,7 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Submit video generation job
+      summary: Start video generation from approved script
       tags:
       - jobs
   /api/v1/jobs:

@@ -160,7 +160,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new video generation job for an ad creative",
+                "description": "Starts Step Functions workflow to generate video from an approved script",
                 "consumes": [
                     "application/json"
                 ],
@@ -170,10 +170,10 @@ const docTemplate = `{
                 "tags": [
                     "jobs"
                 ],
-                "summary": "Submit video generation job",
+                "summary": "Start video generation from approved script",
                 "parameters": [
                     {
-                        "description": "Generation parameters",
+                        "description": "Script ID to generate video from",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -183,8 +183,8 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Created",
+                    "202": {
+                        "description": "Accepted",
                         "schema": {
                             "$ref": "#/definitions/handlers.GenerateResponse"
                         }
@@ -203,6 +203,12 @@ const docTemplate = `{
                     },
                     "402": {
                         "description": "Payment Required - Monthly quota exceeded",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Script not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1333,38 +1339,11 @@ const docTemplate = `{
         "handlers.GenerateRequest": {
             "type": "object",
             "required": [
-                "duration",
-                "prompt"
+                "script_id"
             ],
             "properties": {
-                "aspect_ratio": {
-                    "type": "string",
-                    "enum": [
-                        "16:9",
-                        "9:16",
-                        "1:1"
-                    ]
-                },
-                "duration": {
-                    "type": "integer",
-                    "maximum": 180,
-                    "minimum": 15
-                },
-                "enable_audio": {
-                    "description": "Optional, defaults to true if not specified",
-                    "type": "boolean"
-                },
-                "prompt": {
-                    "type": "string",
-                    "maxLength": 1000,
-                    "minLength": 10
-                },
-                "start_image_url": {
+                "script_id": {
                     "type": "string"
-                },
-                "style": {
-                    "type": "string",
-                    "maxLength": 200
                 }
             }
         },

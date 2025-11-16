@@ -102,7 +102,7 @@ func main() {
 	)
 
 	// Retrieve API keys from Secrets Manager
-	apiKeys, err := secretsService.GetAPIKeys()
+	apiKeys, err := secretsService.GetAPIKeys(context.Background())
 	if err != nil {
 		zapLogger.Fatal("Failed to retrieve API keys from Secrets Manager", zap.Error(err))
 	}
@@ -173,26 +173,28 @@ func main() {
 
 	// Initialize HTTP server
 	server := api.NewServer(&api.ServerConfig{
-		Port:             cfg.Port,
-		Environment:      cfg.Environment,
-		MockMode:         cfg.MockMode,
-		Logger:           zapLogger,
-		JobRepo:          jobRepo,
-		S3Service:        s3Service,
-		UsageRepo:        usageRepo,
-		GeneratorService: generatorService,
-		ParserService:    parserService,
-		MockService:      mockService,
-		APIKeys:          apiKeys,
-		JWTValidator:     jwtValidator,
-		RateLimiter:      rateLimiter,
-		CookieConfig:     cookieConfig,
-		CloudFrontDomain: cfg.CloudFrontDomain,
-		CognitoDomain:    cfg.CognitoDomain,
-		LambdaClient:     awsClients.Lambda,
-		LambdaParserARN:  cfg.LambdaParserARN,
-		ReadTimeout:      time.Duration(cfg.ReadTimeout) * time.Second,
-		WriteTimeout:     time.Duration(cfg.WriteTimeout) * time.Second,
+		Port:                cfg.Port,
+		Environment:         cfg.Environment,
+		MockMode:            cfg.MockMode,
+		Logger:              zapLogger,
+		JobRepo:             jobRepo,
+		S3Service:           s3Service,
+		UsageRepo:           usageRepo,
+		GeneratorService:    generatorService,
+		ParserService:       parserService,
+		MockService:         mockService,
+		APIKeys:             apiKeys,
+		JWTValidator:        jwtValidator,
+		RateLimiter:         rateLimiter,
+		CookieConfig:        cookieConfig,
+		CloudFrontDomain:    cfg.CloudFrontDomain,
+		CognitoDomain:       cfg.CognitoDomain,
+		LambdaClient:        awsClients.Lambda,
+		LambdaParserARN:     cfg.LambdaParserARN,
+		StepFunctionsClient: awsClients.StepFunctions,
+		StepFunctionsARN:    cfg.StepFunctionsARN,
+		ReadTimeout:         time.Duration(cfg.ReadTimeout) * time.Second,
+		WriteTimeout:        time.Duration(cfg.WriteTimeout) * time.Second,
 	})
 
 	httpServer := &http.Server{
