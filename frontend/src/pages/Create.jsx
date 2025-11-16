@@ -7,7 +7,7 @@ import ValidationMessage from "../components/create/ValidationMessage.jsx";
 import BatchGenerationToggle from "../components/create/BatchGenerationToggle.jsx";
 import GenerationState from "../components/create/GenerationState.jsx";
 import ScenePreviewGrid from "../components/create/ScenePreviewGrid.jsx";
-import { generate, jobs, scripts } from "../utils/api.js";
+import { generate, jobs } from "../utils/api.js";
 import "../styles/dashboard.css";
 import "../styles/create.css";
 
@@ -20,7 +20,7 @@ const categories = [
 ];
 const styles = ["Cinematic", "Modern", "Minimalist", "Bold", "Playful"];
 const durations = ["15s", "30s", "60s", "90s"];
-const aspects = ["16:9", "9:16", "1:1", "4:5"];
+const aspects = ["16:9", "9:16", "1:1"];
 
 function IconChevronDown() {
   return (
@@ -115,161 +115,6 @@ function Create() {
 
     try {
       // ============================================
-      // STAGE 1: CONTENT PLANNING (PromptParser)
-      // ============================================
-      console.log("\n" + "=".repeat(80));
-      console.log(
-        "📋 [STAGE 1] CONTENT PLANNING - Parsing prompt into narrative scenes"
-      );
-      console.log("=".repeat(80));
-      console.log(
-        "[STAGE 1] Purpose: Structure user prompt into narrative scenes"
-      );
-      console.log(
-        "[STAGE 1] Process: GPT-4o analyzes prompt and generates scene breakdowns"
-      );
-      console.log(
-        "[STAGE 1] Expected: Narrative arc (setup → development → resolution)"
-      );
-
-      setGenerationState("planning");
-      setGenerationProgress(5);
-
-      // Extract product name and audience from prompt
-      const productMatch = prompt.match(
-        /\b(for|of|featuring|showcasing)\s+([a-z\s]+)/i
-      );
-      const productName = productMatch ? productMatch[2].trim() : "Product";
-      const targetAudience = "General audience";
-
-      const parseParams = {
-        prompt: prompt.trim(),
-        duration: parseInt(selectedDuration),
-        product_name: productName,
-        target_audience: targetAudience,
-        brand_vibe: selectedStyle,
-      };
-
-      console.log("[STAGE 1] 📡 API Call: POST /api/v1/parse");
-      console.log("[STAGE 1] 📦 Request payload:", parseParams);
-
-      const parseResponse = await scripts.parse(parseParams);
-
-      console.log("[STAGE 1] ✅ Script generation initiated");
-      console.log("[STAGE 1] 📄 Script ID:", parseResponse.script_id);
-      console.log("[STAGE 1] 📊 Status:", parseResponse.status);
-      console.log("[STAGE 1] 💬 Message:", parseResponse.message);
-
-      const scriptId = parseResponse.script_id;
-      setGenerationProgress(15);
-
-      // ============================================
-      // STAGE 1: Poll for script completion
-      // ============================================
-      console.log("\n[STAGE 1] 🔄 Polling for script completion...");
-      console.log(
-        "[STAGE 1] Expected output: Structured scenes array with prompts, descriptions, durations"
-      );
-
-      let script = null;
-      let attempts = 0;
-      const maxAttempts = 30;
-      const scriptPollInterval = 7000;
-
-      while (attempts < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, scriptPollInterval));
-        attempts++;
-        console.log(
-          `[STAGE 1] 🔄 Poll attempt ${attempts}/${maxAttempts} - GET /api/v1/scripts/${scriptId}`
-        );
-
-        try {
-          script = await scripts.get(scriptId);
-          console.log(`[STAGE 1] 📄 Script status: ${script.status}`);
-
-          if (script.status === "draft" || script.status === "ready") {
-            console.log("[STAGE 1] ✅ Script generation completed!");
-            console.log(
-              "[STAGE 1] 📊 Scenes generated:",
-              script.scenes?.length || 0
-            );
-            if (script.scenes) {
-              script.scenes.forEach((scene, idx) => {
-                console.log(`[STAGE 1]   Scene ${idx + 1}:`, {
-                  description: scene.description || scene.prompt,
-                  duration: scene.duration,
-                  prompt: scene.prompt,
-                });
-              });
-            }
-            break;
-          }
-          if (script.status === "failed") {
-            console.error("[STAGE 1] ❌ Script generation failed");
-            throw new Error("Script generation failed");
-          }
-          if (script.status === "generating") {
-            console.log("[STAGE 1] ⏳ Script still generating...");
-          }
-        } catch (error) {
-          if (error.status === 429) {
-            const retryAfter = error.details?.reset_in || 60;
-            console.warn(
-              `[STAGE 1] ⚠️ Rate limit hit. Waiting ${retryAfter}s...`
-            );
-            await new Promise((resolve) =>
-              setTimeout(resolve, retryAfter * 1000)
-            );
-            attempts--;
-            continue;
-          }
-          console.warn(
-            `[STAGE 1] ⚠️ Error fetching script (attempt ${attempts}):`,
-            error
-          );
-          if (attempts >= maxAttempts) {
-            throw error;
-          }
-        }
-      }
-
-      if (!script || (script.status !== "draft" && script.status !== "ready")) {
-        console.error("[STAGE 1] ❌ Script generation timed out or failed");
-        throw new Error("Script generation timed out or failed");
-      }
-
-      // Convert script scenes to our format
-      const scenes = script.scenes.map((scene, idx) => ({
-        id: idx + 1,
-        description: scene.description || scene.prompt || `Scene ${idx + 1}`,
-        status: "pending",
-        thumbnailUrl: null,
-        duration: `${
-          scene.duration ||
-          Math.floor(parseInt(selectedDuration) / script.scenes.length)
-        }s`,
-      }));
-
-      console.log("[STAGE 1] ✅ Content planning complete!");
-      console.log("[STAGE 1] 📊 Total scenes:", scenes.length);
-      setScenes(scenes);
-      setSceneCount(scenes.length);
-      setGenerationProgress(30);
-      setGenerationState("rendering");
-
-      // ============================================
-      // STAGE 2: KEYFRAME GENERATION (Optional - Skipped for now)
-      // ============================================
-      console.log("\n" + "=".repeat(80));
-      console.log("🎨 [STAGE 2] KEYFRAME GENERATION - Skipped (not enabled)");
-      console.log("=".repeat(80));
-      console.log("[STAGE 2] Purpose: Prevent style drift across clips");
-      console.log("[STAGE 2] Status: Using last-frame chaining method instead");
-      console.log(
-        "[STAGE 2] Continuity: Each clip will use previous clip's last frame"
-      );
-
-      // ============================================
       // STAGE 3: VIDEO GENERATION (VideoGenerator)
       // ============================================
       console.log("\n" + "=".repeat(80));
@@ -288,14 +133,39 @@ function Create() {
       console.log("[STAGE 3]   3. Poll for completion (~60-180s per clip)");
       console.log("[STAGE 3]   4. Extract last frame for next clip");
 
-      console.log("[STAGE 3] 📡 API Call: POST /api/v1/generate");
-      console.log("[STAGE 3] 📦 Request payload:", {
-        script_id: scriptId,
-      });
+      setGenerationState("rendering");
+      setGenerationProgress(10);
 
-      const generateResponse = await generate.create({
-        script_id: scriptId,
-      });
+      // Prepare generate request with required fields
+      const generateParams = {
+        prompt: prompt.trim(),
+        duration: parseInt(selectedDuration),
+        aspect_ratio: selectedAspect,
+      };
+
+      // Add optional fields if provided
+      if (referenceImage) {
+        generateParams.start_image = referenceImage.url || referenceImage.name;
+      }
+
+      console.log("[STAGE 3] 📡 API Call: POST /api/v1/generate");
+      console.log("[STAGE 3] 📦 Request payload:", generateParams);
+
+      const generateResponse = await generate.create(generateParams);
+
+      // Create mock scenes for UI display
+      const numClips =
+        generateResponse.num_clips ||
+        Math.floor(parseInt(selectedDuration) / 5);
+      const scenes = Array.from({ length: numClips }, (_, idx) => ({
+        id: idx + 1,
+        description: `Scene ${idx + 1}`,
+        status: "pending",
+        thumbnailUrl: null,
+        duration: `${Math.floor(parseInt(selectedDuration) / numClips)}s`,
+      }));
+      setScenes(scenes);
+      setSceneCount(scenes.length);
 
       const jobId = generateResponse.job_id;
       console.log("[STAGE 3] ✅ Video generation job created");
@@ -303,13 +173,34 @@ function Create() {
       console.log("[STAGE 3] 📊 Status:", generateResponse.status);
       console.log(
         "[STAGE 3] 🎬 Number of clips:",
-        generateResponse.num_clips || scenes.length
+        generateResponse.num_clips || numClips
       );
+
+      // ============================================
+      // STAGE 3: VIDEO GENERATION (VideoGenerator)
+      // ============================================
+      console.log("\n" + "=".repeat(80));
       console.log(
         "[STAGE 3] ⏱️ Estimated completion:",
         generateResponse.estimated_completion_seconds || "N/A",
         "seconds"
       );
+      console.log("=".repeat(80));
+      console.log(
+        "[STAGE 3] Purpose: Generate video clips with visual continuity"
+      );
+      console.log("[STAGE 3] Process: For each scene:");
+      console.log(
+        "[STAGE 3]   1. Determine input image (last frame from previous clip)"
+      );
+      console.log("[STAGE 3]   2. Call Replicate API (Minimax/PixVerse/etc.)");
+      console.log("[STAGE 3]   3. Poll for completion (~60-180s per clip)");
+      console.log("[STAGE 3]   4. Extract last frame for next clip");
+
+      console.log("[STAGE 3] 📡 API Call: POST /api/v1/generate");
+      console.log("[STAGE 3] 📦 Request payload:", {
+        script_id: scriptId,
+      });
 
       setGeneratedJobId(jobId);
       setGenerationProgress(40);
@@ -340,7 +231,6 @@ function Create() {
       );
       console.log("[STAGE 7] Metadata Export: Export scene structure");
       console.log("[POLLING] Starting progress polling...");
-
       let pollCount = 0;
       const progressPollInterval = 7000;
       let progressPollTimeoutRef = null;
