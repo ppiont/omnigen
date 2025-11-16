@@ -20,9 +20,7 @@ type GenerateHandler struct {
 	parserService *service.ParserService
 	stepFunctions *service.StepFunctionsService
 	jobRepo       *repository.DynamoDBRepository
-	mockService   *service.MockService
 	logger        *zap.Logger
-	mockMode      bool
 }
 
 // NewGenerateHandler creates a new generate handler
@@ -30,17 +28,13 @@ func NewGenerateHandler(
 	parserService *service.ParserService,
 	stepFunctions *service.StepFunctionsService,
 	jobRepo *repository.DynamoDBRepository,
-	mockService *service.MockService,
 	logger *zap.Logger,
-	mockMode bool,
 ) *GenerateHandler {
 	return &GenerateHandler{
 		parserService: parserService,
 		stepFunctions: stepFunctions,
 		jobRepo:       jobRepo,
-		mockService:   mockService,
 		logger:        logger,
-		mockMode:      mockMode,
 	}
 }
 
@@ -85,18 +79,12 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// Get user ID from auth context (or use mock user ID in mock mode)
-	var userID string
-	if h.mockMode {
-		userID = "mock-user-local-dev"
-	} else {
-		userID = auth.MustGetUserID(c)
-	}
+	// Get user ID from auth context
+	userID := auth.MustGetUserID(c)
 
 	h.logger.Info("Starting video generation",
 		zap.String("user_id", userID),
 		zap.String("script_id", req.ScriptID),
-		zap.Bool("mock_mode", h.mockMode),
 	)
 
 	// Fetch script from database
@@ -158,48 +146,39 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	var estimatedSeconds int
-
-	// In mock mode, just create the job without starting Step Functions
-	if h.mockMode {
-		h.logger.Info("Mock mode: Created job without starting Step Functions",
-			zap.String("job_id", jobID))
-		estimatedSeconds = 180 // Mock: 3 minutes
-	} else {
-		// Prepare Step Functions input
-		sfInput := &domain.StepFunctionsInput{
-			JobID:  jobID,
-			Script: script,
-		}
-
-		// Start Step Functions execution
-		executionARN, err := h.stepFunctions.StartExecution(c.Request.Context(), sfInput)
-		if err != nil {
-			h.logger.Error("Failed to start Step Functions execution",
-				zap.String("job_id", jobID),
-				zap.Error(err))
-
-			// Update job status to failed
-			job.Status = domain.StatusFailed
-			h.jobRepo.UpdateJobStatus(c.Request.Context(), jobID, domain.StatusFailed)
-
-			c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
-				Error: errors.ErrInternalServer.WithDetails(map[string]interface{}{
-					"message": "Failed to start video generation workflow",
-				}),
-			})
-			return
-		}
-
-		h.logger.Info("Step Functions execution started",
-			zap.String("job_id", jobID),
-			zap.String("script_id", req.ScriptID),
-			zap.String("execution_arn", executionARN))
-
-		// Real mode: based on video duration
-		// 15s video ~= 3min, 30s ~= 5min, 60s ~= 10min
-		estimatedSeconds = script.TotalDuration * 10
+	// Prepare Step Functions input
+	sfInput := &domain.StepFunctionsInput{
+		JobID:  jobID,
+		Script: script,
 	}
+
+	// Start Step Functions execution
+	executionARN, err := h.stepFunctions.StartExecution(c.Request.Context(), sfInput)
+	if err != nil {
+		h.logger.Error("Failed to start Step Functions execution",
+			zap.String("job_id", jobID),
+			zap.Error(err))
+
+		// Update job status to failed
+		job.Status = domain.StatusFailed
+		h.jobRepo.UpdateJobStatus(c.Request.Context(), jobID, domain.StatusFailed)
+
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
+			Error: errors.ErrInternalServer.WithDetails(map[string]interface{}{
+				"message": "Failed to start video generation workflow",
+			}),
+		})
+		return
+	}
+
+	h.logger.Info("Step Functions execution started",
+		zap.String("job_id", jobID),
+		zap.String("script_id", req.ScriptID),
+		zap.String("execution_arn", executionARN))
+
+	// Estimate completion time based on video duration
+	// 15s video ~= 3min, 30s ~= 5min, 60s ~= 10min
+	estimatedSeconds := script.TotalDuration * 10
 
 	response := GenerateResponse{
 		JobID:               jobID,

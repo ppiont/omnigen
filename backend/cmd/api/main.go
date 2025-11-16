@@ -59,7 +59,6 @@ func main() {
 		zap.String("environment", cfg.Environment),
 		zap.String("port", cfg.Port),
 		zap.String("aws_region", cfg.AWSRegion),
-		zap.Bool("mock_mode", cfg.MockMode),
 	)
 
 	// Initialize AWS SDK configuration
@@ -91,9 +90,6 @@ func main() {
 		zapLogger,
 	)
 
-	// Initialize rate limiter (1-minute window)
-	rateLimiter := auth.NewRateLimiter(time.Minute, zapLogger)
-
 	// Initialize services
 	secretsService := service.NewSecretsService(
 		awsClients.SecretsManager,
@@ -123,15 +119,9 @@ func main() {
 	)
 
 	// Initialize parser service for script generation
-	// Only initialize LlamaAdapter in non-mock mode (mock mode doesn't need real API calls)
-	var llamaAdapter *adapters.LlamaAdapter
-	if !cfg.MockMode {
-		llamaAdapter = adapters.NewLlamaAdapter(cfg.ReplicateSecretARN, awsClients.SecretsManager, zapLogger)
-		if err := llamaAdapter.Initialize(context.Background()); err != nil {
-			zapLogger.Fatal("Failed to initialize Llama adapter", zap.Error(err))
-		}
-	} else {
-		zapLogger.Info("Mock mode enabled - skipping Llama adapter initialization")
+	llamaAdapter := adapters.NewLlamaAdapter(cfg.ReplicateSecretARN, awsClients.SecretsManager, zapLogger)
+	if err := llamaAdapter.Initialize(context.Background()); err != nil {
+		zapLogger.Fatal("Failed to initialize Llama adapter", zap.Error(err))
 	}
 
 	parserService := service.NewParserService(
@@ -141,28 +131,17 @@ func main() {
 		zapLogger,
 	)
 
-	// Initialize mock service (always available, but only used when MOCK_MODE=true)
-	mockService := service.NewMockService()
-
 	// Initialize JWT validator
-	var jwtValidator *auth.JWTValidator
+	jwksURL := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
+		cfg.AWSRegion, cfg.CognitoUserPoolID)
 
-	if cfg.MockMode {
-		zapLogger.Info("Mock mode enabled - JWT validation will be skipped")
-		// Create a nil validator - middleware will be skipped entirely in mock mode
-		jwtValidator = nil
-	} else {
-		jwksURL := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
-			cfg.AWSRegion, cfg.CognitoUserPoolID)
+	jwtValidator := auth.NewJWTValidator(jwksURL, cfg.JWTIssuer, cfg.CognitoClientID, zapLogger)
 
-		jwtValidator = auth.NewJWTValidator(jwksURL, cfg.JWTIssuer, cfg.CognitoClientID, zapLogger)
-
-		// Fetch JWKS keys at startup
-		if err := jwtValidator.FetchJWKS(); err != nil {
-			zapLogger.Fatal("Failed to fetch JWKS", zap.Error(err))
-		}
-		zapLogger.Info("JWT validator initialized successfully")
+	// Fetch JWKS keys at startup
+	if err := jwtValidator.FetchJWKS(); err != nil {
+		zapLogger.Fatal("Failed to fetch JWKS", zap.Error(err))
 	}
+	zapLogger.Info("JWT validator initialized successfully")
 
 	// Cookie configuration for httpOnly tokens
 	cookieConfig := auth.CookieConfig{
@@ -175,17 +154,14 @@ func main() {
 	server := api.NewServer(&api.ServerConfig{
 		Port:                cfg.Port,
 		Environment:         cfg.Environment,
-		MockMode:            cfg.MockMode,
 		Logger:              zapLogger,
 		JobRepo:             jobRepo,
 		S3Service:           s3Service,
 		UsageRepo:           usageRepo,
 		GeneratorService:    generatorService,
 		ParserService:       parserService,
-		MockService:         mockService,
 		APIKeys:             apiKeys,
 		JWTValidator:        jwtValidator,
-		RateLimiter:         rateLimiter,
 		CookieConfig:        cookieConfig,
 		CloudFrontDomain:    cfg.CloudFrontDomain,
 		CognitoDomain:       cfg.CognitoDomain,
@@ -237,7 +213,6 @@ type Config struct {
 	Environment  string `envconfig:"ENVIRONMENT" default:"production"`
 	ReadTimeout  int    `envconfig:"READ_TIMEOUT" default:"30"`
 	WriteTimeout int    `envconfig:"WRITE_TIMEOUT" default:"30"`
-	MockMode     bool   `envconfig:"MOCK_MODE" default:"false"` // Enable mock responses for frontend development
 
 	// AWS configuration
 	AWSRegion          string `envconfig:"AWS_REGION" required:"true"`

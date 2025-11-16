@@ -724,13 +724,6 @@ definitions:
       status:
         type: string
     type: object
-  handlers.PresetsResponse:
-    properties:
-      presets:
-        items:
-          $ref: '#/definitions/service.BrandPreset'
-        type: array
-    type: object
   handlers.ProgressResponse:
     properties:
       current_stage:
@@ -767,23 +760,6 @@ definitions:
       subscription_tier:
         type: string
       user_id:
-        type: string
-    type: object
-  service.BrandPreset:
-    properties:
-      color_palette:
-        items:
-          type: string
-        type: array
-      description:
-        type: string
-      id:
-        type: string
-      music_mood:
-        type: string
-      name:
-        type: string
-      style:
         type: string
     type: object
 info:
@@ -1063,19 +1039,6 @@ paths:
       summary: Generate ad script from user input (async)
       tags:
       - scripts
-  /api/v1/presets:
-    get:
-      description: Get a list of predefined brand style presets for quick video generation
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.PresetsResponse'
-      summary: Get brand style presets
-      tags:
-      - presets
   /api/v1/scripts/{id}:
     get:
       description: Get a previously generated script for review or editing

@@ -24,7 +24,6 @@ type ParserHandler struct {
 	lambdaClient    interface{} // interface{} to avoid import cycles
 	lambdaParserARN string
 	logger          *zap.Logger
-	mockMode        bool
 }
 
 // NewParserHandler creates a new parser handler
@@ -33,14 +32,12 @@ func NewParserHandler(
 	lambdaClient interface{},
 	lambdaParserARN string,
 	logger *zap.Logger,
-	mockMode bool,
 ) *ParserHandler {
 	return &ParserHandler{
 		parserService:   parserService,
 		lambdaClient:    lambdaClient,
 		lambdaParserARN: lambdaParserARN,
 		logger:          logger,
-		mockMode:        mockMode,
 	}
 }
 
@@ -88,13 +85,8 @@ func (h *ParserHandler) Parse(c *gin.Context) {
 	// Get trace ID from context
 	traceID, _ := c.Get("trace_id")
 
-	// Get user ID from auth context (or use mock user ID in mock mode)
-	var userID string
-	if h.mockMode {
-		userID = "mock-user-local-dev"
-	} else {
-		userID = auth.MustGetUserID(c)
-	}
+	// Get user ID from auth context
+	userID := auth.MustGetUserID(c)
 
 	h.logger.Info("Starting async script generation",
 		zap.String("trace_id", traceID.(string)),
@@ -128,55 +120,6 @@ func (h *ParserHandler) Parse(c *gin.Context) {
 				"error": "Failed to create script",
 			}),
 		})
-		return
-	}
-
-	// In mock mode, call the service directly instead of Lambda
-	if h.mockMode {
-		h.logger.Info("Mock mode: Using synchronous script generation",
-			zap.String("trace_id", traceID.(string)),
-			zap.String("script_id", scriptID),
-		)
-
-		// Create service request
-		serviceReq := service.ParseRequest{
-			UserID:         userID,
-			Prompt:         req.Prompt,
-			Duration:       req.Duration,
-			ProductName:    req.ProductName,
-			TargetAudience: req.TargetAudience,
-			BrandVibe:      req.BrandVibe,
-		}
-
-		// Generate script synchronously in mock mode
-		script, err := h.parserService.GenerateScript(c.Request.Context(), serviceReq)
-		if err != nil {
-			h.logger.Error("Failed to generate script",
-				zap.String("trace_id", traceID.(string)),
-				zap.Error(err),
-			)
-			// Update status to failed
-			scriptStub.Status = "failed"
-			h.parserService.SaveScript(c.Request.Context(), scriptStub)
-
-			c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
-				Error: errors.ErrInternalServer,
-			})
-			return
-		}
-
-		h.logger.Info("Mock mode: Script generated successfully",
-			zap.String("trace_id", traceID.(string)),
-			zap.String("script_id", script.ScriptID),
-		)
-
-		response := ParseResponse{
-			ScriptID: scriptID,
-			Status:   "draft",
-			Message:  "Script generated successfully (mock mode)",
-		}
-
-		c.JSON(http.StatusAccepted, response)
 		return
 	}
 
