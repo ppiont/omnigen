@@ -203,16 +203,48 @@ function Create() {
       const pollProgress = async () => {
         pollCount++;
         try {
-          console.log(
-            `[CREATE] 🔄 Polling job progress (poll #${pollCount})...`
-          );
-          const progress = await jobs.progress(jobId);
+          console.log(`[CREATE] 🔄 Polling job status (poll #${pollCount})...`);
+
+          // Try progress endpoint first, fall back to job status if 501
+          let progress;
+          try {
+            progress = await jobs.progress(jobId);
+          } catch (error) {
+            if (error.status === 501) {
+              // Progress endpoint not implemented, use job status instead
+              console.log(
+                "[POLLING] 📊 Progress endpoint returns 501, using job status"
+              );
+              const job = await jobs.get(jobId);
+              progress = {
+                job_id: job.job_id,
+                status: job.status,
+                progress:
+                  job.status === "completed"
+                    ? 100
+                    : job.status === "processing"
+                    ? 50
+                    : 0,
+                current_stage:
+                  job.status === "completed"
+                    ? "completed"
+                    : job.status === "processing"
+                    ? "rendering"
+                    : "pending",
+                stages_completed: [],
+                stages_pending: [],
+              };
+            } else {
+              throw error;
+            }
+          }
+
           console.log(`[CREATE] 📊 Progress update:`, {
             status: progress.status,
             progress: progress.progress,
             current_stage: progress.current_stage,
-            stages_completed: progress.stages_completed,
-            stages_pending: progress.stages_pending,
+            stages_completed: progress.stages_completed || [],
+            stages_pending: progress.stages_pending || [],
           });
 
           setGenerationProgress(Math.min(40 + progress.progress * 0.6, 100));
