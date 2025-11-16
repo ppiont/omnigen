@@ -833,7 +833,9 @@
   cursor: pointer;
   box-shadow: 0 0 20px var(--glow-green);
   transition: all 0.25s ease;
-  align-self: flex-start;
+  align-self: center;
+  margin: 0 auto;
+  display: block;
 }
 
 .generate-button:hover:not(:disabled) {
