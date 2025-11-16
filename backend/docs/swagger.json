@@ -315,6 +315,72 @@
                 }
             }
         },
+        "/api/v1/jobs/{id}/progress": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get real-time progress updates for a video generation job",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Get detailed job progress",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ProgressResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Job not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/presets": {
+            "get": {
+                "description": "Get a list of predefined brand style presets for quick video generation",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "presets"
+                ],
+                "summary": "Get brand style presets",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PresetsResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Check if the API is healthy and can connect to dependencies",
@@ -503,6 +569,50 @@
                 }
             }
         },
+        "handlers.PresetsResponse": {
+            "type": "object",
+            "properties": {
+                "presets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.BrandPreset"
+                    }
+                }
+            }
+        },
+        "handlers.ProgressResponse": {
+            "type": "object",
+            "properties": {
+                "current_stage": {
+                    "type": "string"
+                },
+                "estimated_time_remaining": {
+                    "description": "seconds",
+                    "type": "integer"
+                },
+                "job_id": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "integer"
+                },
+                "stages_completed": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "stages_pending": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.UserResponse": {
             "type": "object",
             "properties": {
@@ -513,6 +623,32 @@
                     "type": "string"
                 },
                 "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.BrandPreset": {
+            "type": "object",
+            "properties": {
+                "color_palette": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "music_mood": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "style": {
                     "type": "string"
                 }
             }

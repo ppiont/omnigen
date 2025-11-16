@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { Check } from "lucide-react";
+import { useAuth } from "../contexts/useAuth.js";
 import "../styles/auth.css";
 
 function Login() {
@@ -8,12 +9,48 @@ function Login() {
   const { login } = useAuth();
   const [values, setValues] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
     setValues((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
+  };
+
+  const handleBlur = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    validateField(field);
+  };
+
+  const validateField = (field) => {
+    const nextErrors = { ...errors };
+
+    switch (field) {
+      case "email":
+        if (!values.email.trim()) {
+          nextErrors.email = "Email is required.";
+        } else if (!/^\S+@\S+\.\S+$/.test(values.email)) {
+          nextErrors.email = "Enter a valid email address.";
+        } else {
+          delete nextErrors.email;
+        }
+        break;
+
+      case "password":
+        if (!values.password.trim()) {
+          nextErrors.password = "Password is required.";
+        } else {
+          delete nextErrors.password;
+        }
+        break;
+    }
+
+    setErrors(nextErrors);
+  };
+
+  const isFieldValid = (field) => {
+    return touched[field] && values[field] && !errors[field];
   };
 
   const validate = () => {
@@ -47,10 +84,10 @@ function Login() {
 
       if (result.success) {
         // Redirect to dashboard on successful login
-        navigate('/dashboard');
+        navigate("/dashboard");
       } else {
         // Handle specific error codes
-        if (result.code === 'UserNotConfirmedException') {
+        if (result.code === "UserNotConfirmedException") {
           // Redirect to verification page with email
           navigate(`/verify?email=${encodeURIComponent(values.email)}`);
         } else {
@@ -58,8 +95,8 @@ function Login() {
         }
       }
     } catch (error) {
-      console.error('Login error:', error);
-      setErrors({ form: 'An unexpected error occurred. Please try again.' });
+      console.error("Login error:", error);
+      setErrors({ form: "An unexpected error occurred. Please try again." });
     } finally {
       setIsSubmitting(false);
     }
@@ -105,14 +142,20 @@ function Login() {
                 id="login-email"
                 name="email"
                 type="email"
-                className={`form-input ${errors.email ? "error" : ""}`}
+                className={`form-input ${errors.email ? "error" : ""} ${
+                  isFieldValid("email") ? "success" : ""
+                }`}
                 value={values.email}
                 onChange={handleChange}
+                onBlur={() => handleBlur("email")}
                 autoComplete="email"
                 aria-invalid={Boolean(errors.email)}
                 aria-describedby={emailErrorId}
                 required
               />
+              {isFieldValid("email") && (
+                <Check size={18} className="field-icon" />
+              )}
               {errors.email && (
                 <p className="input-error" id="login-email-error" role="status">
                   {errors.email}
@@ -126,14 +169,20 @@ function Login() {
                 id="login-password"
                 name="password"
                 type="password"
-                className={`form-input ${errors.password ? "error" : ""}`}
+                className={`form-input ${errors.password ? "error" : ""} ${
+                  isFieldValid("password") ? "success" : ""
+                }`}
                 value={values.password}
                 onChange={handleChange}
+                onBlur={() => handleBlur("password")}
                 autoComplete="current-password"
                 aria-invalid={Boolean(errors.password)}
                 aria-describedby={passwordErrorId}
                 required
               />
+              {isFieldValid("password") && (
+                <Check size={18} className="field-icon" />
+              )}
               {errors.password && (
                 <p
                   className="input-error"

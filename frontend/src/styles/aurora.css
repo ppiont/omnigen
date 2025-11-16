@@ -1,6 +1,8 @@
 .aurora-field {
   position: relative;
   overflow: hidden;
+  /* Ensure no layout shift during animation */
+  contain: layout style paint;
 }
 
 .aurora-field::before,
@@ -12,10 +14,23 @@
   opacity: 0.5;
   filter: blur(80px);
   pointer-events: none;
+  /* GPU acceleration with translate3d */
   transform: translate3d(0, 0, 0);
   mix-blend-mode: screen;
   animation: auroraDrift 40s linear infinite;
+  /* Hint browser about upcoming changes */
   will-change: transform;
+  /* Optimize compositing */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-field::before,
+  .aurora-field::after {
+    animation: auroraDriftReduced 60s linear infinite;
+  }
 }
 
 .aurora-field::before {
@@ -92,6 +107,7 @@
   animation-direction: reverse;
 }
 
+/* Full animation for standard motion */
 @keyframes auroraDrift {
   0%,
   100% {
@@ -108,5 +124,17 @@
 
   75% {
     transform: translate3d(8%, 10%, 0) scale(1.08) rotate(-1deg);
+  }
+}
+
+/* Reduced motion variant - gentler movement */
+@keyframes auroraDriftReduced {
+  0%,
+  100% {
+    transform: translate3d(-5%, -5%, 0) scale(1) rotate(0deg);
+  }
+
+  50% {
+    transform: translate3d(5%, 5%, 0) scale(1.02) rotate(0deg);
   }
 }
