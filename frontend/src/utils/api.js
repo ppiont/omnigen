@@ -3,7 +3,7 @@
  * Automatically includes credentials (httpOnly cookies) with every request
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 /**
  * Custom error class for API errors
@@ -11,7 +11,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 export class APIError extends Error {
   constructor(message, status, code, details) {
     super(message);
-    this.name = "APIError";
+    this.name = 'APIError';
     this.status = status;
     this.code = code;
     this.details = details;
@@ -28,9 +28,9 @@ export async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
 
   const defaultOptions = {
-    credentials: "include", // Include httpOnly cookies
+    credentials: 'include', // Include httpOnly cookies
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...options.headers,
     },
   };
@@ -50,8 +50,8 @@ export async function apiRequest(endpoint, options = {}) {
     // Handle successful responses
     if (response.ok) {
       // Check if response has content
-      const contentType = response.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
         return await response.json();
       }
       return null;
@@ -61,12 +61,12 @@ export async function apiRequest(endpoint, options = {}) {
     let errorData;
     try {
       errorData = await response.json();
-    } catch {
+    } catch (e) {
       // Response is not JSON
       throw new APIError(
-        response.statusText || "Request failed",
+        response.statusText || 'Request failed',
         response.status,
-        "UNKNOWN_ERROR",
+        'UNKNOWN_ERROR',
         null
       );
     }
@@ -74,9 +74,9 @@ export async function apiRequest(endpoint, options = {}) {
     // Extract error details from response
     const error = errorData.error || errorData;
     throw new APIError(
-      error.message || error.Message || "Request failed",
+      error.message || error.Message || 'Request failed',
       response.status,
-      error.code || error.Code || "UNKNOWN_ERROR",
+      error.code || error.Code || 'UNKNOWN_ERROR',
       error.details || error.Details || null
     );
   } catch (error) {
@@ -87,9 +87,9 @@ export async function apiRequest(endpoint, options = {}) {
 
     // Network errors or other exceptions
     throw new APIError(
-      error.message || "Network error",
+      error.message || 'Network error',
       0,
-      "NETWORK_ERROR",
+      'NETWORK_ERROR',
       null
     );
   }
@@ -108,8 +108,8 @@ export const auth = {
    * @returns {Promise<{user_id: string, email: string, subscription_tier: string}>}
    */
   login: (tokens) =>
-    apiRequest("/api/v1/auth/login", {
-      method: "POST",
+    apiRequest('/api/v1/auth/login', {
+      method: 'POST',
       body: JSON.stringify({
         access_token: tokens.accessToken,
         id_token: tokens.idToken,
@@ -122,23 +122,23 @@ export const auth = {
    * @returns {Promise<void>}
    */
   logout: () =>
-    apiRequest("/api/v1/auth/logout", {
-      method: "POST",
+    apiRequest('/api/v1/auth/logout', {
+      method: 'POST',
     }),
 
   /**
    * Get current user info
    * @returns {Promise<{user_id: string, email: string, subscription_tier: string}>}
    */
-  me: () => apiRequest("/api/v1/auth/me"),
+  me: () => apiRequest('/api/v1/auth/me'),
 
   /**
    * Refresh tokens
    * @returns {Promise<any>}
    */
   refresh: () =>
-    apiRequest("/api/v1/auth/refresh", {
-      method: "POST",
+    apiRequest('/api/v1/auth/refresh', {
+      method: 'POST',
     }),
 };
 
@@ -147,36 +147,36 @@ export const auth = {
  */
 export const jobs = {
   /**
+   * Get all jobs for the current user
+   * @param {Object} params - Query parameters
+   * @param {number} params.page - Page number
+   * @param {number} params.page_size - Page size
+   * @param {string} params.status - Filter by status
+   * @returns {Promise<{jobs: Array, total_count: number, page: number, page_size: number}>}
+   */
+  list: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.page) queryParams.append('page', params.page);
+    if (params.page_size) queryParams.append('page_size', params.page_size);
+    if (params.status) queryParams.append('status', params.status);
+
+    const query = queryParams.toString();
+    return apiRequest(`/api/v1/jobs${query ? `?${query}` : ''}`);
+  },
+
+  /**
    * Get a specific job by ID
-   * @param {string} id - Job ID (UUID)
-   * @returns {Promise<Object>} Job details including status, prompt, video_url, etc.
-   * @example
-   * const job = await jobs.get("abc-123-def-456");
-   * const { status } = job; // "completed"
+   * @param {string} id - Job ID
+   * @returns {Promise<Object>}
    */
   get: (id) => apiRequest(`/api/v1/jobs/${id}`),
 
   /**
-   * List jobs for the current user with optional pagination/filtering
-   * @param {Object} [params={}] - Query parameters
-   * @param {number} [params.page] - Page number (default handled by backend)
-   * @param {number} [params.page_size] - Items per page (default handled by backend)
-   * @param {string} [params.status] - Filter by job status
-   * @returns {Promise<{jobs: Array, total_count: number, page: number, page_size: number}>}
-   * @example
-   * const result = await jobs.list({ page: 1, page_size: 20, status: "completed" });
-   * const completedJobs = result.jobs;
+   * Get detailed progress for a job
+   * @param {string} id - Job ID
+   * @returns {Promise<{job_id: string, status: string, progress: number, current_stage: string, estimated_time_remaining: number, stages_completed: Array, stages_pending: Array}>}
    */
-  list: (params = {}) => {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        searchParams.append(key, value);
-      }
-    });
-    const query = searchParams.toString();
-    return apiRequest(`/api/v1/jobs${query ? `?${query}` : ""}`);
-  },
+  progress: (id) => apiRequest(`/api/v1/jobs/${id}/progress`),
 };
 
 /**
@@ -193,10 +193,21 @@ export const generate = {
    * @returns {Promise<{job_id: string, status: string}>}
    */
   create: (params) =>
-    apiRequest("/api/v1/generate", {
-      method: "POST",
+    apiRequest('/api/v1/generate', {
+      method: 'POST',
       body: JSON.stringify(params),
     }),
+};
+
+/**
+ * Presets API endpoints
+ */
+export const presets = {
+  /**
+   * Get all brand style presets
+   * @returns {Promise<{presets: Array}>}
+   */
+  list: () => apiRequest('/api/v1/presets'),
 };
 
 /**
@@ -204,7 +215,7 @@ export const generate = {
  */
 export const health = {
   check: () =>
-    apiRequest("/health", {
-      credentials: "omit", // No cookies needed for health check
+    apiRequest('/health', {
+      credentials: 'omit', // No cookies needed for health check
     }),
 };

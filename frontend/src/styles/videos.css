@@ -273,6 +273,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-16);
 }
 
 .status-badge {
@@ -298,8 +299,9 @@
 }
 
 .video-date {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .video-card-title {
@@ -324,7 +326,9 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-8);
+  font-size: 0.875rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .aspect-badges {

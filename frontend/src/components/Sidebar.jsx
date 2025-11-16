@@ -45,12 +45,18 @@ function Sidebar({
   isCollapsed = false,
   onToggleCollapse,
 }) {
-  const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const displayName = formatUserName(user?.name || "User");
   const initials = getUserInitials(user?.name || "User");
   const planName = formatPlanName(user?.subscription_tier);
+
+  const handleSignOut = async () => {
+    if (logout) {
+      await logout();
+    }
+  };
 
   const handleSelect = (tabId) => {
     if (onSelect) {
@@ -58,12 +64,6 @@ function Sidebar({
     }
     if (onClose) {
       onClose();
-    }
-  };
-
-  const handleSignOut = async () => {
-    if (logout) {
-      await logout();
     }
   };
 
@@ -126,6 +126,7 @@ function Sidebar({
                 aria-current={isActive ? "page" : undefined}
                 disabled={tab.disabled}
                 aria-label={isCollapsed ? tab.label : undefined}
+<<<<<<< Updated upstream
                 title={
                   isCollapsed
                     ? `${tab.label}${
@@ -133,12 +134,16 @@ function Sidebar({
                       }`
                     : undefined
                 }
+=======
+                title={isCollapsed ? tab.label : undefined}
+>>>>>>> Stashed changes
               >
                 <span className="tab-icon" aria-hidden="true">
                   {tab.icon}
                 </span>
                 {!isCollapsed && (
                   <>
+<<<<<<< Updated upstream
                     <span className="tab-content">
                       <span className="tab-label">{tab.label}</span>
                       {tab.description && (
@@ -147,6 +152,9 @@ function Sidebar({
                         </span>
                       )}
                     </span>
+=======
+                    <span className="tab-label">{tab.label}</span>
+>>>>>>> Stashed changes
                     {tab.badge && (
                       <span className="tab-badge">{tab.badge}</span>
                     )}
@@ -176,7 +184,7 @@ function Sidebar({
             <div className="profile-actions">
               <button
                 type="button"
-                className="theme-toggle"
+                className="profile-action-btn"
                 onClick={toggleTheme}
                 aria-label={`Switch to ${
                   theme === "light" ? "dark" : "light"
@@ -189,7 +197,7 @@ function Sidebar({
               </button>
               <button
                 type="button"
-                className="sign-out-btn"
+                className="profile-action-btn"
                 onClick={handleSignOut}
                 aria-label="Sign out"
                 title="Sign out"
