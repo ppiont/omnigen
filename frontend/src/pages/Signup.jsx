@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Check } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/useAuth.js";
 import PasswordStrength from "../components/PasswordStrength";
 import "../styles/auth.css";
 
 function Signup() {
   const navigate = useNavigate();
   const { signup, confirmSignup, resendCode } = useAuth();
-  const [step, setStep] = useState('signup'); // 'signup' or 'verify'
+  const [step, setStep] = useState("signup"); // 'signup' or 'verify'
   const [values, setValues] = useState({
     name: "",
     email: "",
@@ -130,18 +130,18 @@ function Signup() {
         if (result.userConfirmed) {
           // User is auto-confirmed, redirect to login
           setSuccessMessage(result.message);
-          setTimeout(() => navigate('/login'), 2000);
+          setTimeout(() => navigate("/login"), 2000);
         } else {
           // Need email verification
           setSuccessMessage(result.message);
-          setStep('verify');
+          setStep("verify");
         }
       } else {
         setErrors({ form: result.error });
       }
     } catch (error) {
-      console.error('Signup error:', error);
-      setErrors({ form: 'An unexpected error occurred. Please try again.' });
+      console.error("Signup error:", error);
+      setErrors({ form: "An unexpected error occurred. Please try again." });
     } finally {
       setIsSubmitting(false);
     }
@@ -151,7 +151,7 @@ function Signup() {
     event.preventDefault();
 
     if (!verificationCode.trim()) {
-      setErrors({ code: 'Verification code is required' });
+      setErrors({ code: "Verification code is required" });
       return;
     }
 
@@ -165,13 +165,13 @@ function Signup() {
       if (result.success) {
         setSuccessMessage(result.message);
         // Redirect to login after 2 seconds
-        setTimeout(() => navigate('/login'), 2000);
+        setTimeout(() => navigate("/login"), 2000);
       } else {
         setErrors({ form: result.error });
       }
     } catch (error) {
-      console.error('Verification error:', error);
-      setErrors({ form: 'An unexpected error occurred. Please try again.' });
+      console.error("Verification error:", error);
+      setErrors({ form: "An unexpected error occurred. Please try again." });
     } finally {
       setIsSubmitting(false);
     }
@@ -190,8 +190,8 @@ function Signup() {
         setErrors({ form: result.error });
       }
     } catch (error) {
-      console.error('Resend code error:', error);
-      setErrors({ form: 'Failed to resend code. Please try again.' });
+      console.error("Resend code error:", error);
+      setErrors({ form: "Failed to resend code. Please try again." });
     } finally {
       setIsSubmitting(false);
     }
@@ -220,8 +220,14 @@ function Signup() {
 
         <section className="auth-card accent-shift">
           <div className="auth-card-header">
-            <h1>{step === 'signup' ? 'Create account' : 'Verify your email'}</h1>
-            <p>{step === 'signup' ? 'Spin up your ad studio and publish your first video today.' : 'Enter the code we sent to your email'}</p>
+            <h1>
+              {step === "signup" ? "Create account" : "Verify your email"}
+            </h1>
+            <p>
+              {step === "signup"
+                ? "Spin up your ad studio and publish your first video today."
+                : "Enter the code we sent to your email"}
+            </p>
           </div>
 
           {successMessage && (
@@ -236,190 +242,208 @@ function Signup() {
             </div>
           )}
 
-          {step === 'signup' ? (
-          <form className="auth-form" onSubmit={handleSubmit} noValidate>
-            <div className="form-field">
-              <label htmlFor="signup-name">Full name</label>
-              <input
-                id="signup-name"
-                name="name"
-                type="text"
-                className={`form-input ${errors.name ? "error" : ""} ${isFieldValid("name") ? "success" : ""}`}
-                value={values.name}
-                onChange={handleChange}
-                onBlur={() => handleBlur("name")}
-                autoComplete="name"
-                aria-invalid={Boolean(errors.name)}
-                aria-describedby={fieldErrorId("name")}
-                required
-              />
-              {isFieldValid("name") && (
-                <Check size={18} className="field-icon" />
-              )}
-              {errors.name && (
-                <p className="input-error" id="signup-name-error" role="status">
-                  {errors.name}
-                </p>
-              )}
-            </div>
+          {step === "signup" ? (
+            <form className="auth-form" onSubmit={handleSubmit} noValidate>
+              <div className="form-field">
+                <label htmlFor="signup-name">Full name</label>
+                <input
+                  id="signup-name"
+                  name="name"
+                  type="text"
+                  className={`form-input ${errors.name ? "error" : ""} ${
+                    isFieldValid("name") ? "success" : ""
+                  }`}
+                  value={values.name}
+                  onChange={handleChange}
+                  onBlur={() => handleBlur("name")}
+                  autoComplete="name"
+                  aria-invalid={Boolean(errors.name)}
+                  aria-describedby={fieldErrorId("name")}
+                  required
+                />
+                {isFieldValid("name") && (
+                  <Check size={18} className="field-icon" />
+                )}
+                {errors.name && (
+                  <p
+                    className="input-error"
+                    id="signup-name-error"
+                    role="status"
+                  >
+                    {errors.name}
+                  </p>
+                )}
+              </div>
 
-            <div className="form-field">
-              <label htmlFor="signup-email">Email</label>
-              <input
-                id="signup-email"
-                name="email"
-                type="email"
-                className={`form-input ${errors.email ? "error" : ""} ${isFieldValid("email") ? "success" : ""}`}
-                value={values.email}
-                onChange={handleChange}
-                onBlur={() => handleBlur("email")}
-                autoComplete="email"
-                aria-invalid={Boolean(errors.email)}
-                aria-describedby={fieldErrorId("email")}
-                required
-              />
-              {isFieldValid("email") && (
-                <Check size={18} className="field-icon" />
-              )}
-              {errors.email && (
-                <p
-                  className="input-error"
-                  id="signup-email-error"
-                  role="status"
-                >
-                  {errors.email}
-                </p>
-              )}
-            </div>
+              <div className="form-field">
+                <label htmlFor="signup-email">Email</label>
+                <input
+                  id="signup-email"
+                  name="email"
+                  type="email"
+                  className={`form-input ${errors.email ? "error" : ""} ${
+                    isFieldValid("email") ? "success" : ""
+                  }`}
+                  value={values.email}
+                  onChange={handleChange}
+                  onBlur={() => handleBlur("email")}
+                  autoComplete="email"
+                  aria-invalid={Boolean(errors.email)}
+                  aria-describedby={fieldErrorId("email")}
+                  required
+                />
+                {isFieldValid("email") && (
+                  <Check size={18} className="field-icon" />
+                )}
+                {errors.email && (
+                  <p
+                    className="input-error"
+                    id="signup-email-error"
+                    role="status"
+                  >
+                    {errors.email}
+                  </p>
+                )}
+              </div>
 
-            <div className="form-field">
-              <label htmlFor="signup-password">Password</label>
-              <input
-                id="signup-password"
-                name="password"
-                type="password"
-                className={`form-input ${errors.password ? "error" : ""} ${isFieldValid("password") ? "success" : ""}`}
-                value={values.password}
-                onChange={handleChange}
-                onBlur={() => handleBlur("password")}
-                autoComplete="new-password"
-                aria-invalid={Boolean(errors.password)}
-                aria-describedby={fieldErrorId("password")}
-                required
-              />
-              {isFieldValid("password") && (
-                <Check size={18} className="field-icon" />
-              )}
-              {errors.password && (
-                <p
-                  className="input-error"
-                  id="signup-password-error"
-                  role="status"
-                >
-                  {errors.password}
-                </p>
-              )}
-              {touched.password && <PasswordStrength password={values.password} />}
-            </div>
+              <div className="form-field">
+                <label htmlFor="signup-password">Password</label>
+                <input
+                  id="signup-password"
+                  name="password"
+                  type="password"
+                  className={`form-input ${errors.password ? "error" : ""} ${
+                    isFieldValid("password") ? "success" : ""
+                  }`}
+                  value={values.password}
+                  onChange={handleChange}
+                  onBlur={() => handleBlur("password")}
+                  autoComplete="new-password"
+                  aria-invalid={Boolean(errors.password)}
+                  aria-describedby={fieldErrorId("password")}
+                  required
+                />
+                {isFieldValid("password") && (
+                  <Check size={18} className="field-icon" />
+                )}
+                {errors.password && (
+                  <p
+                    className="input-error"
+                    id="signup-password-error"
+                    role="status"
+                  >
+                    {errors.password}
+                  </p>
+                )}
+                {touched.password && (
+                  <PasswordStrength password={values.password} />
+                )}
+              </div>
 
-            <div className="form-field">
-              <label htmlFor="signup-confirmPassword">Confirm password</label>
-              <input
-                id="signup-confirmPassword"
-                name="confirmPassword"
-                type="password"
-                className={`form-input ${
-                  errors.confirmPassword ? "error" : ""
-                } ${isFieldValid("confirmPassword") ? "success" : ""}`}
-                value={values.confirmPassword}
-                onChange={handleChange}
-                onBlur={() => handleBlur("confirmPassword")}
-                autoComplete="new-password"
-                aria-invalid={Boolean(errors.confirmPassword)}
-                aria-describedby={fieldErrorId("confirmPassword")}
-                required
-              />
-              {isFieldValid("confirmPassword") && (
-                <Check size={18} className="field-icon" />
-              )}
-              {errors.confirmPassword && (
-                <p
-                  className="input-error"
-                  id="signup-confirmPassword-error"
-                  role="status"
-                >
-                  {errors.confirmPassword}
-                </p>
-              )}
-            </div>
+              <div className="form-field">
+                <label htmlFor="signup-confirmPassword">Confirm password</label>
+                <input
+                  id="signup-confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  className={`form-input ${
+                    errors.confirmPassword ? "error" : ""
+                  } ${isFieldValid("confirmPassword") ? "success" : ""}`}
+                  value={values.confirmPassword}
+                  onChange={handleChange}
+                  onBlur={() => handleBlur("confirmPassword")}
+                  autoComplete="new-password"
+                  aria-invalid={Boolean(errors.confirmPassword)}
+                  aria-describedby={fieldErrorId("confirmPassword")}
+                  required
+                />
+                {isFieldValid("confirmPassword") && (
+                  <Check size={18} className="field-icon" />
+                )}
+                {errors.confirmPassword && (
+                  <p
+                    className="input-error"
+                    id="signup-confirmPassword-error"
+                    role="status"
+                  >
+                    {errors.confirmPassword}
+                  </p>
+                )}
+              </div>
 
-            <div className="auth-meta">
-              <span>Password must be 8+ characters</span>
-              <Link to="/login">Sign in</Link>
-            </div>
+              <div className="auth-meta">
+                <span>Password must be 8+ characters</span>
+                <Link to="/login">Sign in</Link>
+              </div>
 
-            <button
-              type="submit"
-              className="auth-submit"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Creating…" : "Create account"}
-            </button>
-          </form>
+              <button
+                type="submit"
+                className="auth-submit"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Creating…" : "Create account"}
+              </button>
+            </form>
           ) : (
-          <form className="auth-form" onSubmit={handleVerify} noValidate>
-            <div className="form-field">
-              <label htmlFor="verification-code">Verification Code</label>
-              <input
-                id="verification-code"
-                name="code"
-                type="text"
-                className={`form-input ${errors.code ? "error" : ""}`}
-                value={verificationCode}
-                onChange={(e) => {
-                  setVerificationCode(e.target.value);
-                  setErrors((prev) => ({ ...prev, code: undefined }));
-                }}
-                placeholder="Enter 6-digit code"
-                aria-invalid={Boolean(errors.code)}
-                aria-describedby={errors.code ? "verification-code-error" : undefined}
-                required
-                disabled={isSubmitting}
-              />
-              {errors.code && (
-                <p className="input-error" id="verification-code-error" role="status">
-                  {errors.code}
-                </p>
-              )}
-            </div>
+            <form className="auth-form" onSubmit={handleVerify} noValidate>
+              <div className="form-field">
+                <label htmlFor="verification-code">Verification Code</label>
+                <input
+                  id="verification-code"
+                  name="code"
+                  type="text"
+                  className={`form-input ${errors.code ? "error" : ""}`}
+                  value={verificationCode}
+                  onChange={(e) => {
+                    setVerificationCode(e.target.value);
+                    setErrors((prev) => ({ ...prev, code: undefined }));
+                  }}
+                  placeholder="Enter 6-digit code"
+                  aria-invalid={Boolean(errors.code)}
+                  aria-describedby={
+                    errors.code ? "verification-code-error" : undefined
+                  }
+                  required
+                  disabled={isSubmitting}
+                />
+                {errors.code && (
+                  <p
+                    className="input-error"
+                    id="verification-code-error"
+                    role="status"
+                  >
+                    {errors.code}
+                  </p>
+                )}
+              </div>
 
-            <div className="auth-meta">
-              <button
-                type="button"
-                onClick={handleResendCode}
-                disabled={isSubmitting}
-                className="auth-link-button"
-              >
-                Resend code
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep('signup')}
-                disabled={isSubmitting}
-                className="auth-link-button"
-              >
-                Back to signup
-              </button>
-            </div>
+              <div className="auth-meta">
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={isSubmitting}
+                  className="auth-link-button"
+                >
+                  Resend code
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep("signup")}
+                  disabled={isSubmitting}
+                  className="auth-link-button"
+                >
+                  Back to signup
+                </button>
+              </div>
 
-            <button
-              type="submit"
-              className="auth-submit"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Verifying…" : "Verify Email"}
-            </button>
-          </form>
+              <button
+                type="submit"
+                className="auth-submit"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Verifying…" : "Verify Email"}
+              </button>
+            </form>
           )}
 
           <p className="auth-support">
