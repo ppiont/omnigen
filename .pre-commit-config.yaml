@@ -1,0 +1,43 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+repos:
+  # Local hooks for this repository
+  - repo: local
+    hooks:
+      # Regenerate Swagger docs when handler files change
+      - id: swagger-gen
+        name: Regenerate Swagger docs
+        entry: bash -c 'cd backend && swag init -g cmd/api/main.go -o docs'
+        language: system
+        files: ^backend/internal/api/handlers/.*\.go$
+        pass_filenames: false
+        verbose: true
+
+      # Format Go code
+      - id: gofmt
+        name: Go Format
+        entry: gofmt -w
+        language: system
+        files: \.go$
+        pass_filenames: true
+
+      # Run Go vet
+      - id: go-vet
+        name: Go Vet
+        entry: bash -c 'cd backend && go vet ./...'
+        language: system
+        files: \.go$
+        pass_filenames: false
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        exclude: ^backend/docs/swagger\.yaml$  # Exclude generated Swagger YAML
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
