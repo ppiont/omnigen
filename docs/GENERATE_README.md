@@ -1,6 +1,7 @@
 # Video Generation Pipeline - Process Overview
 
 ## What This Does
+
 Transforms text prompts into professional multi-clip video advertisements with AI-powered narrative planning, voiceovers, and automatic stitching.
 
 ---
@@ -8,11 +9,13 @@ Transforms text prompts into professional multi-clip video advertisements with A
 ## Process Flow: User Prompt → Final Video
 
 ### Stage 1: Content Planning (`promptParser.js`)
+
 **Purpose:** Structure user prompt into narrative scenes
 
 **Input:** Text prompt + creative options (style, tone, tempo)
 
 **Process:**
+
 - GPT-4o analyzes prompt and generates scene breakdowns
 - Creates narrative arc (setup → development → resolution)
 - Anti-pattern detection prevents repetitive scenes
@@ -21,6 +24,7 @@ Transforms text prompts into professional multi-clip video advertisements with A
 **Output:** Structured scenes array
 
 **Example:**
+
 ```
 Prompt: "athlete drinking energy drink"
 → Scene 1: Exhausted athlete in locker room
@@ -31,9 +35,11 @@ Prompt: "athlete drinking energy drink"
 ---
 
 ### Stage 2: Keyframe Generation (Optional, `keyframeGenerator.js`)
+
 **Purpose:** Prevent style drift across clips
 
 **Process:**
+
 - Generates master style reference image (SDXL)
 - Creates consistent keyframe for each scene
 - Saves to `./keyframes/`
@@ -43,16 +49,19 @@ Prompt: "athlete drinking energy drink"
 ---
 
 ### Stage 3: Video Generation (`videoGenerator.js`)
+
 **Purpose:** Generate video clips with visual continuity
 
 **For each scene:**
 
 1. **Determine Input Image:**
+
    - Priority 1: Pre-generated keyframe (if using `--keyframes`)
    - Priority 2: User-provided image (first scene only)
    - Priority 3: Last frame from previous clip
 
 2. **Generate Video:**
+
    - Call Replicate API (Minimax/PixVerse/Google Veo/etc.)
    - Poll for completion (~60-180s per clip)
    - Returns video URL
@@ -64,22 +73,26 @@ Prompt: "athlete drinking energy drink"
    - Used as input for next clip
 
 **Continuity Methods:**
+
 - **Last-Frame Chaining (default):** Each clip uses previous clip's last frame
 - **Keyframe-First:** Each clip uses pre-generated keyframe
 
 ---
 
 ### Stage 4: Voiceover Generation (Optional, `audioGenerator.js`)
+
 **Purpose:** Add professional narration to videos
 
 **For each video clip:**
 
 1. **Script Generation:**
+
    - GPT-4o-mini creates "show don't tell" ad copy (20-25 words)
    - Focuses on emotion/aspiration, not scene description
    - Example: "Every champion needs fuel that matches their dedication"
 
 2. **Text-to-Speech:**
+
    - Minimax Speech 02 HD synthesis
    - Extracts emotion from scene mood (calm, happy, energetic, etc.)
    - 10+ voice options available
@@ -95,9 +108,11 @@ Prompt: "athlete drinking energy drink"
 ---
 
 ### Stage 5: Download & Output (`downloader.js`)
+
 **Purpose:** Save all generated content locally
 
 **Process:**
+
 - Downloads all videos from Replicate URLs
 - Saves to `./output/` directory
 - Creates `summary_*.json` with metadata
@@ -105,9 +120,11 @@ Prompt: "athlete drinking energy drink"
 ---
 
 ### Stage 6: Video Stitching (`videoStitcher.js`)
+
 **Purpose:** Combine multiple clips into single video
 
 **Process:**
+
 - Creates FFmpeg concat list file
 - Lossless concatenation: `ffmpeg -f concat -safe 0 -i list.txt -c copy output.mp4`
 - Saves to `./output/final_stitched_*.mp4`
@@ -117,9 +134,11 @@ Prompt: "athlete drinking energy drink"
 ---
 
 ### Stage 7: Metadata Export (`xmlExporter.js`)
+
 **Purpose:** Export scene structure for post-production
 
 **Process:**
+
 - Creates XML with scene descriptions, prompts, camera/lighting/mood info
 - Saves to `./output/scene_structure_*.xml`
 
@@ -232,22 +251,23 @@ User Prompt
 
 ## Key Components
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| **PromptParser** | `src/promptParser.js` | Parse prompt into narrative scenes via GPT-4o |
-| **KeyframeGenerator** | `src/keyframeGenerator.js` | Generate style-consistent keyframes via SDXL |
-| **VideoGenerator** | `src/videoGenerator.js` | Generate video clips via Replicate (Minimax/PixVerse/etc.) |
-| **FrameExtractor** | `src/frameExtractor.js` | Extract last frame from videos for continuity |
-| **AudioGenerator** | `src/audioGenerator.js` | Generate scripts (GPT-4o-mini) + voiceover (TTS) + merge |
-| **VideoDownloader** | `src/downloader.js` | Download videos from URLs to local storage |
-| **VideoStitcher** | `src/videoStitcher.js` | Concatenate clips with FFmpeg |
-| **XMLExporter** | `src/xmlExporter.js` | Export scene metadata to XML |
+| Component             | File                       | Purpose                                                    |
+| --------------------- | -------------------------- | ---------------------------------------------------------- |
+| **PromptParser**      | `src/promptParser.js`      | Parse prompt into narrative scenes via GPT-4o              |
+| **KeyframeGenerator** | `src/keyframeGenerator.js` | Generate style-consistent keyframes via SDXL               |
+| **VideoGenerator**    | `src/videoGenerator.js`    | Generate video clips via Replicate (Minimax/PixVerse/etc.) |
+| **FrameExtractor**    | `src/frameExtractor.js`    | Extract last frame from videos for continuity              |
+| **AudioGenerator**    | `src/audioGenerator.js`    | Generate scripts (GPT-4o-mini) + voiceover (TTS) + merge   |
+| **VideoDownloader**   | `src/downloader.js`        | Download videos from URLs to local storage                 |
+| **VideoStitcher**     | `src/videoStitcher.js`     | Concatenate clips with FFmpeg                              |
+| **XMLExporter**       | `src/xmlExporter.js`       | Export scene metadata to XML                               |
 
 ---
 
 ## Models & APIs Used
 
 ### Video Generation (Replicate)
+
 - **Minimax Hailuo 2.3** - 6-10s clips, $0.28-0.56/clip
 - **PixVerse v5** - 5-8s clips, ~$0.30/clip
 - **Seedance Pro** - 5-10s clips, budget-friendly
@@ -255,12 +275,14 @@ User Prompt
 - **Wan 2.5** - 5-8s clips, text-only (no image input)
 
 ### AI Services
+
 - **GPT-4o** (OpenAI) - Content planning, narrative structure
 - **GPT-4o-mini** (OpenAI) - Voiceover script generation
 - **Minimax Speech 02 HD** (Replicate) - Text-to-speech synthesis
 - **SDXL** (Replicate/Stability AI) - Keyframe image generation
 
 ### Local Tools
+
 - **FFmpeg** - Frame extraction, video concatenation
 
 ---
@@ -325,11 +347,13 @@ node cli.js generate "tech startup story" \
 ## Performance Characteristics
 
 ### Timing (Approximate)
+
 - **1 clip:** ~75s (60s video gen + 15s voiceover)
 - **3 clips:** ~230s (180s video gen + 45s voiceover + 5s stitch)
 - **5 clips:** ~385s (300s video gen + 75s voiceover + 10s stitch)
 
 ### Costs (Per Clip)
+
 - **Video generation:** $0.28-0.56
 - **Voiceover:** ~$0.05
 - **Audio merge:** ~$0.01
@@ -340,15 +364,19 @@ node cli.js generate "tech startup story" \
 ## Creative Options
 
 ### Style
+
 `cinematic`, `documentary`, `energetic`, `minimal`, `dramatic`, `playful`
 
 ### Tone
+
 `premium`, `friendly`, `edgy`, `inspiring`, `humorous`
 
 ### Tempo
+
 `slow`, `medium`, `fast`
 
 ### Voices
+
 **English:** Deep_Voice_Man, Friendly_Person, Calm_Woman, Casual_Guy, Wise_Woman, Inspirational_girl, Determined_Man, Lively_Girl, Sweet_Girl_2, Elegant_Man
 
 **Chinese:** male-qn-jingying, male-qn-qingse, female-shaonv, female-yujie, female-chengshu, male-qn-daxuesheng
@@ -358,11 +386,13 @@ node cli.js generate "tech startup story" \
 ## Environment Setup
 
 Required:
+
 ```bash
 REPLICATE_API_TOKEN=<your_token>
 ```
 
 Optional (but recommended):
+
 ```bash
 OPENAI_API_KEY=<your_key>  # For content planning and scripts
 ```
@@ -387,6 +417,7 @@ Without OpenAI, uses fallback simple parsing (no narrative structure).
 **File:** `cli.js`
 
 **Commands:**
+
 - `generate <prompt>` - Main video generation pipeline
 - `models` - List available video generation models
 - `voices` - List available voiceover voices
