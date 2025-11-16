@@ -98,9 +98,11 @@ function Workspace() {
   const fetchJob = useCallback(
     async (id, { showLoader = true } = {}) => {
       if (!id) {
+        console.warn("[WORKSPACE] ⚠️ fetchJob called without ID");
         return;
       }
 
+      console.log(`[WORKSPACE] 📥 Fetching job: ${id} (showLoader: ${showLoader})`);
       clearRetryTimeout();
 
       try {
@@ -108,12 +110,19 @@ function Workspace() {
           setLoading(true);
         }
 
+        console.log("[WORKSPACE] 📡 Calling GET /api/v1/jobs/" + id);
         const data = await jobs.get(id);
+        console.log("[WORKSPACE] ✅ Job data received:", {
+          job_id: data.job_id,
+          status: data.status,
+          has_video_url: !!data.video_url,
+        });
         setJobData(data);
         setRateLimitCountdown(null);
         linkRefreshAttemptsRef.current = 0;
 
         if (data.status === "failed") {
+          console.error("[WORKSPACE] ❌ Job failed:", data.error_message);
           setErrorState({
             type: "job_failed",
             title: "Video Generation Failed",
@@ -123,12 +132,20 @@ function Workspace() {
             action: "try_again",
           });
         } else {
+          console.log("[WORKSPACE] ✅ Job status:", data.status);
           setErrorState(null);
         }
 
         return data;
       } catch (err) {
+        console.error("[WORKSPACE] ❌ Error fetching job:", {
+          status: err.status,
+          code: err.code,
+          message: err.message,
+        });
+        
         if (err.status === 404) {
+          console.error("[WORKSPACE] ❌ Job not found (404)");
           setErrorState({
             type: "not_found",
             title: "Video Not Found",
@@ -237,26 +254,39 @@ function Workspace() {
    * Begins polling for job status updates until the job finishes.
    */
   const beginPolling = useCallback(() => {
-    if (!videoId) return;
+    if (!videoId) {
+      console.warn("[WORKSPACE] ⚠️ Cannot start polling: No video ID");
+      return;
+    }
+    
+    console.log("[WORKSPACE] 🔄 Starting polling for job:", videoId);
     clearPolling();
 
+    let pollCount = 0;
     const pollOnce = async () => {
+      pollCount++;
       try {
+        console.log(`[WORKSPACE] 🔄 Polling job status (poll #${pollCount})...`);
         const updatedJob = await fetchJob(videoId, { showLoader: false });
         if (
           updatedJob?.status === "completed" ||
           updatedJob?.status === "failed"
         ) {
+          console.log(`[WORKSPACE] ✅ Polling complete. Final status: ${updatedJob.status}`);
           clearPolling();
         }
-      } catch {
+      } catch (error) {
+        console.warn(`[WORKSPACE] ⚠️ Poll error (poll #${pollCount}):`, error);
         // Swallow transient errors; fetchJob manages error UI state
       }
     };
 
+    console.log("[WORKSPACE] ⏰ Setting up polling interval (every 5 seconds)");
     pollingIntervalRef.current = setInterval(pollOnce, 5000);
 
+    console.log("[WORKSPACE] ⏰ Setting polling timeout (10 minutes)");
     pollingTimeoutRef.current = setTimeout(() => {
+      console.warn("[WORKSPACE] ⏰ Polling timeout reached (10 minutes)");
       clearPolling();
       setErrorState({
         type: "timeout",
@@ -273,7 +303,10 @@ function Workspace() {
    * @param {Object} [job=jobData] - Job data containing video_url
    */
   const handleDownload = (job = jobData) => {
+    console.log("[WORKSPACE] ⬇️ Download requested for job:", job?.job_id);
+    
     if (!job?.video_url) {
+      console.warn("[WORKSPACE] ⚠️ Cannot download: No video URL");
       setErrorState({
         type: "download_unavailable",
         title: "Video Not Ready",
@@ -283,12 +316,14 @@ function Workspace() {
       return;
     }
 
+    console.log("[WORKSPACE] ⬇️ Starting download:", job.video_url);
     const link = document.createElement("a");
     link.href = job.video_url;
     link.download = `video-${job.job_id}.mp4`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    console.log("[WORKSPACE] ✅ Download initiated");
   };
 
   /**
@@ -308,15 +343,24 @@ function Workspace() {
    * Refreshes job data without showing the loader (used for video refreshes).
    */
   const handleVideoRefresh = () => {
+    console.log("[WORKSPACE] 🔄 Manual refresh requested");
     fetchJob(videoId, { showLoader: false });
   };
 
   useEffect(() => {
+    console.log("=".repeat(60));
+    console.log("[WORKSPACE] 🏗️ Workspace component mounted/updated");
+    console.log("[WORKSPACE] Video ID:", videoId);
+    
     if (videoId) {
+      console.log("[WORKSPACE] 📥 Fetching job data for video:", videoId);
       fetchJob(videoId);
+    } else {
+      console.warn("[WORKSPACE] ⚠️ No video ID provided");
     }
 
     return () => {
+      console.log("[WORKSPACE] 🧹 Cleaning up polling and timeouts");
       clearPolling();
       clearRetryTimeout();
     };
@@ -324,10 +368,17 @@ function Workspace() {
 
   useEffect(() => {
     if (jobData?.status === "processing" || jobData?.status === "pending") {
+      console.log(`[WORKSPACE] 🔄 Job is ${jobData.status}, starting polling`);
       beginPolling();
-      return () => clearPolling();
+      return () => {
+        console.log("[WORKSPACE] 🧹 Stopping polling (job status changed)");
+        clearPolling();
+      };
     }
 
+    if (jobData?.status) {
+      console.log(`[WORKSPACE] ✅ Job status: ${jobData.status} (not polling)`);
+    }
     clearPolling();
   }, [beginPolling, jobData?.status]);
 
@@ -362,8 +413,10 @@ function Workspace() {
    */
   const handleRetry = () => {
     if (!videoId) {
+      console.warn("[WORKSPACE] ⚠️ Cannot retry: No video ID");
       return;
     }
+    console.log("[WORKSPACE] 🔄 Retry requested");
     fetchJob(videoId);
   };
 
