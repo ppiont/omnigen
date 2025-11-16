@@ -126,35 +126,14 @@ function Sidebar({
                 aria-current={isActive ? "page" : undefined}
                 disabled={tab.disabled}
                 aria-label={isCollapsed ? tab.label : undefined}
-<<<<<<< Updated upstream
-                title={
-                  isCollapsed
-                    ? `${tab.label}${
-                        tab.description ? ` - ${tab.description}` : ""
-                      }`
-                    : undefined
-                }
-=======
                 title={isCollapsed ? tab.label : undefined}
->>>>>>> Stashed changes
               >
                 <span className="tab-icon" aria-hidden="true">
                   {tab.icon}
                 </span>
                 {!isCollapsed && (
                   <>
-<<<<<<< Updated upstream
-                    <span className="tab-content">
-                      <span className="tab-label">{tab.label}</span>
-                      {tab.description && (
-                        <span className="tab-description">
-                          {tab.description}
-                        </span>
-                      )}
-                    </span>
-=======
                     <span className="tab-label">{tab.label}</span>
->>>>>>> Stashed changes
                     {tab.badge && (
                       <span className="tab-badge">{tab.badge}</span>
                     )}

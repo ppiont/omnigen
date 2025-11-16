@@ -5,7 +5,7 @@ import { jobs as jobsAPI, presets as presetsAPI } from "../utils/api";
 import StatCard from "../components/StatCard";
 import PresetCard from "../components/PresetCard";
 import VideoCard from "../components/VideoCard";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/useAuth.js";
 import "../styles/dashboard.css";
 
 // Mock data for dev mode when API is not available
