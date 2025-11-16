@@ -263,6 +263,38 @@ export function signOut() {
 }
 
 /**
+ * Change user password
+ * @param {string} oldPassword - Current password
+ * @param {string} newPassword - New password
+ * @returns {Promise<string>} Success message
+ */
+export function changePassword(oldPassword, newPassword) {
+  return new Promise((resolve, reject) => {
+    const cognitoUser = userPool.getCurrentUser();
+
+    if (!cognitoUser) {
+      reject(new Error("No user found"));
+      return;
+    }
+
+    cognitoUser.getSession((err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      cognitoUser.changePassword(oldPassword, newPassword, (changeErr, result) => {
+        if (changeErr) {
+          reject(changeErr);
+          return;
+        }
+        resolve(result);
+      });
+    });
+  });
+}
+
+/**
  * Get user attributes
  * @returns {Promise<Object>} User attributes
  */

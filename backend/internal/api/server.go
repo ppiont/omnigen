@@ -129,10 +129,11 @@ func (s *Server) setupRoutes() {
 	)
 	authGroup := s.router.Group("/api/v1/auth")
 	{
-		authGroup.POST("/login", authHandler.Login)                                                          // Exchange Cognito tokens for cookies
-		authGroup.POST("/refresh", authHandler.Refresh)                                                      // Refresh token endpoint
-		authGroup.POST("/logout", authHandler.Logout)                                                        // Clear cookies
-		authGroup.GET("/me", auth.JWTAuthMiddleware(s.config.JWTValidator, s.config.Logger), authHandler.Me) // Get current user (requires auth)
+		authGroup.POST("/login", authHandler.Login)                                                            // Exchange Cognito tokens for cookies
+		authGroup.POST("/refresh", authHandler.Refresh)                                                        // Refresh token endpoint
+		authGroup.POST("/logout", authHandler.Logout)                                                          // Clear cookies
+		authGroup.GET("/me", auth.JWTAuthMiddleware(s.config.JWTValidator, s.config.Logger), authHandler.Me)   // Get current user (requires auth)
+		authGroup.POST("/change-password", auth.JWTAuthMiddleware(s.config.JWTValidator, s.config.Logger), authHandler.ChangePassword) // Change password (requires auth)
 	}
 
 	// API v1 routes

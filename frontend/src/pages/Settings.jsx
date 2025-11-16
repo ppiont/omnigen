@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Eye, EyeOff, Check } from "lucide-react";
 import PasswordStrength from "../components/PasswordStrength";
+import { auth as authAPI } from "../utils/api";
+import { changePassword as cognitoChangePassword } from "../services/cognito";
 import "../styles/settings.css";
 
 function Settings() {
@@ -111,7 +113,7 @@ function Settings() {
     values.confirmPassword !== values.newPassword ||
     Object.keys(errors).length > 0;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const nextErrors = validateForm(values);
     setErrors(nextErrors);
@@ -128,9 +130,17 @@ function Settings() {
     setIsSaving(true);
     setSuccessMessage("");
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      // First, validate with backend API
+      await authAPI.changePassword({
+        currentPassword: values.currentPassword,
+        newPassword: values.newPassword,
+      });
+
+      // If backend validation succeeds, change password via Cognito
+      await cognitoChangePassword(values.currentPassword, values.newPassword);
+
+      // Success - reset form and show success message
       setValues({
         currentPassword: "",
         newPassword: "",
@@ -139,7 +149,35 @@ function Settings() {
       setErrors({});
       setTouched({});
       setSuccessMessage("Password updated successfully!");
-    }, 1000);
+    } catch (error) {
+      console.error("Password change failed:", error);
+
+      // Handle different error types
+      let errorMessage = "Failed to update password. Please try again.";
+
+      if (error.code === "InvalidPasswordException") {
+        errorMessage = "New password does not meet requirements.";
+        setErrors({ newPassword: errorMessage });
+      } else if (error.code === "NotAuthorizedException") {
+        errorMessage = "Current password is incorrect.";
+        setErrors({ currentPassword: errorMessage });
+      } else if (error.code === "LimitExceededException") {
+        errorMessage = "Too many password change attempts. Please wait and try again.";
+      } else if (error.status === 422) {
+        // Backend validation error
+        errorMessage = error.details?.field === "new_password"
+          ? "New password must be at least 8 characters long."
+          : "Invalid password format.";
+      } else if (error.status === 401) {
+        errorMessage = "Your session has expired. Please log in again.";
+      }
+
+      setSuccessMessage("");
+      // Show error in a more user-friendly way (could add error state)
+      alert(errorMessage);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
