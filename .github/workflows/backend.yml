@@ -11,6 +11,8 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend.yml'
+    paths-ignore:
+      - 'infrastructure/**'  # Don't run if infra changed (workflow_run will handle it)
   workflow_dispatch:
   workflow_run:
     workflows: ["Infrastructure (Terraform)"]
@@ -112,9 +114,11 @@ jobs:
           ECR_REPOSITORY: omnigen-api
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Build for linux/arm64 (ECS Graviton)
+          # Build for linux/arm64 (ECS Graviton) with layer caching
           docker buildx build \
             --platform linux/arm64 \
+            --cache-from type=registry,ref=$ECR_REGISTRY/$ECR_REPOSITORY:buildcache \
+            --cache-to type=registry,ref=$ECR_REGISTRY/$ECR_REPOSITORY:buildcache,mode=max \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --push \
