@@ -41,6 +41,9 @@ type ScriptGenerationRequest struct {
 	Duration    int    // Total duration in seconds
 	AspectRatio string // "16:9", "9:16", or "1:1"
 	StartImage  string // Optional starting image URL for first scene
+
+	// Enhanced prompt options (optional)
+	EnhancedOptions *prompts.EnhancedPromptOptions
 }
 
 // GPT4oRequest matches the Replicate OpenAI GPT-4o API schema
@@ -71,6 +74,25 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 		zap.String("prompt", userPrompt),
 	)
 
+	// Build enhanced system prompt if options provided
+	systemPrompt := prompts.AdScriptSystemPrompt + "\n\n" + prompts.AdScriptFewShotExamples
+	if req.EnhancedOptions != nil {
+		systemPrompt = prompts.BuildEnhancedSystemPrompt(systemPrompt, req.EnhancedOptions)
+		g.logger.Info("Using enhanced system prompt",
+			zap.String("style", req.EnhancedOptions.Style),
+			zap.String("tone", req.EnhancedOptions.Tone),
+			zap.String("platform", req.EnhancedOptions.Platform),
+			zap.Bool("pro_cinematography", req.EnhancedOptions.ProCinematography),
+		)
+	}
+
+	// Determine temperature based on creative boost
+	temperature := 0.7 // Default: creative but not random
+	if req.EnhancedOptions != nil && req.EnhancedOptions.CreativeBoost {
+		temperature = 0.9 // Boosted creativity
+		g.logger.Info("Using creative boost", zap.Float64("temperature", temperature))
+	}
+
 	// Build Replicate API request
 	gpt4oReq := GPT4oRequest{
 		Version: g.modelVersion,
@@ -78,14 +100,14 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 			"messages": []map[string]string{
 				{
 					"role":    "system",
-					"content": prompts.AdScriptSystemPrompt + "\n\n" + prompts.AdScriptFewShotExamples,
+					"content": systemPrompt,
 				},
 				{
 					"role":    "user",
 					"content": userPrompt,
 				},
 			},
-			"temperature":           0.7,   // Creative but not random
+			"temperature":           temperature,
 			"max_completion_tokens": 16384, // Increased for complex scripts with many scenes
 			"top_p":                 0.9,
 		},

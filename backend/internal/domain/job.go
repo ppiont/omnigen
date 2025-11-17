@@ -24,6 +24,17 @@ type Job struct {
 	Duration    int    `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
 	AspectRatio string `dynamodbav:"aspect_ratio,omitempty" json:"aspect_ratio,omitempty"`
 
+	// Enhanced prompt options (Phase 1 - optional)
+	Style              string `dynamodbav:"style,omitempty" json:"style,omitempty"`                               // cinematic, documentary, energetic, minimal, dramatic, playful
+	Tone               string `dynamodbav:"tone,omitempty" json:"tone,omitempty"`                                 // premium, friendly, edgy, inspiring, humorous
+	Tempo              string `dynamodbav:"tempo,omitempty" json:"tempo,omitempty"`                               // slow, medium, fast
+	Platform           string `dynamodbav:"platform,omitempty" json:"platform,omitempty"`                         // instagram, tiktok, youtube, facebook
+	Audience           string `dynamodbav:"audience,omitempty" json:"audience,omitempty"`                         // target audience description
+	Goal               string `dynamodbav:"goal,omitempty" json:"goal,omitempty"`                                 // awareness, sales, engagement, signups
+	CallToAction       string `dynamodbav:"call_to_action,omitempty" json:"call_to_action,omitempty"`             // custom CTA text
+	ProCinematography  bool   `dynamodbav:"pro_cinematography,omitempty" json:"pro_cinematography,omitempty"`     // use advanced film terminology
+	CreativeBoost      bool   `dynamodbav:"creative_boost,omitempty" json:"creative_boost,omitempty"`             // higher temperature for more creativity
+
 	// Embedded script (replaces separate scripts table)
 	Title          string    `dynamodbav:"title,omitempty" json:"title,omitempty"`
 	Scenes         []Scene   `dynamodbav:"scenes,omitempty" json:"scenes,omitempty"`

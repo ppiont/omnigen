@@ -59,6 +59,17 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		Duration:    req.Duration,
 		AspectRatio: req.AspectRatio,
 		StartImage:  req.StartImage,
+
+		// Enhanced prompt options (Phase 1)
+		Style:             req.Style,
+		Tone:              req.Tone,
+		Tempo:             req.Tempo,
+		Platform:          req.Platform,
+		Audience:          req.Audience,
+		Goal:              req.Goal,
+		CallToAction:      req.CallToAction,
+		ProCinematography: req.ProCinematography,
+		CreativeBoost:     req.CreativeBoost,
 	})
 	if err != nil {
 		h.logger.Error("Script generation failed", zap.String("job_id", job.JobID), zap.Error(err))

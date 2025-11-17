@@ -8,6 +8,7 @@ import (
 
 	"github.com/omnigen/backend/internal/adapters"
 	"github.com/omnigen/backend/internal/domain"
+	"github.com/omnigen/backend/internal/prompts"
 )
 
 // ParserService handles ad script generation
@@ -23,6 +24,17 @@ type ParseRequest struct {
 	Duration    int    `json:"duration"`              // 10-60 seconds (must be multiple of 10)
 	AspectRatio string `json:"aspect_ratio"`          // "16:9", "9:16", or "1:1"
 	StartImage  string `json:"start_image,omitempty"` // Optional starting image URL
+
+	// Enhanced prompt options (Phase 1 - all optional)
+	Style             string
+	Tone              string
+	Tempo             string
+	Platform          string
+	Audience          string
+	Goal              string
+	CallToAction      string
+	ProCinematography bool
+	CreativeBoost     bool
 }
 
 // NewParserService creates a new script parser service
@@ -48,12 +60,30 @@ func (s *ParserService) GenerateScript(ctx context.Context, req ParseRequest) (*
 		return nil, fmt.Errorf("invalid request: %w", err)
 	}
 
+	// Build enhanced prompt options if any are provided
+	var enhancedOptions *prompts.EnhancedPromptOptions
+	if req.Style != "" || req.Tone != "" || req.Tempo != "" || req.Platform != "" ||
+		req.Audience != "" || req.Goal != "" || req.CallToAction != "" || req.ProCinematography || req.CreativeBoost {
+		enhancedOptions = &prompts.EnhancedPromptOptions{
+			Style:             req.Style,
+			Tone:              req.Tone,
+			Tempo:             req.Tempo,
+			Platform:          req.Platform,
+			Audience:          req.Audience,
+			Goal:              req.Goal,
+			CallToAction:      req.CallToAction,
+			ProCinematography: req.ProCinematography,
+			CreativeBoost:     req.CreativeBoost,
+		}
+	}
+
 	// Call GPT-4o adapter - GPT-4o will extract product info from prompt
 	gpt4oReq := &adapters.ScriptGenerationRequest{
-		Prompt:      req.Prompt,
-		Duration:    req.Duration,
-		AspectRatio: req.AspectRatio,
-		StartImage:  req.StartImage,
+		Prompt:          req.Prompt,
+		Duration:        req.Duration,
+		AspectRatio:     req.AspectRatio,
+		StartImage:      req.StartImage,
+		EnhancedOptions: enhancedOptions,
 	}
 
 	script, err := s.gpt4o.GenerateScript(ctx, gpt4oReq)
