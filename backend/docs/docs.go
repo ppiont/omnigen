@@ -118,7 +118,10 @@ const docTemplate = `{
         },
         "/api/v1/auth/refresh": {
             "post": {
-                "description": "Refresh the access token using the refresh token from httpOnly cookie",
+                "description": "Exchange new tokens from Cognito refresh for updated httpOnly cookies",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -126,18 +129,32 @@ const docTemplate = `{
                     "auth"
                 ],
                 "summary": "Refresh access token",
+                "parameters": [
+                    {
+                        "description": "New tokens from Cognito refresh",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RefreshRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "Returns new tokens",
+                        "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/handlers.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "401": {
-                        "description": "Missing or invalid refresh token",
+                        "description": "Invalid token",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -454,10 +471,42 @@ const docTemplate = `{
                         "1:1"
                     ]
                 },
+                "audience": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "call_to_action": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "creative_boost": {
+                    "type": "boolean"
+                },
                 "duration": {
                     "type": "integer",
                     "maximum": 60,
                     "minimum": 10
+                },
+                "goal": {
+                    "type": "string",
+                    "enum": [
+                        "awareness",
+                        "sales",
+                        "engagement",
+                        "signups"
+                    ]
+                },
+                "platform": {
+                    "type": "string",
+                    "enum": [
+                        "instagram",
+                        "tiktok",
+                        "youtube",
+                        "facebook"
+                    ]
+                },
+                "pro_cinematography": {
+                    "type": "boolean"
                 },
                 "prompt": {
                     "type": "string",
@@ -465,7 +514,42 @@ const docTemplate = `{
                     "minLength": 10
                 },
                 "start_image": {
+                    "description": "Image options - TWO separate use cases:",
                     "type": "string"
+                },
+                "style": {
+                    "description": "Enhanced prompt options (Phase 1 - all optional)",
+                    "type": "string",
+                    "enum": [
+                        "cinematic",
+                        "documentary",
+                        "energetic",
+                        "minimal",
+                        "dramatic",
+                        "playful"
+                    ]
+                },
+                "style_reference_image": {
+                    "description": "Used to guide visual style across ALL clips",
+                    "type": "string"
+                },
+                "tempo": {
+                    "type": "string",
+                    "enum": [
+                        "slow",
+                        "medium",
+                        "fast"
+                    ]
+                },
+                "tone": {
+                    "type": "string",
+                    "enum": [
+                        "premium",
+                        "friendly",
+                        "edgy",
+                        "inspiring",
+                        "humorous"
+                    ]
                 }
             }
         },
@@ -636,10 +720,32 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.RefreshRequest": {
+            "type": "object",
+            "required": [
+                "access_token",
+                "id_token",
+                "refresh_token"
+            ],
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "id_token": {
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.UserResponse": {
             "type": "object",
             "properties": {
                 "email": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 },
                 "subscription_tier": {

@@ -141,7 +141,7 @@ func main() {
 	cookieConfig := auth.CookieConfig{
 		Secure:   cfg.Environment == "production", // HTTPS only in production
 		Domain:   "",                              // Empty for same-origin cookies
-		SameSite: http.SameSiteStrictMode,         // Strict CSRF protection
+		SameSite: http.SameSiteLaxMode,            // Lax mode for production compatibility (allows top-level navigation)
 	}
 
 	// Initialize HTTP server with goroutine-based async architecture

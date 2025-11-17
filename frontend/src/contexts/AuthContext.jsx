@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import * as cognito from "../services/cognito";
 import { auth as authAPI } from "../utils/api";
@@ -9,10 +9,18 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const tokenRefreshTimerRef = useRef(null);
 
   // Check if user is already authenticated on mount
   useEffect(() => {
     checkAuth();
+
+    // Cleanup timer on unmount
+    return () => {
+      if (tokenRefreshTimerRef.current) {
+        clearTimeout(tokenRefreshTimerRef.current);
+      }
+    };
   }, []);
 
   const checkAuth = async () => {
@@ -21,6 +29,9 @@ export function AuthProvider({ children }) {
       // Try to get user info from backend (checks httpOnly cookie)
       const userData = await authAPI.me();
       setUser(userData);
+
+      // Schedule proactive token refresh after successful authentication
+      scheduleTokenRefresh();
     } catch {
       // Not authenticated or session expired
       setUser(null);
@@ -44,6 +55,10 @@ export function AuthProvider({ children }) {
       const userData = await authAPI.login(tokens);
 
       setUser(userData);
+
+      // Schedule proactive token refresh after login
+      scheduleTokenRefresh();
+
       return { success: true };
     } catch (err) {
       console.error("Login error:", err);
@@ -234,6 +249,11 @@ export function AuthProvider({ children }) {
    */
   const logout = async () => {
     try {
+      // Clear token refresh timer
+      if (tokenRefreshTimerRef.current) {
+        clearTimeout(tokenRefreshTimerRef.current);
+      }
+
       // Sign out from Cognito
       cognito.signOut();
 
@@ -251,7 +271,61 @@ export function AuthProvider({ children }) {
   };
 
   /**
+   * Proactively refresh tokens before they expire
+   * Using direct implementation to avoid circular dependency
+   */
+  const proactiveRefresh = useCallback(async () => {
+    try {
+      console.log("[AUTH] 🔄 Proactive token refresh initiated");
+
+      // Refresh Cognito session
+      const newTokens = await cognito.refreshSession();
+
+      // Update backend cookies
+      await authAPI.login(newTokens);
+
+      console.log("[AUTH] ✅ Proactive token refresh successful");
+
+      // Schedule next refresh (50 minutes from now, tokens expire in 60 minutes)
+      // Inline scheduling to avoid circular dependency
+      if (tokenRefreshTimerRef.current) {
+        clearTimeout(tokenRefreshTimerRef.current);
+      }
+
+      const refreshInterval = 50 * 60 * 1000; // 50 minutes in milliseconds
+      tokenRefreshTimerRef.current = setTimeout(() => {
+        proactiveRefresh();
+      }, refreshInterval);
+
+      console.log("[AUTH] ⏰ Next token refresh scheduled for 50 minutes from now");
+    } catch (err) {
+      console.error("[AUTH] ❌ Proactive token refresh failed:", err);
+      // If refresh fails, user will be logged out on next API call via interceptor
+    }
+  }, []);
+
+  /**
+   * Schedule automatic token refresh before expiry
+   * Tokens expire in 1 hour, refresh at 50 minutes
+   */
+  const scheduleTokenRefresh = useCallback(() => {
+    // Clear existing timer
+    if (tokenRefreshTimerRef.current) {
+      clearTimeout(tokenRefreshTimerRef.current);
+    }
+
+    // Schedule refresh for 50 minutes (3000 seconds)
+    const refreshInterval = 50 * 60 * 1000; // 50 minutes in milliseconds
+    tokenRefreshTimerRef.current = setTimeout(() => {
+      proactiveRefresh();
+    }, refreshInterval);
+
+    console.log("[AUTH] ⏰ Token refresh scheduled for 50 minutes from now");
+  }, [proactiveRefresh]);
+
+  /**
    * Refresh authentication (useful for checking if still authenticated)
+   * Note: checkAuth() internally schedules token refresh if authenticated
    */
   const refresh = useCallback(async () => {
     await checkAuth();
