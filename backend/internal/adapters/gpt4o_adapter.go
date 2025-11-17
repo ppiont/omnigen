@@ -544,7 +544,7 @@ func buildUserPrompt(req *ScriptGenerationRequest) string {
 	)
 
 	if req.StartImage != "" {
-		prompt += fmt.Sprintf("\n**Starting Image:** %s (use as reference for first scene)", req.StartImage)
+		prompt += "\n**Starting Image:** A starting image will be provided for the first scene (leave start_image_url empty in JSON)"
 	}
 
 	prompt += `
@@ -554,6 +554,7 @@ func buildUserPrompt(req *ScriptGenerationRequest) string {
 - Generate varied scenes with different shot types, angles, and lighting (NO repetitive clips!)
 - Each scene must have a unique, detailed generation_prompt optimized for Kling AI
 - Derive appropriate music_mood and music_style based on the content
+- Leave start_image_url empty (will be populated server-side)
 - Return ONLY valid JSON matching the Script schema, no markdown or explanations`
 
 	return prompt
