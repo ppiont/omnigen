@@ -33,14 +33,23 @@ function Workspace() {
   const SKIP_UUID_VALIDATION = false;
 
   /**
-   * Validates whether the provided ID string is a UUID.
+   * Validates whether the provided ID string is a UUID or job-{UUID} format.
    *
    * @param {string} id - Identifier to validate
-   * @returns {boolean} True when the id matches UUID formatting
+   * @returns {boolean} True when the id matches UUID or job-{UUID} formatting
    */
   const isValidUUID = (id) => {
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!id) return false;
+    
+    // Check if it's a job-{uuid} format (backend format)
+    if (id.startsWith('job-')) {
+      const uuidPart = id.substring(4); // Remove 'job-' prefix
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      return uuidRegex.test(uuidPart);
+    }
+    
+    // Check if it's a plain UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(id);
   };
 
