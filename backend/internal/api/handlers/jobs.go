@@ -13,14 +13,14 @@ import (
 // JobsHandler handles job-related requests
 type JobsHandler struct {
 	jobRepo   *repository.DynamoDBRepository
-	s3Service *repository.S3Service
+	s3Service *repository.S3AssetRepository
 	logger    *zap.Logger
 }
 
 // NewJobsHandler creates a new jobs handler
 func NewJobsHandler(
 	jobRepo *repository.DynamoDBRepository,
-	s3Service *repository.S3Service,
+	s3Service *repository.S3AssetRepository,
 	logger *zap.Logger,
 ) *JobsHandler {
 	return &JobsHandler{

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -61,14 +62,20 @@ func main() {
 		zap.String("aws_region", cfg.AWSRegion),
 	)
 
+	// Check system dependencies
+	if err := checkDependencies(); err != nil {
+		zapLogger.Fatal("System dependency check failed", zap.Error(err))
+	}
+	zapLogger.Info("System dependencies verified (ffmpeg found)")
+
 	// Initialize AWS SDK configuration
-	awsConfig, err := aws.NewConfig(cfg.AWSRegion)
+	awsConfig, err := aws.NewConfig(context.Background(), cfg.AWSRegion)
 	if err != nil {
 		zapLogger.Fatal("Failed to initialize AWS config", zap.Error(err))
 	}
 
 	// Initialize AWS clients
-	awsClients := aws.NewClients(awsConfig, cfg)
+	awsClients := aws.NewClients(awsConfig)
 	zapLogger.Info("AWS clients initialized successfully")
 
 	// Initialize repositories
@@ -103,12 +110,6 @@ func main() {
 		zapLogger.Fatal("Failed to retrieve API keys from Secrets Manager", zap.Error(err))
 	}
 	zapLogger.Info("API keys loaded successfully", zap.Int("count", len(apiKeys)))
-
-	// GeneratorService is now a stub - video generation handled by goroutines in GenerateHandler
-	generatorService := service.NewGeneratorService(
-		jobRepo,
-		zapLogger,
-	)
 
 	// Initialize parser service for script generation with GPT-4o
 	// Get the Replicate API key from Secrets Manager
@@ -160,7 +161,6 @@ func main() {
 		JobRepo:          jobRepo,
 		S3Service:        s3Service,
 		UsageRepo:        usageRepo,
-		GeneratorService: generatorService,
 		ParserService:    parserService,
 		KlingAdapter:     klingAdapter,   // Video generation
 		MinimaxAdapter:   minimaxAdapter, // Audio generation
@@ -221,8 +221,6 @@ type Config struct {
 	JobTable           string `envconfig:"JOB_TABLE" required:"true"`
 	UsageTable         string `envconfig:"USAGE_TABLE" required:"true"`
 	ScriptsTable       string `envconfig:"SCRIPTS_TABLE" required:"true"`
-	StepFunctionsARN   string `envconfig:"STEP_FUNCTIONS_ARN" required:"true"`
-	LambdaParserARN    string `envconfig:"LAMBDA_PARSER_ARN"`
 	ReplicateSecretARN string `envconfig:"REPLICATE_SECRET_ARN" required:"true"`
 
 	// Authentication configuration
@@ -241,4 +239,13 @@ func loadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to process environment variables: %w", err)
 	}
 	return &cfg, nil
+}
+
+// checkDependencies verifies required system dependencies are installed
+func checkDependencies() error {
+	// Check for ffmpeg (required for video composition)
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return fmt.Errorf("ffmpeg not found in PATH - required for video composition. Install with: apt-get install ffmpeg (Debian/Ubuntu) or apk add ffmpeg (Alpine)")
+	}
+	return nil
 }

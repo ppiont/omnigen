@@ -97,8 +97,6 @@ resource "aws_iam_policy" "terraform_operations" {
           "elasticloadbalancing:*",
           "s3:*",
           "dynamodb:*",
-          "lambda:*",
-          "states:*",
           "iam:*",
           "logs:*",
           "cloudfront:*",

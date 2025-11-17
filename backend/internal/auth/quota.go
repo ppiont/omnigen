@@ -12,7 +12,7 @@ import (
 
 // QuotaEnforcementMiddleware creates a middleware that checks and decrements usage quotas
 // This should be applied to endpoints that consume quota (e.g., video generation)
-func QuotaEnforcementMiddleware(usageRepo *repository.UsageRepository, logger *zap.Logger) gin.HandlerFunc {
+func QuotaEnforcementMiddleware(usageRepo *repository.DynamoDBUsageRepository, logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get user claims from context (set by JWT middleware)
 		claims, ok := GetUserClaims(c)

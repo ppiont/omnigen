@@ -22,9 +22,8 @@ type ServerConfig struct {
 	Environment      string
 	Logger           *zap.Logger
 	JobRepo          *repository.DynamoDBRepository
-	S3Service        *repository.S3Service // For presigned URLs and video uploads/downloads
-	UsageRepo        *repository.UsageRepository
-	GeneratorService *service.GeneratorService
+	S3Service        *repository.S3AssetRepository // For presigned URLs and video uploads/downloads
+	UsageRepo        *repository.DynamoDBUsageRepository
 	ParserService    *service.ParserService   // Script generation service
 	KlingAdapter     *adapters.KlingAdapter   // Kling video generation
 	MinimaxAdapter   *adapters.MinimaxAdapter // Minimax audio generation
@@ -163,8 +162,6 @@ func (s *Server) setupRoutes() {
 
 		parserHandler := handlers.NewParserHandler(
 			s.config.ParserService,
-			nil, // No Lambda client needed
-			"",  // No Lambda ARN needed
 			s.config.Logger,
 		)
 

@@ -27,7 +27,7 @@ type ClipVideo struct {
 // generateVideoAsync runs the entire video generation pipeline in a goroutine
 func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Job, req GenerateRequest) {
 	// Create job-specific context with timeout
-	jobCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
+	jobCtx, cancel := context.WithTimeout(ctx, VideoGenerationTimeout)
 	defer cancel()
 
 	h.logger.Info("Starting async video generation",
@@ -197,8 +197,8 @@ func (h *GenerateHandler) generateClip(
 	}
 
 	// Poll until complete (max 10 minutes)
-	maxAttempts := 120 // 120 × 5s = 10 minutes
-	pollInterval := 5 * time.Second
+	maxAttempts := VideoGenerationMaxAttempts // 120 × 5s = 10 minutes
+	pollInterval := PollInterval
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		select {
@@ -333,8 +333,8 @@ func (h *GenerateHandler) generateAudio(
 	}
 
 	// Poll until complete (max 5 minutes)
-	maxAttempts := 60 // 60 × 5s = 5 minutes
-	pollInterval := 5 * time.Second
+	maxAttempts := AudioGenerationMaxAttempts // 60 × 5s = 5 minutes
+	pollInterval := PollInterval
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		select {

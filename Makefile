@@ -1,4 +1,4 @@
-.PHONY: help init plan apply destroy format validate outputs docker-build docker-push deploy-ecs deploy-frontend logs-ecs logs-generator logs-composer clean
+.PHONY: help init plan apply destroy format validate outputs docker-build docker-push deploy-ecs deploy-frontend logs-ecs clean swagger
 
 # Default target - show help when running 'make' with no arguments
 .DEFAULT_GOAL := help
@@ -67,13 +67,13 @@ outputs: ## Show terraform outputs
 
 # Docker commands
 
-docker-build: ## Build Docker image for ECS (linux/amd64)
-	@printf '${CYAN}Building Docker image for linux/amd64...${NC}\n'
-	@cd backend && docker buildx build --platform linux/amd64 -t ${PROJECT_NAME}-api:latest --load .
+docker-build: ## Build Docker image for ECS (ARM64 Graviton)
+	@printf '${CYAN}Building Docker image for linux/arm64 (Graviton)...${NC}\n'
+	@cd backend && docker buildx build --platform linux/arm64 -t ${PROJECT_NAME}-api:latest --load .
 	@printf '${GREEN}Docker image built successfully!${NC}\n'
 
-docker-push: ## Build and push Docker image to ECR (linux/amd64)
-	@printf '${CYAN}Building and pushing Docker image to ECR (linux/amd64)...${NC}\n'
+docker-push: ## Build and push Docker image to ECR (ARM64 Graviton)
+	@printf '${CYAN}Building and pushing Docker image to ECR (linux/arm64 Graviton)...${NC}\n'
 	$(eval ECR_URL := $(shell cd $(INFRA_DIR) && terraform output -raw ecr_repository_url 2>/dev/null))
 	@if [ -z "$(ECR_URL)" ]; then \
 		printf '${RED}Error: Could not get ECR repository URL. Run terraform apply first.${NC}\n'; \
@@ -82,8 +82,8 @@ docker-push: ## Build and push Docker image to ECR (linux/amd64)
 	@printf "ECR Repository: $(ECR_URL)\n"
 	@printf '${CYAN}Logging in to ECR...${NC}\n'
 	@aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin $(ECR_URL)
-	@printf '${CYAN}Building image for linux/amd64...${NC}\n'
-	@cd backend && docker buildx build --platform linux/amd64 -t ${PROJECT_NAME}-api:latest --load .
+	@printf '${CYAN}Building image for linux/arm64 (Graviton)...${NC}\n'
+	@cd backend && docker buildx build --platform linux/arm64 -t ${PROJECT_NAME}-api:latest --load .
 	@printf '${CYAN}Tagging image...${NC}\n'
 	@docker tag ${PROJECT_NAME}-api:latest $(ECR_URL):latest
 	@printf '${CYAN}Pushing image...${NC}\n'
@@ -174,22 +174,19 @@ logs-ecs: ## Tail ECS logs
 	$(eval LOG_GROUP := $(shell cd $(INFRA_DIR) && terraform output -raw ecs_log_group_name 2>/dev/null))
 	@aws logs tail $(LOG_GROUP) --follow --region ${AWS_REGION}
 
-logs-generator: ## Tail generator Lambda logs
-	@printf '${CYAN}Tailing Generator Lambda logs (Ctrl+C to stop)...${NC}\n'
-	$(eval LOG_GROUP := $(shell cd $(INFRA_DIR) && terraform output -raw lambda_generator_log_group_name 2>/dev/null))
-	@aws logs tail $(LOG_GROUP) --follow --region ${AWS_REGION}
-
-logs-composer: ## Tail composer Lambda logs
-	@printf '${CYAN}Tailing Composer Lambda logs (Ctrl+C to stop)...${NC}\n'
-	$(eval LOG_GROUP := $(shell cd $(INFRA_DIR) && terraform output -raw lambda_composer_log_group_name 2>/dev/null))
-	@aws logs tail $(LOG_GROUP) --follow --region ${AWS_REGION}
-
 # Health check
 
 health: ## Check API health
 	@printf '${CYAN}Checking API health...${NC}\n'
 	$(eval API_URL := $(shell cd $(INFRA_DIR) && terraform output -raw alb_dns_name 2>/dev/null))
 	@curl -s http://$(API_URL)/health | jq . || printf '${RED}API not responding${NC}\n'
+
+# Documentation
+
+swagger: ## Generate Swagger API documentation
+	@printf '${CYAN}Generating Swagger documentation...${NC}\n'
+	@cd backend && swag init -g cmd/api/main.go --output docs
+	@printf '${GREEN}Swagger docs generated successfully in backend/docs/${NC}\n'
 
 # Cleanup
 

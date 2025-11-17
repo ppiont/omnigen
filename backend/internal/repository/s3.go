@@ -13,7 +13,7 @@ import (
 )
 
 // S3Service handles S3 operations
-type S3Service struct {
+type S3AssetRepository struct {
 	client     *s3.Client
 	bucketName string
 	logger     *zap.Logger
@@ -24,8 +24,8 @@ func NewS3Service(
 	client *s3.Client,
 	bucketName string,
 	logger *zap.Logger,
-) *S3Service {
-	return &S3Service{
+) *S3AssetRepository {
+	return &S3AssetRepository{
 		client:     client,
 		bucketName: bucketName,
 		logger:     logger,
@@ -33,7 +33,7 @@ func NewS3Service(
 }
 
 // GetPresignedURL generates a presigned URL for downloading a video
-func (s *S3Service) GetPresignedURL(ctx context.Context, key string, duration time.Duration) (string, error) {
+func (s *S3AssetRepository) GetPresignedURL(ctx context.Context, key string, duration time.Duration) (string, error) {
 	presignClient := s3.NewPresignClient(s.client)
 
 	request, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
@@ -60,7 +60,7 @@ func (s *S3Service) GetPresignedURL(ctx context.Context, key string, duration ti
 }
 
 // UploadFile uploads a file to S3
-func (s *S3Service) UploadFile(ctx context.Context, bucket, key, filePath string, contentType string) (string, error) {
+func (s *S3AssetRepository) UploadFile(ctx context.Context, bucket, key, filePath string, contentType string) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open file: %w", err)
@@ -83,7 +83,7 @@ func (s *S3Service) UploadFile(ctx context.Context, bucket, key, filePath string
 }
 
 // DownloadFile downloads a file from S3
-func (s *S3Service) DownloadFile(ctx context.Context, bucket, key, destPath string) error {
+func (s *S3AssetRepository) DownloadFile(ctx context.Context, bucket, key, destPath string) error {
 	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
@@ -108,7 +108,7 @@ func (s *S3Service) DownloadFile(ctx context.Context, bucket, key, destPath stri
 }
 
 // HealthCheck performs a lightweight health check on S3
-func (s *S3Service) HealthCheck(ctx context.Context) error {
+func (s *S3AssetRepository) HealthCheck(ctx context.Context) error {
 	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(s.bucketName),
 	})

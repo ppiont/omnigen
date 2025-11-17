@@ -28,8 +28,8 @@ var tierQuotas = map[string]int{
 	"enterprise": 1000,
 }
 
-// UsageRepository handles DynamoDB operations for usage tracking
-type UsageRepository struct {
+// DynamoDBUsageRepository handles DynamoDB operations for usage tracking
+type DynamoDBUsageRepository struct {
 	client    *dynamodb.Client
 	tableName string
 	logger    *zap.Logger
@@ -40,8 +40,8 @@ func NewUsageRepository(
 	client *dynamodb.Client,
 	tableName string,
 	logger *zap.Logger,
-) *UsageRepository {
-	return &UsageRepository{
+) *DynamoDBUsageRepository {
+	return &DynamoDBUsageRepository{
 		client:    client,
 		tableName: tableName,
 		logger:    logger,
@@ -55,7 +55,7 @@ func GetCurrentPeriod() string {
 }
 
 // GetOrCreateUsage retrieves or creates usage record for user and current period
-func (r *UsageRepository) GetOrCreateUsage(ctx context.Context, userID, subscriptionTier string) (*domain.Usage, error) {
+func (r *DynamoDBUsageRepository) GetOrCreateUsage(ctx context.Context, userID, subscriptionTier string) (*domain.Usage, error) {
 	period := GetCurrentPeriod()
 
 	// Try to get existing usage record
@@ -93,7 +93,7 @@ func (r *UsageRepository) GetOrCreateUsage(ctx context.Context, userID, subscrip
 }
 
 // GetUsage retrieves usage record for a specific user and period
-func (r *UsageRepository) GetUsage(ctx context.Context, userID, period string) (*domain.Usage, error) {
+func (r *DynamoDBUsageRepository) GetUsage(ctx context.Context, userID, period string) (*domain.Usage, error) {
 	result, err := r.client.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(r.tableName),
 		Key: map[string]types.AttributeValue{
@@ -128,7 +128,7 @@ func (r *UsageRepository) GetUsage(ctx context.Context, userID, period string) (
 }
 
 // CreateUsage creates a new usage record
-func (r *UsageRepository) CreateUsage(ctx context.Context, usage *domain.Usage) error {
+func (r *DynamoDBUsageRepository) CreateUsage(ctx context.Context, usage *domain.Usage) error {
 	item, err := attributevalue.MarshalMap(usage)
 	if err != nil {
 		r.logger.Error("Failed to marshal usage", zap.Error(err))
@@ -157,7 +157,7 @@ func (r *UsageRepository) CreateUsage(ctx context.Context, usage *domain.Usage) 
 
 // CheckAndDecrementQuota checks if user has remaining quota and decrements it
 // Returns error if quota is exceeded
-func (r *UsageRepository) CheckAndDecrementQuota(ctx context.Context, userID, subscriptionTier string) error {
+func (r *DynamoDBUsageRepository) CheckAndDecrementQuota(ctx context.Context, userID, subscriptionTier string) error {
 	period := GetCurrentPeriod()
 
 	// Get or create usage record
@@ -183,7 +183,7 @@ func (r *UsageRepository) CheckAndDecrementQuota(ctx context.Context, userID, su
 			"user_id": &types.AttributeValueMemberS{Value: userID},
 			"period":  &types.AttributeValueMemberS{Value: period},
 		},
-		UpdateExpression: aws.String("SET quota_remaining = quota_remaining - :dec, last_updated = :now"),
+		UpdateExpression:    aws.String("SET quota_remaining = quota_remaining - :dec, last_updated = :now"),
 		ConditionExpression: aws.String("quota_remaining > :zero"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":dec":  &types.AttributeValueMemberN{Value: "1"},
@@ -218,7 +218,7 @@ func (r *UsageRepository) CheckAndDecrementQuota(ctx context.Context, userID, su
 }
 
 // IncrementUsage increments usage counters after successful video generation
-func (r *UsageRepository) IncrementUsage(ctx context.Context, userID string, videoDuration int) error {
+func (r *DynamoDBUsageRepository) IncrementUsage(ctx context.Context, userID string, videoDuration int) error {
 	period := GetCurrentPeriod()
 
 	_, err := r.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{

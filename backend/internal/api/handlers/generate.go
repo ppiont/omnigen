@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/omnigen/backend/internal/adapters"
 	"github.com/omnigen/backend/internal/auth"
+	"github.com/omnigen/backend/internal/concurrency"
 	"github.com/omnigen/backend/internal/domain"
 	"github.com/omnigen/backend/internal/repository"
 	"github.com/omnigen/backend/internal/service"
@@ -22,10 +23,11 @@ type GenerateHandler struct {
 	parserService  *service.ParserService
 	klingAdapter   *adapters.KlingAdapter
 	minimaxAdapter *adapters.MinimaxAdapter
-	s3Service      *repository.S3Service
+	s3Service      *repository.S3AssetRepository
 	jobRepo        *repository.DynamoDBRepository
 	assetsBucket   string
 	logger         *zap.Logger
+	semaphore      *concurrency.Semaphore // Limits concurrent video generations
 }
 
 // NewGenerateHandler creates a new generate handler
@@ -33,7 +35,7 @@ func NewGenerateHandler(
 	parserService *service.ParserService,
 	klingAdapter *adapters.KlingAdapter,
 	minimaxAdapter *adapters.MinimaxAdapter,
-	s3Service *repository.S3Service,
+	s3Service *repository.S3AssetRepository,
 	jobRepo *repository.DynamoDBRepository,
 	assetsBucket string,
 	logger *zap.Logger,
@@ -46,6 +48,7 @@ func NewGenerateHandler(
 		jobRepo:        jobRepo,
 		assetsBucket:   assetsBucket,
 		logger:         logger,
+		semaphore:      concurrency.NewSemaphore(MaxConcurrentGenerations),
 	}
 }
 
@@ -136,12 +139,37 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// Launch async video generation in goroutine (includes GPT-4o + video generation)
-	go h.generateVideoAsync(context.Background(), job, req)
+	// Launch async video generation in goroutine with semaphore limiting
+	go func() {
+		// Acquire semaphore slot (blocks if all slots are in use)
+		if err := h.semaphore.Acquire(context.Background()); err != nil {
+			h.logger.Error("Failed to acquire semaphore",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+			h.jobRepo.MarkJobFailed(context.Background(), jobID, "System overloaded, please try again")
+			return
+		}
+		defer h.semaphore.Release()
 
-	h.logger.Info("Job created, async generation started",
+		// Add panic recovery
+		defer func() {
+			if r := recover(); r != nil {
+				h.logger.Error("Panic in video generation",
+					zap.String("job_id", jobID),
+					zap.Any("panic", r),
+				)
+				h.jobRepo.MarkJobFailed(context.Background(), jobID, "Internal error during generation")
+			}
+		}()
+
+		h.generateVideoAsync(context.Background(), job, req)
+	}()
+
+	h.logger.Info("Job created, async generation queued",
 		zap.String("job_id", jobID),
 		zap.String("stage", "script_generating"),
+		zap.Int("available_slots", h.semaphore.Available()),
 	)
 
 	// Return immediately (<100ms response time)
@@ -150,7 +178,7 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		Status:              job.Status,
 		NumClips:            0, // Will be set after script generation
 		CreatedAt:           job.CreatedAt,
-		EstimatedCompletion: 300, // ~5 minutes total
+		EstimatedCompletion: EstimatedCompletionSeconds, // ~5 minutes total
 	}
 
 	c.JSON(http.StatusAccepted, response)
