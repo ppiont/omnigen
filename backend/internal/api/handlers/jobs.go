@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/omnigen/backend/internal/auth"
 	"github.com/omnigen/backend/internal/repository"
 	"github.com/omnigen/backend/pkg/errors"
 	"go.uber.org/zap"
@@ -130,24 +132,72 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 // @Router /api/v1/jobs [get]
 // @Security BearerAuth
 func (h *JobsHandler) ListJobs(c *gin.Context) {
+	// Get user ID from auth context
+	userID := auth.MustGetUserID(c)
+
 	// Get query parameters
-	page := c.DefaultQuery("page", "1")
-	pageSize := c.DefaultQuery("page_size", "20")
-	status := c.Query("status")
+	pageSizeStr := c.DefaultQuery("page_size", "20")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
 
 	h.logger.Info("Listing jobs",
-		zap.String("page", page),
-		zap.String("page_size", pageSize),
-		zap.String("status", status),
+		zap.String("user_id", userID),
+		zap.Int("page_size", pageSize),
 	)
 
-	// For MVP, return a simple response
-	// TODO: Implement pagination and filtering
+	// Get jobs for user
+	jobs, err := h.jobRepo.GetJobsByUser(c.Request.Context(), userID, pageSize)
+	if err != nil {
+		h.logger.Error("Failed to list jobs",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
+			Error: errors.ErrInternalServer,
+		})
+		return
+	}
+
+	// Convert to response format
+	jobResponses := make([]JobResponse, len(jobs))
+	for i, job := range jobs {
+		// Convert VideoKey to presigned URL if present
+		var videoURL *string
+		if job.VideoKey != "" {
+			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), job.VideoKey, 1*time.Hour)
+			if err != nil {
+				h.logger.Warn("Failed to generate presigned URL",
+					zap.String("job_id", job.JobID),
+					zap.String("video_key", job.VideoKey),
+					zap.Error(err),
+				)
+			} else {
+				videoURL = &url
+			}
+		}
+
+		jobResponses[i] = JobResponse{
+			JobID:        job.JobID,
+			Status:       job.Status,
+			Stage:        job.Stage,
+			Metadata:     job.Metadata,
+			VideoURL:     videoURL,
+			ErrorMessage: job.ErrorMessage,
+			Prompt:       job.Prompt,
+			Duration:     job.Duration,
+			CreatedAt:    job.CreatedAt,
+			UpdatedAt:    job.UpdatedAt,
+			CompletedAt:  job.CompletedAt,
+		}
+	}
+
 	response := ListJobsResponse{
-		Jobs:       []JobResponse{},
-		TotalCount: 0,
+		Jobs:       jobResponses,
+		TotalCount: len(jobResponses),
 		Page:       1,
-		PageSize:   20,
+		PageSize:   pageSize,
 	}
 
 	c.JSON(http.StatusOK, response)
