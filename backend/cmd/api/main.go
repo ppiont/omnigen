@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -61,14 +62,20 @@ func main() {
 		zap.String("aws_region", cfg.AWSRegion),
 	)
 
+	// Check system dependencies
+	if err := checkDependencies(); err != nil {
+		zapLogger.Fatal("System dependency check failed", zap.Error(err))
+	}
+	zapLogger.Info("System dependencies verified (ffmpeg found)")
+
 	// Initialize AWS SDK configuration
-	awsConfig, err := aws.NewConfig(cfg.AWSRegion)
+	awsConfig, err := aws.NewConfig(context.Background(), cfg.AWSRegion)
 	if err != nil {
 		zapLogger.Fatal("Failed to initialize AWS config", zap.Error(err))
 	}
 
 	// Initialize AWS clients
-	awsClients := aws.NewClients(awsConfig, cfg)
+	awsClients := aws.NewClients(awsConfig)
 	zapLogger.Info("AWS clients initialized successfully")
 
 	// Initialize repositories
@@ -104,32 +111,28 @@ func main() {
 	}
 	zapLogger.Info("API keys loaded successfully", zap.Int("count", len(apiKeys)))
 
-	stepFunctionsService := service.NewStepFunctionsService(
-		awsClients.StepFunctions,
-		cfg.StepFunctionsARN,
-		zapLogger,
-	)
-
-	generatorService := service.NewGeneratorService(
-		jobRepo,
-		stepFunctionsService,
-		// promptParser,
-		// scenePlanner,
-		zapLogger,
-	)
-
-	// Initialize parser service for script generation
-	llamaAdapter := adapters.NewLlamaAdapter(cfg.ReplicateSecretARN, awsClients.SecretsManager, zapLogger)
-	if err := llamaAdapter.Initialize(context.Background()); err != nil {
-		zapLogger.Fatal("Failed to initialize Llama adapter", zap.Error(err))
+	// Initialize parser service for script generation with GPT-4o
+	// Get the Replicate API key from Secrets Manager
+	replicateAPIKey, err := secretsService.GetReplicateAPIKey(context.Background())
+	if err != nil {
+		zapLogger.Fatal("Failed to retrieve Replicate API key", zap.Error(err))
 	}
 
+	// Create GPT-4o adapter for intelligent script generation
+	gpt4oAdapter := adapters.NewGPT4oAdapter(replicateAPIKey, zapLogger)
+
 	parserService := service.NewParserService(
-		llamaAdapter,
+		gpt4oAdapter,
 		awsClients.DynamoDB,
 		cfg.ScriptsTable,
 		zapLogger,
 	)
+	zapLogger.Info("Parser service initialized with GPT-4o")
+
+	// Initialize video and audio generation adapters
+	klingAdapter := adapters.NewKlingAdapter(replicateAPIKey, zapLogger)
+	minimaxAdapter := adapters.NewMinimaxAdapter(replicateAPIKey, zapLogger)
+	zapLogger.Info("Video and audio generation adapters initialized")
 
 	// Initialize JWT validator
 	jwksURL := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
@@ -150,27 +153,25 @@ func main() {
 		SameSite: http.SameSiteStrictMode,         // Strict CSRF protection
 	}
 
-	// Initialize HTTP server
+	// Initialize HTTP server with goroutine-based async architecture
 	server := api.NewServer(&api.ServerConfig{
-		Port:                cfg.Port,
-		Environment:         cfg.Environment,
-		Logger:              zapLogger,
-		JobRepo:             jobRepo,
-		S3Service:           s3Service,
-		UsageRepo:           usageRepo,
-		GeneratorService:    generatorService,
-		ParserService:       parserService,
-		APIKeys:             apiKeys,
-		JWTValidator:        jwtValidator,
-		CookieConfig:        cookieConfig,
-		CloudFrontDomain:    cfg.CloudFrontDomain,
-		CognitoDomain:       cfg.CognitoDomain,
-		LambdaClient:        awsClients.Lambda,
-		LambdaParserARN:     cfg.LambdaParserARN,
-		StepFunctionsClient: awsClients.StepFunctions,
-		StepFunctionsARN:    cfg.StepFunctionsARN,
-		ReadTimeout:         time.Duration(cfg.ReadTimeout) * time.Second,
-		WriteTimeout:        time.Duration(cfg.WriteTimeout) * time.Second,
+		Port:             cfg.Port,
+		Environment:      cfg.Environment,
+		Logger:           zapLogger,
+		JobRepo:          jobRepo,
+		S3Service:        s3Service,
+		UsageRepo:        usageRepo,
+		ParserService:    parserService,
+		KlingAdapter:     klingAdapter,   // Video generation
+		MinimaxAdapter:   minimaxAdapter, // Audio generation
+		AssetsBucket:     cfg.AssetsBucket,
+		APIKeys:          apiKeys,
+		JWTValidator:     jwtValidator,
+		CookieConfig:     cookieConfig,
+		CloudFrontDomain: cfg.CloudFrontDomain,
+		CognitoDomain:    cfg.CognitoDomain,
+		ReadTimeout:      time.Duration(cfg.ReadTimeout) * time.Second,
+		WriteTimeout:     time.Duration(cfg.WriteTimeout) * time.Second,
 	})
 
 	httpServer := &http.Server{
@@ -220,8 +221,6 @@ type Config struct {
 	JobTable           string `envconfig:"JOB_TABLE" required:"true"`
 	UsageTable         string `envconfig:"USAGE_TABLE" required:"true"`
 	ScriptsTable       string `envconfig:"SCRIPTS_TABLE" required:"true"`
-	StepFunctionsARN   string `envconfig:"STEP_FUNCTIONS_ARN" required:"true"`
-	LambdaParserARN    string `envconfig:"LAMBDA_PARSER_ARN"`
 	ReplicateSecretARN string `envconfig:"REPLICATE_SECRET_ARN" required:"true"`
 
 	// Authentication configuration
@@ -240,4 +239,13 @@ func loadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to process environment variables: %w", err)
 	}
 	return &cfg, nil
+}
+
+// checkDependencies verifies required system dependencies are installed
+func checkDependencies() error {
+	// Check for ffmpeg (required for video composition)
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return fmt.Errorf("ffmpeg not found in PATH - required for video composition. Install with: apt-get install ffmpeg (Debian/Ubuntu) or apk add ffmpeg (Alpine)")
+	}
+	return nil
 }

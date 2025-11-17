@@ -160,7 +160,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Generates video by creating multiple 5s clips and stitching them together",
+                "description": "Creates job immediately and processes video generation in background goroutine",
                 "consumes": [
                     "application/json"
                 ],
@@ -170,7 +170,7 @@ const docTemplate = `{
                 "tags": [
                     "jobs"
                 ],
-                "summary": "Generate video from prompt (simplified)",
+                "summary": "Generate video from prompt with intelligent parsing",
                 "parameters": [
                     {
                         "description": "Video generation parameters",
@@ -348,6 +348,46 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/jobs/{id}/stream": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams job progress updates using Server-Sent Events (SSE)",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Stream job status updates in real-time",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Event stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1319,23 +1359,6 @@ const docTemplate = `{
                     "maximum": 60,
                     "minimum": 10
                 },
-                "music_mood": {
-                    "type": "string",
-                    "enum": [
-                        "upbeat",
-                        "calm",
-                        "dramatic",
-                        "energetic"
-                    ]
-                },
-                "music_style": {
-                    "type": "string",
-                    "enum": [
-                        "electronic",
-                        "acoustic",
-                        "orchestral"
-                    ]
-                },
                 "prompt": {
                     "type": "string",
                     "maxLength": 2000,
@@ -1401,14 +1424,24 @@ const docTemplate = `{
                 "job_id": {
                     "type": "string"
                 },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "progress_percent": {
+                    "type": "integer"
+                },
                 "prompt": {
+                    "type": "string"
+                },
+                "stage": {
                     "type": "string"
                 },
                 "status": {
                     "type": "string"
                 },
-                "style": {
-                    "type": "string"
+                "updated_at": {
+                    "type": "integer"
                 },
                 "video_url": {
                     "type": "string"

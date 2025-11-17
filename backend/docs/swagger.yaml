@@ -621,19 +621,6 @@ definitions:
         maximum: 60
         minimum: 10
         type: integer
-      music_mood:
-        enum:
-        - upbeat
-        - calm
-        - dramatic
-        - energetic
-        type: string
-      music_style:
-        enum:
-        - electronic
-        - acoustic
-        - orchestral
-        type: string
       prompt:
         maxLength: 2000
         minLength: 10
@@ -681,12 +668,19 @@ definitions:
         type: string
       job_id:
         type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      progress_percent:
+        type: integer
       prompt:
+        type: string
+      stage:
         type: string
       status:
         type: string
-      style:
-        type: string
+      updated_at:
+        type: integer
       video_url:
         type: string
     type: object
@@ -895,8 +889,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Generates video by creating multiple 5s clips and stitching them
-        together
+      description: Creates job immediately and processes video generation in background
+        goroutine
       parameters:
       - description: Video generation parameters
         in: body
@@ -925,7 +919,7 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Generate video from prompt (simplified)
+      summary: Generate video from prompt with intelligent parsing
       tags:
       - jobs
   /api/v1/jobs:
@@ -1018,6 +1012,31 @@ paths:
       security:
       - BearerAuth: []
       summary: Get detailed job progress
+      tags:
+      - jobs
+  /api/v1/jobs/{id}/stream:
+    get:
+      description: Streams job progress updates using Server-Sent Events (SSE)
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: Event stream
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stream job status updates in real-time
       tags:
       - jobs
   /api/v1/parse:

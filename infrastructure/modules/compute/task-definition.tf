@@ -9,6 +9,12 @@ resource "aws_ecs_task_definition" "api" {
   execution_role_arn       = var.task_execution_role_arn
   task_role_arn            = var.task_role_arn
 
+  # Use ARM64 Graviton processors for better price/performance
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "ARM64"
+  }
+
   container_definitions = jsonencode([
     {
       name      = var.container_name
@@ -46,14 +52,6 @@ resource "aws_ecs_task_definition" "api" {
         {
           name  = "SCRIPTS_TABLE"
           value = var.dynamodb_scripts_table_name
-        },
-        {
-          name  = "STEP_FUNCTIONS_ARN"
-          value = var.step_functions_arn
-        },
-        {
-          name  = "LAMBDA_PARSER_ARN"
-          value = var.lambda_parser_arn
         },
         {
           name  = "REPLICATE_SECRET_ARN"

@@ -103,16 +103,6 @@ variable "dynamodb_scripts_table_name" {
   type        = string
 }
 
-variable "step_functions_arn" {
-  description = "ARN of the Step Functions state machine"
-  type        = string
-}
-
-variable "lambda_parser_arn" {
-  description = "ARN of the Parser Lambda function"
-  type        = string
-}
-
 variable "replicate_secret_arn" {
   description = "ARN of the Replicate API key secret"
   type        = string
