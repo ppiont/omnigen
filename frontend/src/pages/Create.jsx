@@ -167,22 +167,45 @@ function Create() {
       if (proCinematography) generateParams.pro_cinematography = true;
       if (creativeBoost) generateParams.creative_boost = true;
 
-      // Add start_image only if it's a valid URL (data URI or http/https)
+      // Add style_reference_image (🎨 Reference Style Img - guides style for ALL clips)
       if (referenceImage) {
         // Use preview (data URI) if available, otherwise skip
         if (
           referenceImage.preview &&
           referenceImage.preview.startsWith("data:image/")
         ) {
-          generateParams.start_image = referenceImage.preview;
-          console.log("[CREATE] 📸 Using start image (data URI)");
+          generateParams.style_reference_image = referenceImage.preview;
+          console.log("[CREATE] 🎨 Using style reference image (data URI)");
         } else if (
           referenceImage.url &&
           (referenceImage.url.startsWith("http://") ||
             referenceImage.url.startsWith("https://"))
         ) {
-          generateParams.start_image = referenceImage.url;
-          console.log("[CREATE] 📸 Using start image (URL)");
+          generateParams.style_reference_image = referenceImage.url;
+          console.log("[CREATE] 🎨 Using style reference image (URL)");
+        } else {
+          console.log(
+            "[CREATE] ⚠️ Style reference image provided but not a valid URL, skipping"
+          );
+        }
+      }
+
+      // Add start_image (🖼️ Starting Img - used ONLY for first scene)
+      if (templateImage) {
+        // Use preview (data URI) if available, otherwise skip
+        if (
+          templateImage.preview &&
+          templateImage.preview.startsWith("data:image/")
+        ) {
+          generateParams.start_image = templateImage.preview;
+          console.log("[CREATE] 🖼️ Using start image for first scene (data URI)");
+        } else if (
+          templateImage.url &&
+          (templateImage.url.startsWith("http://") ||
+            templateImage.url.startsWith("https://"))
+        ) {
+          generateParams.start_image = templateImage.url;
+          console.log("[CREATE] 🖼️ Using start image for first scene (URL)");
         } else {
           console.log(
             "[CREATE] ⚠️ Start image provided but not a valid URL, skipping"

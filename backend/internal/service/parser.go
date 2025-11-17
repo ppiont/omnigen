@@ -23,7 +23,10 @@ type ParseRequest struct {
 	Prompt      string `json:"prompt"`                // Free-form user input with ALL context
 	Duration    int    `json:"duration"`              // 10-60 seconds (must be multiple of 10)
 	AspectRatio string `json:"aspect_ratio"`          // "16:9", "9:16", or "1:1"
-	StartImage  string `json:"start_image,omitempty"` // Optional starting image URL
+	StartImage  string `json:"start_image,omitempty"` // Optional starting image URL (first scene only)
+
+	// Style reference image - analyzed and converted to text description for ALL scenes
+	StyleReferenceImage string `json:"style_reference_image,omitempty"`
 
 	// Enhanced prompt options (Phase 1 - all optional)
 	Style             string
@@ -79,11 +82,12 @@ func (s *ParserService) GenerateScript(ctx context.Context, req ParseRequest) (*
 
 	// Call GPT-4o adapter - GPT-4o will extract product info from prompt
 	gpt4oReq := &adapters.ScriptGenerationRequest{
-		Prompt:          req.Prompt,
-		Duration:        req.Duration,
-		AspectRatio:     req.AspectRatio,
-		StartImage:      req.StartImage,
-		EnhancedOptions: enhancedOptions,
+		Prompt:              req.Prompt,
+		Duration:            req.Duration,
+		AspectRatio:         req.AspectRatio,
+		StartImage:          req.StartImage,
+		StyleReferenceImage: req.StyleReferenceImage,
+		EnhancedOptions:     enhancedOptions,
 	}
 
 	script, err := s.gpt4o.GenerateScript(ctx, gpt4oReq)
