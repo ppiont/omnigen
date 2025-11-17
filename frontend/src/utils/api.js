@@ -1,9 +1,14 @@
 /**
  * API client utility for making authenticated requests to the backend
  * Automatically includes credentials (httpOnly cookies) with every request
+ * Handles automatic token refresh on 401 errors
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
+// Track ongoing refresh to prevent multiple simultaneous refreshes
+let isRefreshing = false;
+let refreshPromise = null;
 
 /**
  * Custom error class for API errors
@@ -72,11 +77,77 @@ export async function apiRequest(endpoint, options = {}) {
       return null;
     }
 
-    // Handle error responses
+    // Handle 401 errors with automatic token refresh
+    // Exclude login and refresh endpoints to prevent infinite loops
+    if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
+      console.warn(`[API] ${new Date().toISOString()} ⚠️  401 Unauthorized on ${method} ${endpoint}. Attempting token refresh...`);
+
+      try {
+        // Import refreshSession dynamically to avoid circular dependency
+        const { refreshSession } = await import('../services/cognito.js');
+
+        // If already refreshing, wait for that to complete
+        if (isRefreshing && refreshPromise) {
+          console.log('[API] 🔄 Token refresh already in progress, waiting...');
+          await refreshPromise;
+        } else {
+          // Start new refresh
+          isRefreshing = true;
+          refreshPromise = (async () => {
+            try {
+              console.log('[API] 🔑 Refreshing tokens with Cognito...');
+              const newTokens = await refreshSession();
+
+              // Update backend cookies with new tokens
+              const refreshResponse = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  access_token: newTokens.accessToken,
+                  id_token: newTokens.idToken,
+                  refresh_token: newTokens.refreshToken,
+                }),
+              });
+
+              if (!refreshResponse.ok) {
+                const errorText = await refreshResponse.text();
+                throw new Error(`Failed to update backend cookies: ${errorText}`);
+              }
+
+              console.log('[API] ✅ Token refresh successful');
+            } finally {
+              isRefreshing = false;
+              refreshPromise = null;
+            }
+          })();
+
+          await refreshPromise;
+        }
+
+        // Retry the original request with new tokens
+        console.log(`[API] 🔄 Retrying ${method} ${endpoint} with refreshed tokens...`);
+        return apiRequest(endpoint, options);
+      } catch (refreshError) {
+        console.error('[API] ❌ Token refresh failed:', refreshError);
+        // Clear refresh state
+        isRefreshing = false;
+        refreshPromise = null;
+        // Throw the original 401 error so the app can handle logout
+        throw new APIError(
+          'Session expired. Please log in again.',
+          401,
+          'REFRESH_FAILED',
+          { originalError: refreshError.message }
+        );
+      }
+    }
+
+    // Handle other error responses
     let errorData;
     try {
       errorData = await response.json();
-    } catch (e) {
+    } catch {
       // Response is not JSON
       throw new APIError(
         response.statusText || 'Request failed',

@@ -23,15 +23,67 @@ definitions:
         - "9:16"
         - "1:1"
         type: string
+      audience:
+        maxLength: 200
+        type: string
+      call_to_action:
+        maxLength: 100
+        type: string
+      creative_boost:
+        type: boolean
       duration:
         maximum: 60
         minimum: 10
         type: integer
+      goal:
+        enum:
+        - awareness
+        - sales
+        - engagement
+        - signups
+        type: string
+      platform:
+        enum:
+        - instagram
+        - tiktok
+        - youtube
+        - facebook
+        type: string
+      pro_cinematography:
+        type: boolean
       prompt:
         maxLength: 2000
         minLength: 10
         type: string
       start_image:
+        description: 'Image options - TWO separate use cases:'
+        type: string
+      style:
+        description: Enhanced prompt options (Phase 1 - all optional)
+        enum:
+        - cinematic
+        - documentary
+        - energetic
+        - minimal
+        - dramatic
+        - playful
+        type: string
+      style_reference_image:
+        description: Used to guide visual style across ALL clips
+        type: string
+      tempo:
+        enum:
+        - slow
+        - medium
+        - fast
+        type: string
+      tone:
+        enum:
+        - premium
+        - friendly
+        - edgy
+        - inspiring
+        - humorous
         type: string
     required:
     - aspect_ratio
@@ -149,9 +201,24 @@ definitions:
       status:
         type: string
     type: object
+  handlers.RefreshRequest:
+    properties:
+      access_token:
+        type: string
+      id_token:
+        type: string
+      refresh_token:
+        type: string
+    required:
+    - access_token
+    - id_token
+    - refresh_token
+    type: object
   handlers.UserResponse:
     properties:
       email:
+        type: string
+      name:
         type: string
       subscription_tier:
         type: string
@@ -233,19 +300,29 @@ paths:
       - auth
   /api/v1/auth/refresh:
     post:
-      description: Refresh the access token using the refresh token from httpOnly
-        cookie
+      consumes:
+      - application/json
+      description: Exchange new tokens from Cognito refresh for updated httpOnly cookies
+      parameters:
+      - description: New tokens from Cognito refresh
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RefreshRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: Returns new tokens
+          description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handlers.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
         "401":
-          description: Missing or invalid refresh token
+          description: Invalid token
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       summary: Refresh access token

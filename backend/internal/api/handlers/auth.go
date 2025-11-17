@@ -87,30 +87,59 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
+// RefreshRequest represents the request body for refresh endpoint
+type RefreshRequest struct {
+	AccessToken  string `json:"access_token" binding:"required"`
+	IDToken      string `json:"id_token" binding:"required"`
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
 // @Summary Refresh access token
-// @Description Refresh the access token using the refresh token from httpOnly cookie
+// @Description Exchange new tokens from Cognito refresh for updated httpOnly cookies
 // @Tags auth
+// @Accept json
 // @Produce json
-// @Success 200 {object} map[string]string "Returns new tokens"
-// @Failure 401 {object} errors.ErrorResponse "Missing or invalid refresh token"
+// @Param request body RefreshRequest true "New tokens from Cognito refresh"
+// @Success 200 {object} UserResponse
+// @Failure 400 {object} errors.ErrorResponse
+// @Failure 401 {object} errors.ErrorResponse "Invalid token"
 // @Router /api/v1/auth/refresh [post]
 func (h *AuthHandler) Refresh(c *gin.Context) {
-	refreshToken := auth.GetRefreshTokenFromCookie(c)
-	if refreshToken == "" {
-		c.JSON(http.StatusUnauthorized, errors.NewAPIError(
-			errors.ErrUnauthorized,
-			"No refresh token found in cookies",
+	var req RefreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewAPIError(
+			errors.ErrInvalidRequest,
+			"Invalid request body: "+err.Error(),
 			nil,
 		))
 		return
 	}
 
-	// Note: Frontend will handle the actual token refresh with Cognito SDK
-	// This endpoint just validates the refresh token exists
-	// The frontend should call Cognito's refresh API and then call /auth/login again
+	// Validate the new ID token
+	claims, err := h.jwtValidator.ValidateToken(req.IDToken)
+	if err != nil {
+		h.logger.Warn("Invalid ID token during refresh", zap.Error(err))
+		c.JSON(http.StatusUnauthorized, errors.NewAPIError(
+			errors.ErrUnauthorized,
+			"Invalid or expired token",
+			nil,
+		))
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Refresh token found. Frontend should refresh with Cognito SDK and call /auth/login with new tokens.",
+	// Set new httpOnly cookies with refreshed tokens
+	auth.SetAuthCookies(c, req.AccessToken, req.IDToken, req.RefreshToken, h.cookieConfig)
+
+	h.logger.Info("User tokens refreshed successfully",
+		zap.String("user_id", claims.Sub),
+		zap.String("email", claims.Email),
+	)
+
+	c.JSON(http.StatusOK, UserResponse{
+		UserID:           claims.Sub,
+		Email:            claims.Email,
+		Name:             claims.Name,
+		SubscriptionTier: claims.SubscriptionTier,
 	})
 }
 
