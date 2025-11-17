@@ -189,9 +189,19 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 
 			pollResp, err := g.pollStatus(ctx, gpt4oResp.ID)
 			if err != nil {
-				g.logger.Warn("Failed to poll status, retrying", zap.Error(err))
+				g.logger.Warn("Failed to poll status, retrying",
+					zap.Error(err),
+					zap.Int("attempt", attempt+1),
+					zap.Int("max_attempts", maxAttempts),
+				)
 				continue
 			}
+
+			g.logger.Info("Poll status check",
+				zap.String("status", pollResp.Status),
+				zap.Int("output_length", len(pollResp.Output)),
+				zap.Int("attempt", attempt+1),
+			)
 
 			if pollResp.Status == "succeeded" && len(pollResp.Output) > 0 {
 				gpt4oResp = *pollResp
@@ -201,12 +211,20 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 			if pollResp.Status == "failed" || pollResp.Status == "canceled" {
 				return nil, fmt.Errorf("GPT-4o generation failed: %s", pollResp.Error)
 			}
+
+			// Update response for next iteration even if not succeeded yet
+			gpt4oResp = *pollResp
 		}
 	}
 
 	// Extract and parse JSON response
 	if len(gpt4oResp.Output) == 0 {
-		return nil, fmt.Errorf("no output from GPT-4o")
+		return nil, fmt.Errorf("no output from GPT-4o after polling (final status: %s)", gpt4oResp.Status)
+	}
+
+	// Check if we timed out without succeeding
+	if gpt4oResp.Status != "succeeded" {
+		return nil, fmt.Errorf("GPT-4o generation did not complete in time (status: %s)", gpt4oResp.Status)
 	}
 
 	// Combine output array into single string
@@ -250,7 +268,12 @@ func (g *GPT4oAdapter) pollStatus(ctx context.Context, predictionID string) (*GP
 
 	httpReq.Header.Set("Authorization", "Bearer "+g.apiToken)
 
-	resp, err := g.httpClient.Do(httpReq)
+	// Use a separate client with shorter timeout for polling requests
+	pollClient := &http.Client{
+		Timeout: 30 * time.Second, // Each poll request should complete quickly
+	}
+
+	resp, err := pollClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -357,8 +380,8 @@ Provide a concise 2-3 sentence description that captures the essence of this vis
 			zap.String("prediction_id", gpt4oResp.ID),
 		)
 
-		// Poll for completion (max 1 minute)
-		maxAttempts := 12 // 12 * 5s = 1 minute
+		// Poll for completion (max 2 minutes for vision analysis)
+		maxAttempts := 24 // 24 * 5s = 2 minutes
 		pollInterval := 5 * time.Second
 
 		for attempt := 0; attempt < maxAttempts; attempt++ {
@@ -372,9 +395,19 @@ Provide a concise 2-3 sentence description that captures the essence of this vis
 
 			pollResp, err := g.pollStatus(ctx, gpt4oResp.ID)
 			if err != nil {
-				g.logger.Warn("Failed to poll status, retrying", zap.Error(err))
+				g.logger.Warn("Failed to poll vision status, retrying",
+					zap.Error(err),
+					zap.Int("attempt", attempt+1),
+					zap.Int("max_attempts", maxAttempts),
+				)
 				continue
 			}
+
+			g.logger.Info("Vision poll status check",
+				zap.String("status", pollResp.Status),
+				zap.Int("output_length", len(pollResp.Output)),
+				zap.Int("attempt", attempt+1),
+			)
 
 			if pollResp.Status == "succeeded" && len(pollResp.Output) > 0 {
 				gpt4oResp = *pollResp
@@ -384,12 +417,20 @@ Provide a concise 2-3 sentence description that captures the essence of this vis
 			if pollResp.Status == "failed" || pollResp.Status == "canceled" {
 				return "", fmt.Errorf("Vision analysis failed: %s", pollResp.Error)
 			}
+
+			// Update response for next iteration
+			gpt4oResp = *pollResp
 		}
 	}
 
 	// Extract style description from output
 	if len(gpt4oResp.Output) == 0 {
-		return "", fmt.Errorf("no output from GPT-4o Vision")
+		return "", fmt.Errorf("no output from GPT-4o Vision after polling (final status: %s)", gpt4oResp.Status)
+	}
+
+	// Check if we timed out without succeeding
+	if gpt4oResp.Status != "succeeded" {
+		return "", fmt.Errorf("GPT-4o Vision analysis did not complete in time (status: %s)", gpt4oResp.Status)
 	}
 
 	// Concatenate all output chunks (GPT-4o streams response)
