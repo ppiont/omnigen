@@ -489,13 +489,14 @@ function Create() {
         {isAdvancedOpen && (
           <div className="advanced-content">
             <div className="options-grid">
-              {/* Brand Preset Selector */}
-              <BrandPresetSelector
+              {/* Brand Preset Selector - Commented out for now */}
+              {/* <BrandPresetSelector
                 selectedPreset={selectedBrandPreset}
                 onChange={setSelectedBrandPreset}
-              />
+              /> */}
 
-              <div className="option-group">
+              {/* Category Selector - Commented out for now */}
+              {/* <div className="option-group">
                 <label className="option-label">Category</label>
                 <select
                   className="dropdown-field"
@@ -511,7 +512,7 @@ function Create() {
                 <p className="option-helper">
                   Choose the type of content you're creating
                 </p>
-              </div>
+              </div> */}
 
               <div className="option-group">
                 <label className="option-label">Style</label>
