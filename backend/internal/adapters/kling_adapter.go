@@ -25,7 +25,7 @@ func NewKlingAdapter(apiToken string, logger *zap.Logger) *KlingAdapter {
 	return &KlingAdapter{
 		apiToken: apiToken,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 30 * time.Second, // Async operation - just for initial request acknowledgment
 		},
 		logger:       logger,
 		modelVersion: "kwaivgi/kling-v2.5-turbo-pro:939cd1851c5b112f284681b57ee9b0f36d0f913ba97de5845a7eef92d52837df",
@@ -102,6 +102,12 @@ func (k *KlingAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRe
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	k.logger.Info("Submitting Kling API request",
+		zap.Int("clip_duration_seconds", k.mapDuration(req.Duration)),
+		zap.String("aspect_ratio", aspectRatio),
+		zap.Bool("has_start_image", req.StartImageURL != ""),
+	)
+
 	// Create HTTP request
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
@@ -144,9 +150,10 @@ func (k *KlingAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRe
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	k.logger.Info("Video generation started",
+	k.logger.Info("Kling prediction created successfully",
 		zap.String("prediction_id", klingResp.ID),
 		zap.String("status", klingResp.Status),
+		zap.String("created_at", klingResp.CreatedAt),
 	)
 
 	// Map to our result format

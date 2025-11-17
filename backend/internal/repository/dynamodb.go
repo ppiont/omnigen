@@ -252,16 +252,14 @@ func (r *DynamoDBRepository) MarkJobFailed(ctx context.Context, jobID string, er
 		Key: map[string]types.AttributeValue{
 			"job_id": &types.AttributeValueMemberS{Value: jobID},
 		},
-		UpdateExpression: aws.String("SET #status = :status, #stage = :stage, #error_message = :error_message, #updated_at = :updated_at"),
+		UpdateExpression: aws.String("SET #status = :status, #error_message = :error_message, #updated_at = :updated_at"),
 		ExpressionAttributeNames: map[string]string{
 			"#status":        "status",
-			"#stage":         "stage",
 			"#error_message": "error_message",
 			"#updated_at":    "updated_at",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":status":        &types.AttributeValueMemberS{Value: domain.StatusFailed},
-			":stage":         &types.AttributeValueMemberS{Value: "failed"},
 			":error_message": &types.AttributeValueMemberS{Value: errorMsg},
 			":updated_at":    &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", getCurrentTimestamp())},
 		},
@@ -285,6 +283,45 @@ func (r *DynamoDBRepository) MarkJobFailed(ctx context.Context, jobID string, er
 // getCurrentTimestamp returns the current Unix timestamp
 func getCurrentTimestamp() int64 {
 	return time.Now().Unix()
+}
+
+// GetJobsByUser retrieves all jobs for a user, sorted by creation time (newest first)
+func (r *DynamoDBRepository) GetJobsByUser(ctx context.Context, userID string, limit int) ([]*domain.Job, error) {
+	input := &dynamodb.QueryInput{
+		TableName:              aws.String(r.tableName),
+		IndexName:              aws.String("UserJobsIndex"),
+		KeyConditionExpression: aws.String("user_id = :user_id"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":user_id": &types.AttributeValueMemberS{Value: userID},
+		},
+		ScanIndexForward: aws.Bool(false), // Sort by created_at descending (newest first)
+		Limit:            aws.Int32(int32(limit)),
+	}
+
+	result, err := r.client.Query(ctx, input)
+	if err != nil {
+		r.logger.Error("Failed to query jobs by user",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("failed to query jobs by user: %w", err)
+	}
+
+	var jobs []*domain.Job
+	if err := attributevalue.UnmarshalListOfMaps(result.Items, &jobs); err != nil {
+		r.logger.Error("Failed to unmarshal jobs",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("failed to unmarshal jobs: %w", err)
+	}
+
+	r.logger.Info("Retrieved user jobs",
+		zap.String("user_id", userID),
+		zap.Int("count", len(jobs)),
+	)
+
+	return jobs, nil
 }
 
 // HealthCheck performs a lightweight health check on DynamoDB

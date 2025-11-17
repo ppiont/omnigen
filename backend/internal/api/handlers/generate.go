@@ -94,11 +94,11 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// Validate duration is multiple of 10 (Kling constraint for 10s clips)
-	if req.Duration%10 != 0 {
+	// Validate duration is multiple of 5 (Kling constraint: 5s or 10s clips only)
+	if req.Duration%5 != 0 {
 		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
 			Error: errors.ErrInvalidRequest.WithDetails(map[string]interface{}{
-				"error": "duration must be a multiple of 10 seconds (Kling v2.5 10s clip limitation)",
+				"error": "duration must be a multiple of 5 seconds (Kling v2.5 supports 5s or 10s clips)",
 			}),
 		})
 		return

@@ -26,7 +26,7 @@ func NewMinimaxAdapter(apiToken string, logger *zap.Logger) *MinimaxAdapter {
 	return &MinimaxAdapter{
 		apiToken: apiToken,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 30 * time.Second, // Async operation - just for initial request acknowledgment
 		},
 		logger:       logger,
 		modelVersion: "minimax/music-1.5:70c8395540eae909be2c09a0b4897d22ee2455a5e5c9826b71161743b5cc45f1",
@@ -102,6 +102,12 @@ func (m *MinimaxAdapter) GenerateMusic(ctx context.Context, req *MusicGeneration
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	m.logger.Info("Submitting Minimax API request",
+		zap.Int("duration_seconds", req.Duration),
+		zap.Int("sample_rate", 44100),
+		zap.Int("bitrate", 256000),
+	)
+
 	// Submit prediction to Replicate
 	httpReq, err := http.NewRequestWithContext(ctx, "POST",
 		"https://api.replicate.com/v1/predictions",
@@ -112,7 +118,7 @@ func (m *MinimaxAdapter) GenerateMusic(ctx context.Context, req *MusicGeneration
 
 	httpReq.Header.Set("Authorization", "Bearer "+m.apiToken)
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Prefer", "wait") // Wait for result if possible
+	httpReq.Header.Set("Prefer", "wait=0") // Don't wait for completion (async)
 
 	resp, err := m.httpClient.Do(httpReq)
 	if err != nil {
@@ -147,9 +153,10 @@ func (m *MinimaxAdapter) GenerateMusic(ctx context.Context, req *MusicGeneration
 		}
 	}
 
-	m.logger.Info("Music generation submitted",
+	m.logger.Info("Minimax prediction created successfully",
 		zap.String("prediction_id", result.PredictionID),
 		zap.String("status", result.Status),
+		zap.String("created_at", minimaxResp.CreatedAt),
 	)
 
 	return result, nil

@@ -26,7 +26,7 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
     {
       "scene_number": number,
       "start_time": number - seconds from start,
-      "duration": number - scene length in seconds,
+      "duration": number - scene length in seconds (MUST be exactly 5 or 10),
 
       "location": "string - e.g., 'INT. MODERN KITCHEN - DAY' or 'EXT. MOUNTAIN PEAK - GOLDEN HOUR'",
       "action": "string - 2-3 sentences describing what happens",
@@ -80,9 +80,12 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
    - Mood progression (can escalate but must be cohesive)
 
 2. **Pacing for Ads**:
-   - 15s ads: 3-4 scenes (3-5s each)
-   - 30s ads: 5-7 scenes (4-6s each)
-   - 60s ads: 8-12 scenes (5-8s each)
+   - **CRITICAL**: Each scene duration MUST be exactly 5s or 10s (Kling AI constraint)
+   - 10s ads: 2 scenes (5s each) OR 1 scene (10s)
+   - 15s ads: 3 scenes (5s each)
+   - 20s ads: 4 scenes (5s each) OR 2 scenes (10s each)
+   - 30s ads: 6 scenes (5s each) OR 3 scenes (10s each)
+   - 60s ads: 12 scenes (5s each) OR 6 scenes (10s each)
    - First scene: Establish context (wider shot)
    - Middle scenes: Build narrative, show product
    - Final scene: Product hero shot + CTA (medium_close_up or close_up)
