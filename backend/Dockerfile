@@ -15,17 +15,17 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# Build binary for ARM64 (AWS Graviton)
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
     -ldflags="-w -s" \
     -o /app/api \
     ./cmd/api
 
-# Runtime stage
+# Runtime stage - ARM64-compatible base image
 FROM alpine:3.22
 
-# Install ca-certificates for HTTPS and curl for health checks
-RUN apk --no-cache add ca-certificates curl
+# Install dependencies: ca-certificates for HTTPS, curl for health checks, ffmpeg for video processing
+RUN apk --no-cache add ca-certificates curl ffmpeg
 
 WORKDIR /app
 

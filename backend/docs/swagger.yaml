@@ -611,20 +611,37 @@ definitions:
     type: object
   handlers.GenerateRequest:
     properties:
-      script_id:
+      aspect_ratio:
+        enum:
+        - "16:9"
+        - "9:16"
+        - "1:1"
+        type: string
+      duration:
+        maximum: 60
+        minimum: 10
+        type: integer
+      prompt:
+        maxLength: 2000
+        minLength: 10
+        type: string
+      start_image:
         type: string
     required:
-    - script_id
+    - aspect_ratio
+    - duration
+    - prompt
     type: object
   handlers.GenerateResponse:
     properties:
       created_at:
         type: integer
-      estimated_completion:
-        description: in seconds
+      estimated_completion_seconds:
         type: integer
       job_id:
         type: string
+      num_clips:
+        type: integer
       status:
         type: string
     type: object
@@ -651,12 +668,19 @@ definitions:
         type: string
       job_id:
         type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      progress_percent:
+        type: integer
       prompt:
+        type: string
+      stage:
         type: string
       status:
         type: string
-      style:
-        type: string
+      updated_at:
+        type: integer
       video_url:
         type: string
     type: object
@@ -865,10 +889,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Starts Step Functions workflow to generate video from an approved
-        script
+      description: Creates job immediately and processes video generation in background
+        goroutine
       parameters:
-      - description: Script ID to generate video from
+      - description: Video generation parameters
         in: body
         name: request
         required: true
@@ -886,19 +910,7 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
         "401":
-          description: Unauthorized - Invalid or missing JWT token
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "402":
-          description: Payment Required - Monthly quota exceeded
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "404":
-          description: Script not found
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "429":
-          description: Too Many Requests - Rate limit exceeded
+          description: Unauthorized
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
         "500":
@@ -907,7 +919,7 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Start video generation from approved script
+      summary: Generate video from prompt with intelligent parsing
       tags:
       - jobs
   /api/v1/jobs:
@@ -1000,6 +1012,31 @@ paths:
       security:
       - BearerAuth: []
       summary: Get detailed job progress
+      tags:
+      - jobs
+  /api/v1/jobs/{id}/stream:
+    get:
+      description: Streams job progress updates using Server-Sent Events (SSE)
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: Event stream
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stream job status updates in real-time
       tags:
       - jobs
   /api/v1/parse:

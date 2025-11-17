@@ -17,6 +17,7 @@ node_modules/
 dist/
 dist-ssr/
 *.local
+build/
 
 # Logs
 logs
@@ -42,3 +43,4 @@ AI Video Generation Pipeline.pdf
 # AI slop
 CLAUDE.md
 .claude/
+backend/api

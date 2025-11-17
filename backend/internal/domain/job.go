@@ -2,19 +2,21 @@ package domain
 
 // Job represents a video generation job
 type Job struct {
-	JobID        string  `dynamodbav:"job_id" json:"job_id"`
-	UserID       string  `dynamodbav:"user_id" json:"user_id"`
-	ScriptID     string  `dynamodbav:"script_id,omitempty" json:"script_id,omitempty"` // Optional script ID (for new workflow)
-	Status       string  `dynamodbav:"status" json:"status"`                           // pending, processing, completed, failed
-	Prompt       string  `dynamodbav:"prompt,omitempty" json:"prompt,omitempty"`       // Legacy field
-	Duration     int     `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
-	Style        string  `dynamodbav:"style,omitempty" json:"style,omitempty"`
-	AspectRatio  string  `dynamodbav:"aspect_ratio,omitempty" json:"aspect_ratio,omitempty"`
-	VideoKey     string  `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"` // S3 key
-	CreatedAt    int64   `dynamodbav:"created_at" json:"created_at"`
-	CompletedAt  *int64  `dynamodbav:"completed_at,omitempty" json:"completed_at,omitempty"`
-	ErrorMessage *string `dynamodbav:"error_message,omitempty" json:"error_message,omitempty"`
-	TTL          int64   `dynamodbav:"ttl" json:"ttl"` // Unix timestamp for auto-deletion
+	JobID        string                 `dynamodbav:"job_id" json:"job_id"`
+	UserID       string                 `dynamodbav:"user_id" json:"user_id"`
+	ScriptID     string                 `dynamodbav:"script_id,omitempty" json:"script_id,omitempty"`
+	Status       string                 `dynamodbav:"status" json:"status"`                         // pending, processing, completed, failed
+	Stage        string                 `dynamodbav:"stage,omitempty" json:"stage,omitempty"`       // Granular progress: script_generating, scene_1_complete, etc.
+	Metadata     map[string]interface{} `dynamodbav:"metadata,omitempty" json:"metadata,omitempty"` // Stores script, thumbnails, progress data
+	Prompt       string                 `dynamodbav:"prompt,omitempty" json:"prompt,omitempty"`
+	Duration     int                    `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
+	AspectRatio  string                 `dynamodbav:"aspect_ratio,omitempty" json:"aspect_ratio,omitempty"`
+	VideoKey     string                 `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"` // S3 key
+	CreatedAt    int64                  `dynamodbav:"created_at" json:"created_at"`
+	UpdatedAt    int64                  `dynamodbav:"updated_at" json:"updated_at"`
+	CompletedAt  *int64                 `dynamodbav:"completed_at,omitempty" json:"completed_at,omitempty"`
+	ErrorMessage *string                `dynamodbav:"error_message,omitempty" json:"error_message,omitempty"`
+	TTL          int64                  `dynamodbav:"ttl" json:"ttl"` // Unix timestamp for auto-deletion
 }
 
 // GenerateRequest represents a video generation request
@@ -36,13 +38,6 @@ type ParsedPrompt struct {
 	AspectRatio  string   `json:"aspect_ratio"`
 	Duration     int      `json:"duration"`
 	TextOverlays []string `json:"text_overlays"`
-}
-
-// StepFunctionsInput represents the input to Step Functions workflow
-// Matches the structure expected by workflow.asl.json
-type StepFunctionsInput struct {
-	JobID  string  `json:"job_id"`
-	Script *Script `json:"script"`
 }
 
 // JobStatus constants

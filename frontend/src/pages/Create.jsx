@@ -7,7 +7,7 @@ import ValidationMessage from "../components/create/ValidationMessage.jsx";
 import BatchGenerationToggle from "../components/create/BatchGenerationToggle.jsx";
 import GenerationState from "../components/create/GenerationState.jsx";
 import ScenePreviewGrid from "../components/create/ScenePreviewGrid.jsx";
-import { generate, jobs, scripts } from "../utils/api.js";
+import { generate, jobs } from "../utils/api.js";
 import "../styles/dashboard.css";
 import "../styles/create.css";
 
@@ -19,8 +19,8 @@ const categories = [
   "Tutorial",
 ];
 const styles = ["Cinematic", "Modern", "Minimalist", "Bold", "Playful"];
-const durations = ["15s", "30s", "60s", "90s"];
-const aspects = ["16:9", "9:16", "1:1", "4:5"];
+const durations = ["10s", "20s", "30s", "40s", "50s", "60s"]; // Must be multiple of 10
+const aspects = ["16:9", "9:16", "1:1"]; // Backend only supports these
 
 function IconChevronDown() {
   return (
@@ -84,10 +84,11 @@ function Create() {
   };
 
   const handleGenerate = async () => {
-    console.log("=".repeat(60));
-    console.log("[CREATE] 🎬 User clicked Generate Video button");
-    console.log("[CREATE] Prompt:", prompt);
-    console.log("[CREATE] Config:", {
+    console.log("=".repeat(80));
+    console.log("🎬 [CREATE] VIDEO GENERATION PIPELINE STARTED");
+    console.log("=".repeat(80));
+    console.log("[CREATE] 📝 User Input:", {
+      prompt: prompt.trim(),
       category: selectedCategory,
       style: selectedStyle,
       duration: selectedDuration,
@@ -107,210 +108,176 @@ function Create() {
       return;
     }
 
+    // Validate duration is multiple of 10
+    const durationNum = parseInt(selectedDuration);
+    if (durationNum % 10 !== 0) {
+      console.warn(
+        "[CREATE] ⚠️ Validation failed: Duration must be multiple of 10"
+      );
+      setValidationError("Duration must be 10, 20, 30, 40, 50, or 60 seconds");
+      return;
+    }
+
     // Clear validation error and reset state
     setValidationError("");
     setIsGenerating(true);
     setGenerationError(null);
 
     try {
-      // ============================================
-      // STEP 1: Parse prompt into script
-      // ============================================
-      console.log("\n[CREATE] 📝 STEP 1: Starting script generation (parse)");
-      setGenerationState("planning");
-      setGenerationProgress(10);
+      console.log("\n" + "=".repeat(80));
+      console.log("🎥 [GENERATE] Starting video generation");
+      console.log("=".repeat(80));
 
-      // Extract product name and audience from prompt
-      const productMatch = prompt.match(
-        /\b(for|of|featuring|showcasing)\s+([a-z\s]+)/i
-      );
-      const productName = productMatch ? productMatch[2].trim() : "Product";
-      const targetAudience = "General audience";
+      setGenerationState("rendering");
+      setGenerationProgress(0);
 
-      const parseParams = {
+      // Prepare generate request with required fields
+      const generateParams = {
         prompt: prompt.trim(),
-        duration: parseInt(selectedDuration),
-        product_name: productName,
-        target_audience: targetAudience,
-        brand_vibe: selectedStyle,
+        duration: durationNum,
+        aspect_ratio: selectedAspect,
       };
 
-      console.log(
-        "[CREATE] 📝 Calling POST /api/v1/parse with params:",
-        parseParams
-      );
-      const parseResponse = await scripts.parse(parseParams);
-      console.log("[CREATE] ✅ Script generation started:", parseResponse);
-
-      const scriptId = parseResponse.script_id;
-      console.log("[CREATE] 📝 Script ID:", scriptId);
-      setGenerationProgress(30);
-
-      // ============================================
-      // STEP 2: Poll for script completion
-      // ============================================
-      console.log("\n[CREATE] 🔄 STEP 2: Polling for script completion");
-      let script = null;
-      let attempts = 0;
-      const maxAttempts = 30; // 30 attempts max
-      const scriptPollInterval = 7000; // 7 seconds between polls (stays under 10/min limit)
-
-      while (attempts < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, scriptPollInterval));
-        attempts++;
-        console.log(
-          `[CREATE] 🔄 Polling script status (attempt ${attempts}/${maxAttempts})...`
-        );
-
-        try {
-          script = await scripts.get(scriptId);
-          console.log(`[CREATE] 📄 Script status: ${script.status}`, script);
-
-          if (script.status === "draft" || script.status === "ready") {
-            console.log("[CREATE] ✅ Script generation completed!");
-            break;
-          }
-          if (script.status === "failed") {
-            console.error("[CREATE] ❌ Script generation failed");
-            throw new Error("Script generation failed");
-          }
-        } catch (error) {
-          // Handle rate limit errors specifically
-          if (error.status === 429) {
-            const retryAfter = error.details?.reset_in || 60; // Default to 60 seconds
-            console.warn(
-              `[CREATE] ⚠️ Rate limit hit. Waiting ${retryAfter} seconds before retry...`
-            );
-            await new Promise((resolve) =>
-              setTimeout(resolve, retryAfter * 1000)
-            );
-            // Don't increment attempts on rate limit - retry this attempt
-            attempts--;
-            continue;
-          }
-
-          console.warn(
-            `[CREATE] ⚠️ Error fetching script (attempt ${attempts}):`,
-            error
+      // Add start_image only if it's a valid URL (data URI or http/https)
+      if (referenceImage) {
+        // Use preview (data URI) if available, otherwise skip
+        if (
+          referenceImage.preview &&
+          referenceImage.preview.startsWith("data:image/")
+        ) {
+          generateParams.start_image = referenceImage.preview;
+          console.log("[CREATE] 📸 Using start image (data URI)");
+        } else if (
+          referenceImage.url &&
+          (referenceImage.url.startsWith("http://") ||
+            referenceImage.url.startsWith("https://"))
+        ) {
+          generateParams.start_image = referenceImage.url;
+          console.log("[CREATE] 📸 Using start image (URL)");
+        } else {
+          console.log(
+            "[CREATE] ⚠️ Start image provided but not a valid URL, skipping"
           );
-          // Continue polling on transient errors
-          if (attempts >= maxAttempts) {
-            throw error;
-          }
         }
       }
 
-      if (!script || script.status !== "draft") {
-        console.error("[CREATE] ❌ Script generation timed out or failed");
-        throw new Error("Script generation timed out or failed");
-      }
+      console.log("[CREATE] 📡 API Call: POST /api/v1/generate");
+      console.log("[CREATE] 📦 Request payload:", generateParams);
 
-      // Convert script scenes to our format
-      const scenes = script.scenes.map((scene, idx) => ({
-        id: idx + 1,
-        description: scene.description || scene.prompt || `Scene ${idx + 1}`,
-        status: "pending",
-        thumbnailUrl: null,
-        duration: `${
-          scene.duration ||
-          Math.floor(parseInt(selectedDuration) / script.scenes.length)
-        }s`,
-      }));
-
-      console.log("[CREATE] 🎬 Scenes extracted:", scenes);
-      setScenes(scenes);
-      setSceneCount(scenes.length);
-      setGenerationProgress(60);
-      setGenerationState("rendering");
-
-      // ============================================
-      // STEP 3: Generate video from script
-      // ============================================
-      console.log(
-        "\n[CREATE] 🎥 STEP 3: Starting video generation from script"
-      );
-      console.log(
-        "[CREATE] 🎥 Calling POST /api/v1/generate with script_id:",
-        scriptId
-      );
-
-      const generateResponse = await generate.create({
-        script_id: scriptId,
-      });
+      const generateResponse = await generate.create(generateParams);
 
       const jobId = generateResponse.job_id;
+      console.log("[CREATE] ✅ Video generation job created");
+      console.log("[CREATE] 🆔 Job ID:", jobId);
+      console.log("[CREATE] 📊 Status:", generateResponse.status);
       console.log(
-        "[CREATE] ✅ Video generation job created:",
-        generateResponse
+        "[CREATE] ⏱️ Estimated completion:",
+        generateResponse.estimated_completion_seconds || "N/A",
+        "seconds"
       );
-      console.log("[CREATE] 🎥 Job ID:", jobId);
 
       setGeneratedJobId(jobId);
-      setGenerationProgress(70);
+      setGenerationProgress(5); // Initial progress
 
       // ============================================
-      // STEP 4: Poll for job progress
+      // Poll for job status
       // ============================================
-      console.log("\n[CREATE] 🔄 STEP 4: Polling for job progress");
+      console.log("\n" + "=".repeat(80));
+      console.log("📊 [POLLING] Starting job status polling");
+      console.log("=".repeat(80));
+      console.log("[POLLING] Polling GET /api/v1/jobs/:id every 7 seconds");
+
       let pollCount = 0;
       const progressPollInterval = 7000; // 7 seconds between polls (stays under 10/min limit)
+      const maxPollAttempts = 300; // ~35 minutes max (300 * 7s = 2100s = 35min)
+      const startTime = Date.now();
       let progressPollTimeoutRef = null;
 
       const pollProgress = async () => {
         pollCount++;
+        const elapsedTime = Date.now() - startTime;
+
+        // Check max polling attempts
+        if (pollCount > maxPollAttempts) {
+          console.error(
+            `[CREATE] ⚠️ Max polling attempts (${maxPollAttempts}) reached. Job may be stuck.`
+          );
+          if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
+          setGenerationState("error");
+          setGenerationError(
+            "Video generation is taking longer than expected. Please check back later or try again."
+          );
+          setIsGenerating(false);
+          return;
+        }
+
         try {
           console.log(
-            `[CREATE] 🔄 Polling job progress (poll #${pollCount})...`
+            `[CREATE] 🔄 Polling job status (poll #${pollCount}, elapsed: ${Math.round(
+              elapsedTime / 1000
+            )}s)...`
           );
-          const progress = await jobs.progress(jobId);
-          console.log(`[CREATE] 📊 Progress update:`, {
-            status: progress.status,
-            progress: progress.progress,
-            current_stage: progress.current_stage,
-            stages_completed: progress.stages_completed,
-            stages_pending: progress.stages_pending,
+
+          // Get job status directly (progress endpoint returns 501)
+          const job = await jobs.get(jobId);
+
+          console.log(`[CREATE] 📊 Job status update:`, {
+            status: job.status,
+            stage: job.stage,
+            progress_percent: job.progress_percent,
+            metadata: job.metadata,
           });
 
-          setGenerationProgress(Math.min(70 + progress.progress * 0.3, 100));
+          // Update progress from backend's calculated progress_percent
+          setGenerationProgress(job.progress_percent || 0);
 
-          // Update scene statuses based on progress
-          if (progress.current_stage === "rendering") {
-            const updatedScenes = scenes.map((scene, idx) => {
-              const sceneProgress = (idx + 1) / scenes.length;
-              if (progress.progress / 100 >= sceneProgress) {
-                return { ...scene, status: "complete" };
-              } else if (progress.progress / 100 >= sceneProgress - 0.1) {
-                return { ...scene, status: "rendering" };
-              }
-              return scene;
-            });
-            setScenes(updatedScenes);
+          // Update scene information from metadata if available
+          if (job.metadata) {
+            if (job.metadata.num_scenes) {
+              setSceneCount(job.metadata.num_scenes);
+            }
+            if (job.metadata.current_scene) {
+              setCurrentScene(job.metadata.current_scene);
+            }
+            if (job.metadata.scenes_complete !== undefined) {
+              setCurrentScene(job.metadata.scenes_complete);
+            }
           }
 
-          if (progress.status === "completed" || progress.status === "ready") {
+          // Update generation state based on stage
+          if (job.stage) {
+            if (job.stage === "script_generating") {
+              setGenerationState("planning");
+            } else if (
+              job.stage.startsWith("scene_") ||
+              job.stage === "audio_generating" ||
+              job.stage === "composing"
+            ) {
+              setGenerationState("rendering");
+            }
+          }
+
+          if (job.status === "completed") {
             console.log("[CREATE] ✅ Video generation completed!");
             if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
             setGenerationState("ready");
             setGenerationProgress(100);
 
-            // Get final job to get video URL
-            console.log("[CREATE] 📥 Fetching final job details...");
-            const job = await jobs.get(jobId);
-            console.log("[CREATE] 📥 Final job data:", job);
-
-            if (job.video_url || job.video_key) {
-              const videoUrl =
-                job.video_url ||
-                `https://your-s3-bucket.s3.amazonaws.com/${job.video_key}`;
-              console.log("[CREATE] 🎬 Video URL:", videoUrl);
+            if (job.video_url) {
+              console.log("[CREATE] 🎬 Video URL:", job.video_url);
+              setVideoPreview(job.video_url);
+            } else if (job.video_key) {
+              // Fallback: construct URL from key (though backend should provide video_url)
+              const videoUrl = `https://your-s3-bucket.s3.amazonaws.com/${job.video_key}`;
+              console.log("[CREATE] 🎬 Video URL (constructed):", videoUrl);
               setVideoPreview(videoUrl);
             }
             setIsGenerating(false);
-          } else if (progress.status === "failed") {
+          } else if (job.status === "failed") {
             console.error("[CREATE] ❌ Video generation failed");
             if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
             setGenerationState("error");
-            setGenerationError("Video generation failed");
+            setGenerationError(job.error_message || "Video generation failed");
             setIsGenerating(false);
           } else {
             // Continue polling
@@ -350,13 +317,16 @@ function Create() {
       progressPollTimeoutRef = setTimeout(pollProgress, progressPollInterval);
       window._createPollTimeout = progressPollTimeoutRef;
     } catch (error) {
-      console.error("[CREATE] ❌ Generation failed:", error);
+      console.error("\n" + "=".repeat(80));
+      console.error("❌ [ERROR] VIDEO GENERATION PIPELINE ERROR");
+      console.error("=".repeat(80));
+      console.error("[ERROR] Generation failed:", error);
       setGenerationState("error");
       setGenerationError(error.message || "Generation failed");
       setIsGenerating(false);
     }
 
-    console.log("=".repeat(60));
+    console.log("=".repeat(80));
   };
 
   // Get character counter class based on count

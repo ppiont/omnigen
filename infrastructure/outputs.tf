@@ -59,27 +59,6 @@ output "ecr_repository_url" {
   value       = module.compute.ecr_repository_url
 }
 
-# Serverless
-output "lambda_generator_name" {
-  description = "Generator Lambda function name"
-  value       = module.serverless.lambda_generator_name
-}
-
-output "lambda_composer_name" {
-  description = "Composer Lambda function name"
-  value       = module.serverless.lambda_composer_name
-}
-
-output "step_functions_arn" {
-  description = "Step Functions state machine ARN"
-  value       = module.serverless.step_functions_arn
-}
-
-output "step_functions_name" {
-  description = "Step Functions state machine name"
-  value       = module.serverless.step_functions_name
-}
-
 # Networking
 output "vpc_id" {
   description = "VPC ID"
@@ -112,25 +91,10 @@ output "ecs_task_role_arn" {
   value       = module.iam.ecs_task_role_arn
 }
 
-output "lambda_execution_role_arn" {
-  description = "Lambda execution role ARN"
-  value       = module.iam.lambda_execution_role_arn
-}
-
 # CloudWatch
 output "ecs_log_group_name" {
   description = "ECS CloudWatch log group name"
   value       = module.monitoring.ecs_log_group_name
-}
-
-output "lambda_generator_log_group_name" {
-  description = "Generator Lambda CloudWatch log group name"
-  value       = module.monitoring.lambda_generator_log_group_name
-}
-
-output "lambda_composer_log_group_name" {
-  description = "Composer Lambda CloudWatch log group name"
-  value       = module.monitoring.lambda_composer_log_group_name
 }
 
 # Authentication (Cognito)
@@ -215,7 +179,5 @@ output "quick_start_commands" {
 
     📝 View Logs:
     - ECS: aws logs tail ${module.monitoring.ecs_log_group_name} --follow
-    - Generator: aws logs tail ${module.monitoring.lambda_generator_log_group_name} --follow
-    - Composer: aws logs tail ${module.monitoring.lambda_composer_log_group_name} --follow
   EOT
 }

@@ -13,14 +13,14 @@ import (
 // HealthHandler handles health check requests
 type HealthHandler struct {
 	jobRepo   *repository.DynamoDBRepository
-	s3Service *repository.S3Service
+	s3Service *repository.S3AssetRepository
 	logger    *zap.Logger
 }
 
 // NewHealthHandler creates a new health handler
 func NewHealthHandler(
 	jobRepo *repository.DynamoDBRepository,
-	s3Service *repository.S3Service,
+	s3Service *repository.S3AssetRepository,
 	logger *zap.Logger,
 ) *HealthHandler {
 	return &HealthHandler{

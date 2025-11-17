@@ -74,7 +74,7 @@ variable "replicate_api_key_secret_arn" {
 variable "ecs_min_tasks" {
   description = "Minimum number of ECS tasks"
   type        = number
-  default     = 1
+  default     = 2 # Run 2 tasks for load balancing
 
   validation {
     condition     = var.ecs_min_tasks >= 1 && var.ecs_min_tasks <= 10
@@ -85,7 +85,7 @@ variable "ecs_min_tasks" {
 variable "ecs_max_tasks" {
   description = "Maximum number of ECS tasks"
   type        = number
-  default     = 5
+  default     = 10 # Increased for video processing workload
 
   validation {
     condition     = var.ecs_max_tasks >= 1 && var.ecs_max_tasks <= 20
@@ -94,23 +94,23 @@ variable "ecs_max_tasks" {
 }
 
 variable "ecs_cpu" {
-  description = "CPU units for ECS tasks (1024 = 1 vCPU)"
+  description = "CPU units for ECS tasks (4096 = 4 vCPU for ARM64 Graviton)"
   type        = number
-  default     = 1024
+  default     = 4096 # 4 vCPU for video processing with ffmpeg
 
   validation {
-    condition     = contains([256, 512, 1024, 2048, 4096], var.ecs_cpu)
-    error_message = "ECS CPU must be 256, 512, 1024, 2048, or 4096."
+    condition     = contains([256, 512, 1024, 2048, 4096, 8192, 16384], var.ecs_cpu)
+    error_message = "ECS CPU must be 256, 512, 1024, 2048, 4096, 8192, or 16384."
   }
 }
 
 variable "ecs_memory" {
-  description = "Memory for ECS tasks in MB"
+  description = "Memory for ECS tasks in MB (16384 = 16 GB for ARM64 Graviton)"
   type        = number
-  default     = 2048
+  default     = 16384 # 16 GB for video processing with ffmpeg
 
   validation {
-    condition     = contains([512, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192], var.ecs_memory)
+    condition     = contains([512, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192, 16384, 30720], var.ecs_memory)
     error_message = "ECS memory must be valid for selected CPU."
   }
 }
@@ -123,61 +123,6 @@ variable "ecs_target_cpu_utilization" {
   validation {
     condition     = var.ecs_target_cpu_utilization >= 30 && var.ecs_target_cpu_utilization <= 90
     error_message = "Target CPU utilization must be between 30 and 90."
-  }
-}
-
-variable "lambda_generator_memory" {
-  description = "Memory allocation for generator Lambda in MB"
-  type        = number
-  default     = 2048
-
-  validation {
-    condition     = var.lambda_generator_memory >= 128 && var.lambda_generator_memory <= 10240
-    error_message = "Lambda memory must be between 128 and 10240 MB."
-  }
-}
-
-variable "lambda_composer_memory" {
-  description = "Memory allocation for composer Lambda in MB"
-  type        = number
-  default     = 10240
-
-  validation {
-    condition     = var.lambda_composer_memory >= 128 && var.lambda_composer_memory <= 10240
-    error_message = "Lambda memory must be between 128 and 10240 MB."
-  }
-}
-
-variable "lambda_timeout" {
-  description = "Timeout for Lambda functions in seconds"
-  type        = number
-  default     = 900
-
-  validation {
-    condition     = var.lambda_timeout >= 60 && var.lambda_timeout <= 900
-    error_message = "Lambda timeout must be between 60 and 900 seconds."
-  }
-}
-
-variable "lambda_generator_concurrency" {
-  description = "Reserved concurrent executions for generator Lambda"
-  type        = number
-  default     = 10
-
-  validation {
-    condition     = var.lambda_generator_concurrency >= 1 && var.lambda_generator_concurrency <= 100
-    error_message = "Concurrency must be between 1 and 100."
-  }
-}
-
-variable "lambda_composer_concurrency" {
-  description = "Reserved concurrent executions for composer Lambda"
-  type        = number
-  default     = 5
-
-  validation {
-    condition     = var.lambda_composer_concurrency >= 1 && var.lambda_composer_concurrency <= 100
-    error_message = "Concurrency must be between 1 and 100."
   }
 }
 

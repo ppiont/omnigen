@@ -14,9 +14,9 @@ import (
 
 // KlingAdapter implements VideoGeneratorAdapter for Kling v2.5 Turbo
 type KlingAdapter struct {
-	apiToken   string
-	httpClient *http.Client
-	logger     *zap.Logger
+	apiToken     string
+	httpClient   *http.Client
+	logger       *zap.Logger
 	modelVersion string
 }
 
@@ -28,7 +28,7 @@ func NewKlingAdapter(apiToken string, logger *zap.Logger) *KlingAdapter {
 			Timeout: 30 * time.Second,
 		},
 		logger:       logger,
-		modelVersion: "kwaivgi/kling-v2.5-turbo-pro:latest",
+		modelVersion: "kwaivgi/kling-v2.5-turbo-pro:939cd1851c5b112f284681b57ee9b0f36d0f913ba97de5845a7eef92d52837df",
 	}
 }
 
@@ -40,15 +40,15 @@ type KlingRequest struct {
 
 // KlingResponse represents the Replicate API response
 type KlingResponse struct {
-	ID         string                 `json:"id"`
-	Status     string                 `json:"status"`
-	Output     interface{}            `json:"output,omitempty"`
-	Error      string                 `json:"error,omitempty"`
-	Logs       string                 `json:"logs,omitempty"`
-	CreatedAt  string                 `json:"created_at"`
-	CompletedAt string                `json:"completed_at,omitempty"`
-	URLs       map[string]string      `json:"urls,omitempty"`
-	Input      map[string]interface{} `json:"input,omitempty"`
+	ID          string                 `json:"id"`
+	Status      string                 `json:"status"`
+	Output      interface{}            `json:"output,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	Logs        string                 `json:"logs,omitempty"`
+	CreatedAt   string                 `json:"created_at"`
+	CompletedAt string                 `json:"completed_at,omitempty"`
+	URLs        map[string]string      `json:"urls,omitempty"`
+	Input       map[string]interface{} `json:"input,omitempty"`
 }
 
 // GenerateVideo submits a video generation request to Kling v2.5 Turbo
@@ -259,13 +259,13 @@ func (k *KlingAdapter) mapAspectRatio(ar string) string {
 
 // mapDuration maps our duration to Kling's duration
 // Kling v2.5 Turbo supports 5s or 10s clips
-func (k *KlingAdapter) mapDuration(seconds int) string {
+func (k *KlingAdapter) mapDuration(seconds int) int {
 	// For longer videos, we'll need to generate multiple clips
 	// For now, use 10s as the base clip duration
 	if seconds <= 5 {
-		return "5"
+		return 5
 	}
-	return "10"
+	return 10
 }
 
 // mapStatus maps Replicate status to our status format

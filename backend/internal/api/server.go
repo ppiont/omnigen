@@ -3,9 +3,9 @@ package api
 import (
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/sfn"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/omnigen/backend/internal/adapters"
 	"github.com/omnigen/backend/internal/api/handlers"
 	"github.com/omnigen/backend/internal/api/middleware"
 	"github.com/omnigen/backend/internal/auth"
@@ -18,25 +18,23 @@ import (
 
 // ServerConfig holds the server configuration
 type ServerConfig struct {
-	Port                string
-	Environment         string
-	Logger              *zap.Logger
-	JobRepo             *repository.DynamoDBRepository
-	S3Service           *repository.S3Service
-	UsageRepo           *repository.UsageRepository
-	GeneratorService    *service.GeneratorService
-	ParserService       *service.ParserService // Script generation service
-	APIKeys             []string               // Deprecated: Use JWTValidator instead
-	JWTValidator        *auth.JWTValidator
-	CookieConfig        auth.CookieConfig // Cookie configuration for httpOnly tokens
-	CloudFrontDomain    string            // For CORS in production
-	CognitoDomain       string            // Cognito hosted UI domain for CORS
-	LambdaClient        interface{}       // Lambda client for async script generation
-	LambdaParserARN     string            // Parser Lambda ARN
-	StepFunctionsClient interface{}       // Step Functions client
-	StepFunctionsARN    string            // Step Functions state machine ARN
-	ReadTimeout         time.Duration
-	WriteTimeout        time.Duration
+	Port             string
+	Environment      string
+	Logger           *zap.Logger
+	JobRepo          *repository.DynamoDBRepository
+	S3Service        *repository.S3AssetRepository // For presigned URLs and video uploads/downloads
+	UsageRepo        *repository.DynamoDBUsageRepository
+	ParserService    *service.ParserService   // Script generation service
+	KlingAdapter     *adapters.KlingAdapter   // Kling video generation
+	MinimaxAdapter   *adapters.MinimaxAdapter // Minimax audio generation
+	AssetsBucket     string                   // S3 bucket for video assets
+	APIKeys          []string                 // Deprecated: Use JWTValidator instead
+	JWTValidator     *auth.JWTValidator
+	CookieConfig     auth.CookieConfig // Cookie configuration for httpOnly tokens
+	CloudFrontDomain string            // For CORS in production
+	CognitoDomain    string            // Cognito hosted UI domain for CORS
+	ReadTimeout      time.Duration
+	WriteTimeout     time.Duration
 }
 
 // Server represents the HTTP server
@@ -142,18 +140,14 @@ func (s *Server) setupRoutes() {
 	s.config.Logger.Info("Auth enabled for API routes")
 
 	{
-		// Initialize handlers
-		// Step Functions service
-		stepFunctionsService := service.NewStepFunctionsService(
-			s.config.StepFunctionsClient.(*sfn.Client),
-			s.config.StepFunctionsARN,
-			s.config.Logger,
-		)
-
+		// Initialize handlers with goroutine-based async architecture
 		generateHandler := handlers.NewGenerateHandler(
 			s.config.ParserService,
-			stepFunctionsService,
+			s.config.KlingAdapter,
+			s.config.MinimaxAdapter,
+			s.config.S3Service,
 			s.config.JobRepo,
+			s.config.AssetsBucket,
 			s.config.Logger,
 		)
 
@@ -167,16 +161,8 @@ func (s *Server) setupRoutes() {
 			s.config.Logger,
 		)
 
-		// Type assert Lambda client
-		var lambdaClient interface{}
-		if s.config.LambdaClient != nil {
-			lambdaClient = s.config.LambdaClient
-		}
-
 		parserHandler := handlers.NewParserHandler(
 			s.config.ParserService,
-			lambdaClient,
-			s.config.LambdaParserARN,
 			s.config.Logger,
 		)
 
@@ -190,6 +176,7 @@ func (s *Server) setupRoutes() {
 
 		// Job routes
 		v1.GET("/jobs/:id", jobsHandler.GetJob)
+		v1.GET("/jobs/:id/stream", jobsHandler.StreamJobUpdates) // SSE endpoint
 		v1.GET("/jobs", jobsHandler.ListJobs)
 		v1.DELETE("/jobs/:id", jobsHandler.DeleteJob)
 		v1.GET("/jobs/:id/progress", progressHandler.GetProgress)

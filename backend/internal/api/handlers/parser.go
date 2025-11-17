@@ -1,16 +1,10 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/lambda"
-	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/omnigen/backend/internal/auth"
 	"github.com/omnigen/backend/internal/domain"
 	"github.com/omnigen/backend/internal/service"
@@ -20,24 +14,18 @@ import (
 
 // ParserHandler handles script generation and management
 type ParserHandler struct {
-	parserService   *service.ParserService
-	lambdaClient    interface{} // interface{} to avoid import cycles
-	lambdaParserARN string
-	logger          *zap.Logger
+	parserService *service.ParserService
+	logger        *zap.Logger
 }
 
 // NewParserHandler creates a new parser handler
 func NewParserHandler(
 	parserService *service.ParserService,
-	lambdaClient interface{},
-	lambdaParserARN string,
 	logger *zap.Logger,
 ) *ParserHandler {
 	return &ParserHandler{
-		parserService:   parserService,
-		lambdaClient:    lambdaClient,
-		lambdaParserARN: lambdaParserARN,
-		logger:          logger,
+		parserService: parserService,
+		logger:        logger,
 	}
 }
 
@@ -95,112 +83,46 @@ func (h *ParserHandler) Parse(c *gin.Context) {
 		zap.Int("duration", req.Duration),
 	)
 
-	// Generate script ID
-	scriptID := fmt.Sprintf("script-%s", uuid.New().String())
-
-	// Create script stub with status="generating"
-	scriptStub := &domain.Script{
-		ScriptID:  scriptID,
-		UserID:    userID,
-		Status:    "generating",
-		CreatedAt: time.Now().Unix(),
-		UpdatedAt: time.Now().Unix(),
-		ExpiresAt: time.Now().Add(30 * 24 * time.Hour).Unix(), // 30-day TTL
-	}
-
-	// Save script stub to DynamoDB immediately
-	if err := h.parserService.SaveScript(c.Request.Context(), scriptStub); err != nil {
-		h.logger.Error("Failed to save script stub",
-			zap.String("trace_id", traceID.(string)),
-			zap.String("script_id", scriptID),
-			zap.Error(err),
-		)
-		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
-			Error: errors.ErrInternalServer.WithDetails(map[string]interface{}{
-				"error": "Failed to create script",
-			}),
-		})
-		return
-	}
-
-	// Prepare Lambda invocation payload
-	lambdaInput := map[string]interface{}{
-		"script_id":       scriptID,
-		"user_id":         userID,
-		"prompt":          req.Prompt,
-		"duration":        req.Duration,
-		"product_name":    req.ProductName,
-		"target_audience": req.TargetAudience,
-	}
-
+	// Build comprehensive prompt from request fields
+	fullPrompt := fmt.Sprintf("%s. Product: %s. Target audience: %s", req.Prompt, req.ProductName, req.TargetAudience)
 	if req.BrandVibe != "" {
-		lambdaInput["brand_vibe"] = req.BrandVibe
+		fullPrompt += fmt.Sprintf(". Brand vibe: %s", req.BrandVibe)
 	}
 
-	payload, err := json.Marshal(lambdaInput)
-	if err != nil {
-		h.logger.Error("Failed to marshal Lambda payload",
-			zap.String("trace_id", traceID.(string)),
-			zap.Error(err),
-		)
-		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
-			Error: errors.ErrInternalServer,
-		})
-		return
-	}
-
-	// Invoke Parser Lambda asynchronously
-	lambdaClient, ok := h.lambdaClient.(*lambda.Client)
-	if !ok || lambdaClient == nil {
-		h.logger.Error("Lambda client not configured",
-			zap.String("trace_id", traceID.(string)),
-			zap.String("script_id", scriptID),
-		)
-		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
-			Error: errors.ErrInternalServer.WithDetails(map[string]interface{}{
-				"error": "Lambda client not configured",
-			}),
-		})
-		return
-	}
-
-	_, err = lambdaClient.Invoke(c.Request.Context(), &lambda.InvokeInput{
-		FunctionName:   aws.String(h.lambdaParserARN),
-		InvocationType: types.InvocationTypeEvent, // Async invocation
-		Payload:        payload,
+	// Call ParserService directly to generate script
+	script, err := h.parserService.GenerateScript(c.Request.Context(), service.ParseRequest{
+		UserID:      userID,
+		Prompt:      fullPrompt,
+		Duration:    req.Duration,
+		AspectRatio: "16:9", // Default aspect ratio for /parse endpoint
 	})
 
 	if err != nil {
-		h.logger.Error("Failed to invoke Parser Lambda",
+		h.logger.Error("Failed to generate script",
 			zap.String("trace_id", traceID.(string)),
-			zap.String("script_id", scriptID),
+			zap.String("user_id", userID),
 			zap.Error(err),
 		)
-
-		// Mark script as failed
-		scriptStub.Status = "failed"
-		h.parserService.SaveScript(c.Request.Context(), scriptStub)
-
 		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{
 			Error: errors.ErrInternalServer.WithDetails(map[string]interface{}{
-				"error": "Failed to start script generation",
+				"error": "Failed to generate script",
 			}),
 		})
 		return
 	}
 
-	h.logger.Info("Parser Lambda invoked successfully",
+	h.logger.Info("Script generated successfully",
 		zap.String("trace_id", traceID.(string)),
-		zap.String("script_id", scriptID),
+		zap.String("script_id", script.ScriptID),
 	)
 
 	response := ParseResponse{
-		ScriptID: scriptID,
-		Status:   "generating",
-		Message:  "Script generation started. Use GET /scripts/{script_id} to check status.",
+		ScriptID: script.ScriptID,
+		Status:   script.Status,
+		Message:  "Script generated successfully.",
 	}
 
-	c.JSON(http.StatusAccepted, response)
+	c.JSON(http.StatusOK, response)
 }
 
 // GetScript handles GET /api/v1/scripts/:id

@@ -16,14 +16,14 @@ import (
 // JobsHandler handles job-related requests
 type JobsHandler struct {
 	jobRepo   *repository.DynamoDBRepository
-	s3Service *repository.S3Service
+	s3Service *repository.S3AssetRepository
 	logger    *zap.Logger
 }
 
 // NewJobsHandler creates a new jobs handler
 func NewJobsHandler(
 	jobRepo *repository.DynamoDBRepository,
-	s3Service *repository.S3Service,
+	s3Service *repository.S3AssetRepository,
 	logger *zap.Logger,
 ) *JobsHandler {
 	return &JobsHandler{
@@ -35,15 +35,18 @@ func NewJobsHandler(
 
 // JobResponse represents a job status response
 type JobResponse struct {
-	JobID        string  `json:"job_id"`
-	Status       string  `json:"status"`
-	Prompt       string  `json:"prompt"`
-	Duration     int     `json:"duration"`
-	Style        string  `json:"style,omitempty"`
-	VideoURL     *string `json:"video_url,omitempty"`
-	CreatedAt    int64   `json:"created_at"`
-	CompletedAt  *int64  `json:"completed_at,omitempty"`
-	ErrorMessage *string `json:"error_message,omitempty"`
+	JobID           string                 `json:"job_id"`
+	Status          string                 `json:"status"`
+	Stage           string                 `json:"stage,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	ProgressPercent int                    `json:"progress_percent"`
+	Prompt          string                 `json:"prompt"`
+	Duration        int                    `json:"duration"`
+	VideoURL        *string                `json:"video_url,omitempty"`
+	CreatedAt       int64                  `json:"created_at"`
+	UpdatedAt       int64                  `json:"updated_at"`
+	CompletedAt     *int64                 `json:"completed_at,omitempty"`
+	ErrorMessage    *string                `json:"error_message,omitempty"`
 }
 
 // ListJobsResponse represents a list of jobs
@@ -100,15 +103,18 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 	}
 
 	response := JobResponse{
-		JobID:        job.JobID,
-		Status:       job.Status,
-		Prompt:       job.Prompt,
-		Duration:     job.Duration,
-		Style:        job.Style,
-		VideoURL:     videoURL,
-		CreatedAt:    job.CreatedAt,
-		CompletedAt:  job.CompletedAt,
-		ErrorMessage: job.ErrorMessage,
+		JobID:           job.JobID,
+		Status:          job.Status,
+		Stage:           job.Stage,
+		Metadata:        job.Metadata,
+		ProgressPercent: calculateProgress(job.Stage),
+		Prompt:          job.Prompt,
+		Duration:        job.Duration,
+		VideoURL:        videoURL,
+		CreatedAt:       job.CreatedAt,
+		UpdatedAt:       job.UpdatedAt,
+		CompletedAt:     job.CompletedAt,
+		ErrorMessage:    job.ErrorMessage,
 	}
 
 	c.JSON(http.StatusOK, response)

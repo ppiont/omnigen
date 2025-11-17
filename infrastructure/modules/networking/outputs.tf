@@ -28,11 +28,6 @@ output "ecs_security_group_id" {
   value       = aws_security_group.ecs.id
 }
 
-output "lambda_security_group_id" {
-  description = "Lambda security group ID"
-  value       = aws_security_group.lambda.id
-}
-
 output "nat_gateway_id" {
   description = "NAT Gateway ID"
   value       = var.enable_nat_gateway ? aws_nat_gateway.main[0].id : null

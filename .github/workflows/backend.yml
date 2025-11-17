@@ -12,12 +12,6 @@ on:
       - 'backend/**'
       - '.github/workflows/backend.yml'
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Infrastructure (Terraform)"]
-    types:
-      - completed
-    branches:
-      - master
 
 permissions:
   id-token: write
@@ -56,6 +50,9 @@ jobs:
         run: go mod download
 
       - name: Build
+        env:
+          GOOS: linux
+          GOARCH: arm64
         run: go build -v ./cmd/api
 
       - name: Run tests
@@ -66,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: build-test
-    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     outputs:
       image_uri: ${{ steps.build.outputs.image_uri }}
 
@@ -109,9 +106,11 @@ jobs:
           ECR_REPOSITORY: omnigen-api
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Build for linux/amd64 (ECS requirement)
+          # Build for linux/arm64 (ECS Graviton) with layer caching
           docker buildx build \
-            --platform linux/amd64 \
+            --platform linux/arm64 \
+            --cache-from type=registry,ref=$ECR_REGISTRY/$ECR_REPOSITORY:buildcache \
+            --cache-to type=registry,ref=$ECR_REGISTRY/$ECR_REPOSITORY:buildcache,mode=max \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --push \
@@ -133,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: docker-build-push
-    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
 
     steps:
       - name: Checkout code

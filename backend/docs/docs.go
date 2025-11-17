@@ -160,7 +160,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Starts Step Functions workflow to generate video from an approved script",
+                "description": "Creates job immediately and processes video generation in background goroutine",
                 "consumes": [
                     "application/json"
                 ],
@@ -170,10 +170,10 @@ const docTemplate = `{
                 "tags": [
                     "jobs"
                 ],
-                "summary": "Start video generation from approved script",
+                "summary": "Generate video from prompt with intelligent parsing",
                 "parameters": [
                     {
-                        "description": "Script ID to generate video from",
+                        "description": "Video generation parameters",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -196,25 +196,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Unauthorized - Invalid or missing JWT token",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "402": {
-                        "description": "Payment Required - Monthly quota exceeded",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Script not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests - Rate limit exceeded",
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -366,6 +348,46 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/jobs/{id}/stream": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams job progress updates using Server-Sent Events (SSE)",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Stream job status updates in real-time",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Event stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1319,10 +1341,30 @@ const docTemplate = `{
         "handlers.GenerateRequest": {
             "type": "object",
             "required": [
-                "script_id"
+                "aspect_ratio",
+                "duration",
+                "prompt"
             ],
             "properties": {
-                "script_id": {
+                "aspect_ratio": {
+                    "type": "string",
+                    "enum": [
+                        "16:9",
+                        "9:16",
+                        "1:1"
+                    ]
+                },
+                "duration": {
+                    "type": "integer",
+                    "maximum": 60,
+                    "minimum": 10
+                },
+                "prompt": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "minLength": 10
+                },
+                "start_image": {
                     "type": "string"
                 }
             }
@@ -1333,12 +1375,14 @@ const docTemplate = `{
                 "created_at": {
                     "type": "integer"
                 },
-                "estimated_completion": {
-                    "description": "in seconds",
+                "estimated_completion_seconds": {
                     "type": "integer"
                 },
                 "job_id": {
                     "type": "string"
+                },
+                "num_clips": {
+                    "type": "integer"
                 },
                 "status": {
                     "type": "string"
@@ -1380,14 +1424,24 @@ const docTemplate = `{
                 "job_id": {
                     "type": "string"
                 },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "progress_percent": {
+                    "type": "integer"
+                },
                 "prompt": {
+                    "type": "string"
+                },
+                "stage": {
                     "type": "string"
                 },
                 "status": {
                     "type": "string"
                 },
-                "style": {
-                    "type": "string"
+                "updated_at": {
+                    "type": "integer"
                 },
                 "video_url": {
                     "type": "string"
