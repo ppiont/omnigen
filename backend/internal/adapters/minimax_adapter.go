@@ -29,7 +29,7 @@ func NewMinimaxAdapter(apiToken string, logger *zap.Logger) *MinimaxAdapter {
 			Timeout: 30 * time.Second,
 		},
 		logger:       logger,
-		modelVersion: "minimax/music-1.5:latest",
+		modelVersion: "minimax/music-1.5:70c8395540eae909be2c09a0b4897d22ee2455a5e5c9826b71161743b5cc45f1",
 	}
 }
 
