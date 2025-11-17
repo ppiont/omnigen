@@ -145,7 +145,8 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 
 	httpReq.Header.Set("Authorization", "Bearer "+g.apiToken)
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Prefer", "wait") // Wait for completion if possible
+	// Don't use Prefer: wait to avoid 60-second timeout - we'll poll instead
+	// httpReq.Header.Set("Prefer", "wait")
 
 	resp, err := g.httpClient.Do(httpReq)
 	if err != nil {
@@ -164,8 +165,18 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 
 	var gpt4oResp GPT4oResponse
 	if err := json.Unmarshal(body, &gpt4oResp); err != nil {
+		g.logger.Error("Failed to unmarshal initial response",
+			zap.Error(err),
+			zap.String("body_preview", string(body)[:min(1000, len(body))]),
+		)
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
+
+	g.logger.Info("Initial GPT-4o response",
+		zap.String("prediction_id", gpt4oResp.ID),
+		zap.String("status", gpt4oResp.Status),
+		zap.Int("initial_output_chunks", len(gpt4oResp.Output)),
+	)
 
 	// If output not ready, poll for completion
 	if gpt4oResp.Status != "succeeded" {
@@ -234,8 +245,11 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 		scriptJSON += part
 	}
 
-	g.logger.Debug("Received GPT-4o output",
-		zap.String("output", scriptJSON[:min(500, len(scriptJSON))]),
+	g.logger.Info("Received GPT-4o output",
+		zap.Int("output_length", len(scriptJSON)),
+		zap.Int("output_chunks", len(gpt4oResp.Output)),
+		zap.String("output_preview", scriptJSON[:min(500, len(scriptJSON))]),
+		zap.String("output_end", scriptJSON[max(0, len(scriptJSON)-200):]),
 	)
 
 	// Parse JSON into Script struct
@@ -353,7 +367,8 @@ Provide a concise 2-3 sentence description that captures the essence of this vis
 
 	httpReq.Header.Set("Authorization", "Bearer "+g.apiToken)
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Prefer", "wait") // Wait for completion
+	// Don't use Prefer: wait to avoid 60-second timeout - we'll poll instead
+	// httpReq.Header.Set("Prefer", "wait")
 
 	resp, err := g.httpClient.Do(httpReq)
 	if err != nil {
@@ -569,6 +584,14 @@ func validateScript(script *domain.Script, requestedDuration int) error {
 // min returns the minimum of two integers
 func min(a, b int) int {
 	if a < b {
+		return a
+	}
+	return b
+}
+
+// max returns the maximum of two integers
+func max(a, b int) int {
+	if a > b {
 		return a
 	}
 	return b
