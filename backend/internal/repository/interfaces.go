@@ -15,17 +15,8 @@ type JobRepository interface {
 	// GetJob retrieves a job by ID
 	GetJob(ctx context.Context, jobID string) (*domain.Job, error)
 
-	// GetJobsByUser retrieves all jobs for a user
-	GetJobsByUser(ctx context.Context, userID string, limit int) ([]*domain.Job, error)
-
-	// UpdateJob updates an entire job record
-	UpdateJob(ctx context.Context, job *domain.Job) error
-
-	// UpdateJobStatus updates only the job status
-	UpdateJobStatus(ctx context.Context, jobID string, status string) error
-
-	// UpdateJobStage updates the job stage
-	UpdateJobStage(ctx context.Context, jobID string, stage string) error
+	// GetJobsByUser retrieves all jobs for a user, optionally filtered by status
+	GetJobsByUser(ctx context.Context, userID string, limit int, status string) ([]*domain.Job, error)
 
 	// UpdateJobStageWithMetadata updates stage and metadata atomically
 	UpdateJobStageWithMetadata(ctx context.Context, jobID string, stage string, metadata map[string]interface{}) error

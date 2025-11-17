@@ -46,6 +46,12 @@ type JobResponse struct {
 	UpdatedAt       int64                  `json:"updated_at"`
 	CompletedAt     *int64                 `json:"completed_at,omitempty"`
 	ErrorMessage    *string                `json:"error_message,omitempty"`
+
+	// Progress fields
+	ThumbnailURL    string   `json:"thumbnail_url,omitempty"`
+	AudioURL        string   `json:"audio_url,omitempty"`
+	ScenesCompleted int      `json:"scenes_completed,omitempty"`
+	SceneVideoURLs  []string `json:"scene_video_urls,omitempty"`
 }
 
 // ListJobsResponse represents a list of jobs
@@ -114,6 +120,10 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		UpdatedAt:       job.UpdatedAt,
 		CompletedAt:     job.CompletedAt,
 		ErrorMessage:    job.ErrorMessage,
+		ThumbnailURL:    job.ThumbnailURL,
+		AudioURL:        job.AudioURL,
+		ScenesCompleted: job.ScenesCompleted,
+		SceneVideoURLs:  job.SceneVideoURLs,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -142,13 +152,17 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 		pageSize = 20
 	}
 
+	// Get optional status filter
+	status := c.Query("status")
+
 	h.logger.Info("Listing jobs",
 		zap.String("user_id", userID),
 		zap.Int("page_size", pageSize),
+		zap.String("status_filter", status),
 	)
 
-	// Get jobs for user
-	jobs, err := h.jobRepo.GetJobsByUser(c.Request.Context(), userID, pageSize)
+	// Get jobs for user with optional status filter
+	jobs, err := h.jobRepo.GetJobsByUser(c.Request.Context(), userID, pageSize, status)
 	if err != nil {
 		h.logger.Error("Failed to list jobs",
 			zap.String("user_id", userID),
@@ -179,17 +193,22 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 		}
 
 		jobResponses[i] = JobResponse{
-			JobID:        job.JobID,
-			Status:       job.Status,
-			Stage:        job.Stage,
-			Metadata:     job.Metadata,
-			VideoURL:     videoURL,
-			ErrorMessage: job.ErrorMessage,
-			Prompt:       job.Prompt,
-			Duration:     job.Duration,
-			CreatedAt:    job.CreatedAt,
-			UpdatedAt:    job.UpdatedAt,
-			CompletedAt:  job.CompletedAt,
+			JobID:           job.JobID,
+			Status:          job.Status,
+			Stage:           job.Stage,
+			Metadata:        job.Metadata,
+			ProgressPercent: calculateProgress(job.Stage),
+			VideoURL:        videoURL,
+			ErrorMessage:    job.ErrorMessage,
+			Prompt:          job.Prompt,
+			Duration:        job.Duration,
+			CreatedAt:       job.CreatedAt,
+			UpdatedAt:       job.UpdatedAt,
+			CompletedAt:     job.CompletedAt,
+			ThumbnailURL:    job.ThumbnailURL,
+			AudioURL:        job.AudioURL,
+			ScenesCompleted: job.ScenesCompleted,
+			SceneVideoURLs:  job.SceneVideoURLs,
 		}
 	}
 

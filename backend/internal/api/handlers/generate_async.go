@@ -66,16 +66,21 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		return
 	}
 
-	// Update job with script
+	// Embed script in job record
+	job.Title = script.Title
+	job.Scenes = script.Scenes
+	job.AudioSpec = script.AudioSpec
+	job.ScriptMetadata = script.Metadata
+
+	// Update job with embedded script
 	updateStage("script_complete", map[string]interface{}{
-		"script_id":  script.ScriptID,
 		"num_scenes": len(script.Scenes),
 		"audio_mood": script.AudioSpec.MusicMood,
 	})
 
-	h.logger.Info("Script generated successfully",
+	h.logger.Info("Script generated and embedded in job",
 		zap.String("job_id", job.JobID),
-		zap.String("script_id", script.ScriptID),
+		zap.String("title", script.Title),
 		zap.Int("num_scenes", len(script.Scenes)),
 		zap.String("audio_mood", script.AudioSpec.MusicMood),
 		zap.String("audio_style", script.AudioSpec.MusicStyle),

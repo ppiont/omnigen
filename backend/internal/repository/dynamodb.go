@@ -86,82 +86,6 @@ func (r *DynamoDBRepository) GetJob(ctx context.Context, jobID string) (*domain.
 	return &job, nil
 }
 
-// UpdateJobStatus updates the status of a job
-func (r *DynamoDBRepository) UpdateJobStatus(ctx context.Context, jobID string, status string) error {
-	_, err := r.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-		TableName: aws.String(r.tableName),
-		Key: map[string]types.AttributeValue{
-			"job_id": &types.AttributeValueMemberS{Value: jobID},
-		},
-		UpdateExpression: aws.String("SET #status = :status"),
-		ExpressionAttributeNames: map[string]string{
-			"#status": "status",
-		},
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":status": &types.AttributeValueMemberS{Value: status},
-		},
-	})
-	if err != nil {
-		r.logger.Error("Failed to update job status",
-			zap.String("job_id", jobID),
-			zap.String("status", status),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to update job status: %w", err)
-	}
-
-	return nil
-}
-
-// UpdateJob updates an entire job record
-func (r *DynamoDBRepository) UpdateJob(ctx context.Context, job *domain.Job) error {
-	item, err := attributevalue.MarshalMap(job)
-	if err != nil {
-		r.logger.Error("Failed to marshal job", zap.Error(err))
-		return fmt.Errorf("failed to marshal job: %w", err)
-	}
-
-	_, err = r.client.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String(r.tableName),
-		Item:      item,
-	})
-	if err != nil {
-		r.logger.Error("Failed to update job", zap.String("job_id", job.JobID), zap.Error(err))
-		return fmt.Errorf("failed to update job: %w", err)
-	}
-
-	return nil
-}
-
-// UpdateJobStage updates the stage and updated_at timestamp
-func (r *DynamoDBRepository) UpdateJobStage(ctx context.Context, jobID string, stage string) error {
-	_, err := r.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-		TableName: aws.String(r.tableName),
-		Key: map[string]types.AttributeValue{
-			"job_id": &types.AttributeValueMemberS{Value: jobID},
-		},
-		UpdateExpression: aws.String("SET #stage = :stage, #updated_at = :updated_at"),
-		ExpressionAttributeNames: map[string]string{
-			"#stage":      "stage",
-			"#updated_at": "updated_at",
-		},
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":stage":      &types.AttributeValueMemberS{Value: stage},
-			":updated_at": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", getCurrentTimestamp())},
-		},
-	})
-	if err != nil {
-		r.logger.Error("Failed to update job stage",
-			zap.String("job_id", jobID),
-			zap.String("stage", stage),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to update job stage: %w", err)
-	}
-
-	return nil
-}
-
 // UpdateJobStageWithMetadata atomically updates stage and metadata
 func (r *DynamoDBRepository) UpdateJobStageWithMetadata(
 	ctx context.Context,
@@ -286,7 +210,7 @@ func getCurrentTimestamp() int64 {
 }
 
 // GetJobsByUser retrieves all jobs for a user, sorted by creation time (newest first)
-func (r *DynamoDBRepository) GetJobsByUser(ctx context.Context, userID string, limit int) ([]*domain.Job, error) {
+func (r *DynamoDBRepository) GetJobsByUser(ctx context.Context, userID string, limit int, status string) ([]*domain.Job, error) {
 	input := &dynamodb.QueryInput{
 		TableName:              aws.String(r.tableName),
 		IndexName:              aws.String("UserJobsIndex"),
@@ -296,6 +220,15 @@ func (r *DynamoDBRepository) GetJobsByUser(ctx context.Context, userID string, l
 		},
 		ScanIndexForward: aws.Bool(false), // Sort by created_at descending (newest first)
 		Limit:            aws.Int32(int32(limit)),
+	}
+
+	// Add status filter if provided
+	if status != "" {
+		input.FilterExpression = aws.String("#status = :status")
+		input.ExpressionAttributeNames = map[string]string{
+			"#status": "status",
+		}
+		input.ExpressionAttributeValues[":status"] = &types.AttributeValueMemberS{Value: status}
 	}
 
 	result, err := r.client.Query(ctx, input)
