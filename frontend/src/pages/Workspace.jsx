@@ -4,7 +4,8 @@ import VideoPlayer from "../components/workspace/VideoPlayer";
 import ChatInterface from "../components/workspace/ChatInterface";
 import VideoMetadata from "../components/workspace/VideoMetadata";
 import ActionsToolbar from "../components/workspace/ActionsToolbar";
-import { jobs } from "../utils/api";
+import RefinementModal from "../components/workspace/RefinementModal";
+import { jobs, generate } from "../utils/api";
 import "../styles/workspace.css";
 
 /**
@@ -21,6 +22,8 @@ function Workspace() {
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState(null);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(null);
+  const [refinementModalOpen, setRefinementModalOpen] = useState(false);
+  const [refinementJobId, setRefinementJobId] = useState(null);
   const pollingIntervalRef = useRef(null);
   const pollingTimeoutRef = useRef(null);
   const retryTimeoutRef = useRef(null);
@@ -354,6 +357,117 @@ function Workspace() {
   const handleVideoRefresh = () => {
     console.log("[WORKSPACE] 🔄 Manual refresh requested");
     fetchJob(videoId, { showLoader: false });
+  };
+
+  /**
+   * Handles video refinement request from chat interface.
+   * Creates a new generation job with the refinement prompt.
+   *
+   * @param {string} refinementPrompt - User's refinement request
+   */
+  const handleRefine = useCallback(
+    async (refinementPrompt) => {
+      if (!jobData) {
+        console.warn("[WORKSPACE] ⚠️ Cannot refine: No job data");
+        throw new Error("No video data available");
+      }
+
+      console.log("=".repeat(80));
+      console.log("[WORKSPACE] 🎬 REFINEMENT REQUEST");
+      console.log("=".repeat(80));
+      console.log("[WORKSPACE] Original prompt:", jobData.prompt);
+      console.log("[WORKSPACE] Refinement prompt:", refinementPrompt);
+      console.log("[WORKSPACE] Original job ID:", jobData.job_id);
+
+      try {
+        // Build the refinement prompt by combining original prompt with refinement request
+        // For now, we'll use the refinement prompt directly (backend doesn't support parent_job_id yet)
+        const generateParams = {
+          prompt: refinementPrompt,
+          duration: jobData.duration || 10,
+          aspect_ratio: jobData.aspect_ratio || "16:9",
+        };
+
+        console.log("[WORKSPACE] 📡 Calling POST /api/v1/generate with params:", generateParams);
+
+        const generateResponse = await generate.create(generateParams);
+
+        const newJobId = generateResponse.job_id;
+        console.log("[WORKSPACE] ✅ Refinement job created");
+        console.log("[WORKSPACE] 🆔 New Job ID:", newJobId);
+
+        // Open modal and start tracking
+        setRefinementJobId(newJobId);
+        setRefinementModalOpen(true);
+
+        // Poll for completion and update video player when done
+        const pollForCompletion = async () => {
+          let pollCount = 0;
+          const maxPollAttempts = 300;
+          const pollInterval = 7000;
+
+          const poll = async () => {
+            pollCount++;
+            if (pollCount > maxPollAttempts) {
+              console.warn("[WORKSPACE] ⚠️ Max polling attempts reached for refinement");
+              return;
+            }
+
+            try {
+              const updatedJob = await jobs.get(newJobId);
+              console.log("[WORKSPACE] 📊 Refinement job status:", updatedJob.status);
+
+              if (updatedJob.status === "completed") {
+                console.log("[WORKSPACE] ✅ Refinement completed!");
+                console.log("[WORKSPACE] 🎬 New video URL:", updatedJob.video_url);
+
+                // Update the current job data with the new video
+                setJobData((prev) => ({
+                  ...prev,
+                  video_url: updatedJob.video_url,
+                  status: "completed",
+                }));
+
+                // Close modal after a brief delay
+                setTimeout(() => {
+                  setRefinementModalOpen(false);
+                  setRefinementJobId(null);
+                }, 1500);
+              } else if (updatedJob.status === "failed") {
+                console.error("[WORKSPACE] ❌ Refinement failed");
+                setRefinementModalOpen(false);
+                setRefinementJobId(null);
+              } else {
+                // Continue polling
+                setTimeout(poll, pollInterval);
+              }
+            } catch (error) {
+              console.error("[WORKSPACE] ⚠️ Error polling refinement:", error);
+              // Continue polling on error
+              setTimeout(poll, pollInterval);
+            }
+          };
+
+          // Start polling
+          setTimeout(poll, pollInterval);
+        };
+
+        // Start polling for completion
+        pollForCompletion();
+      } catch (error) {
+        console.error("[WORKSPACE] ❌ Refinement failed:", error);
+        throw error;
+      }
+    },
+    [jobData]
+  );
+
+  /**
+   * Closes the refinement modal.
+   */
+  const handleCloseRefinementModal = () => {
+    setRefinementModalOpen(false);
+    setRefinementJobId(null);
   };
 
   useEffect(() => {
@@ -738,10 +852,16 @@ function Workspace() {
 
           <div className="workspace-grid">
             <VideoMetadata key={jobData.job_id} jobData={jobData} />
-            <ChatInterface jobData={jobData} />
+            <ChatInterface jobData={jobData} onRefine={handleRefine} />
           </div>
         </main>
       </div>
+
+      <RefinementModal
+        isOpen={refinementModalOpen}
+        jobId={refinementJobId}
+        onClose={handleCloseRefinementModal}
+      />
     </div>
   );
 }

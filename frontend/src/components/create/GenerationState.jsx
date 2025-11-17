@@ -56,7 +56,9 @@ function GenerationState({
           ></div>
         </div>
         {sceneCount > 0 && (
-          <p className="state-detail">Scene breakdown: {sceneCount} clips planned</p>
+          <p className="state-detail">
+            Scene breakdown: {sceneCount} clips planned
+          </p>
         )}
       </div>
     );
@@ -116,7 +118,9 @@ function GenerationState({
       <div className="preview-state ready">
         <div className="state-icon">✅</div>
         <h4 className="state-title">Video Ready!</h4>
-        <p className="state-description">Your video has been generated successfully</p>
+        <p className="state-description">
+          Your video has been generated successfully
+        </p>
 
         {videoPreview && (
           <div className="video-thumbnail-preview">
@@ -128,16 +132,10 @@ function GenerationState({
         )}
 
         <div className="ready-actions">
-          <button
-            className="btn-view-workspace"
-            onClick={onViewWorkspace}
-          >
+          <button className="btn-view-workspace" onClick={onViewWorkspace}>
             View in Workspace
           </button>
-          <button
-            className="btn-generate-another"
-            onClick={onRetry}
-          >
+          <button className="btn-generate-another" onClick={onRetry}>
             Generate Another
           </button>
         </div>
