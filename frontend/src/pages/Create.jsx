@@ -557,7 +557,8 @@ function Create() {
                 </p>
               </div>
 
-              <div className="option-group">
+              {/* Options - Commented out (not currently implemented in backend) */}
+              {/* <div className="option-group">
                 <label className="option-label">Options</label>
                 <div className="toggle-group">
                   <div className="toggle-item">
@@ -580,7 +581,7 @@ function Create() {
                 <p className="option-helper">
                   Additional video enhancements and playback options
                 </p>
-              </div>
+              </div> */}
 
               {/* Batch Generation Toggle */}
               <BatchGenerationToggle />
