@@ -25,17 +25,10 @@ import (
 
 // @title OmniGen API
 // @version 1.0
-// @description AI video generation pipeline API for creating professional-quality video content
+// @description AI ad creative generation pipeline API for creating professional-quality ads
 // @termsOfService http://swagger.io/terms/
 
-// @contact.name API Support
-// @contact.url http://www.omnigen.ai/support
-// @contact.email support@omnigen.ai
-
-// @license.name MIT
-// @license.url https://opensource.org/licenses/MIT
-
-// @BasePath /
+// @BasePath /api/v1
 
 // @securityDefinitions.apikey BearerAuth
 // @in header
@@ -123,8 +116,6 @@ func main() {
 
 	parserService := service.NewParserService(
 		gpt4oAdapter,
-		awsClients.DynamoDB,
-		cfg.ScriptsTable,
 		zapLogger,
 	)
 	zapLogger.Info("Parser service initialized with GPT-4o")

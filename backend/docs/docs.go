@@ -10,15 +10,7 @@ const docTemplate = `{
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
         "termsOfService": "http://swagger.io/terms/",
-        "contact": {
-            "name": "API Support",
-            "url": "http://www.omnigen.ai/support",
-            "email": "support@omnigen.ai"
-        },
-        "license": {
-            "name": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-        },
+        "contact": {},
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -517,6 +509,9 @@ const docTemplate = `{
         "handlers.JobResponse": {
             "type": "object",
             "properties": {
+                "audio_url": {
+                    "type": "string"
+                },
                 "completed_at": {
                     "type": "integer"
                 },
@@ -542,10 +537,23 @@ const docTemplate = `{
                 "prompt": {
                     "type": "string"
                 },
+                "scene_video_urls": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "scenes_completed": {
+                    "type": "integer"
+                },
                 "stage": {
                     "type": "string"
                 },
                 "status": {
+                    "type": "string"
+                },
+                "thumbnail_url": {
+                    "description": "Progress fields",
                     "type": "string"
                 },
                 "updated_at": {
@@ -657,10 +665,10 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
 	Host:             "",
-	BasePath:         "/",
+	BasePath:         "/api/v1",
 	Schemes:          []string{},
 	Title:            "OmniGen API",
-	Description:      "AI video generation pipeline API for creating professional-quality video content",
+	Description:      "AI ad creative generation pipeline API for creating professional-quality ads",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

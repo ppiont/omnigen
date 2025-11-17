@@ -50,10 +50,6 @@ resource "aws_ecs_task_definition" "api" {
           value = var.dynamodb_usage_table_name
         },
         {
-          name  = "SCRIPTS_TABLE"
-          value = var.dynamodb_scripts_table_name
-        },
-        {
           name  = "REPLICATE_SECRET_ARN"
           value = var.replicate_secret_arn
         },
