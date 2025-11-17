@@ -5,13 +5,13 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend.yml'
-  workflow_dispatch:
-  workflow_run:
-    workflows: ["Infrastructure (Terraform)"]
-    types:
-      - completed
+  push:
     branches:
       - master
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: build-test
-    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     outputs:
       image_uri: ${{ steps.build.outputs.image_uri }}
 
@@ -132,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: docker-build-push
-    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_run')
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
 
     steps:
       - name: Checkout code

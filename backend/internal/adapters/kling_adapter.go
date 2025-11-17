@@ -259,13 +259,13 @@ func (k *KlingAdapter) mapAspectRatio(ar string) string {
 
 // mapDuration maps our duration to Kling's duration
 // Kling v2.5 Turbo supports 5s or 10s clips
-func (k *KlingAdapter) mapDuration(seconds int) string {
+func (k *KlingAdapter) mapDuration(seconds int) int {
 	// For longer videos, we'll need to generate multiple clips
 	// For now, use 10s as the base clip duration
 	if seconds <= 5 {
-		return "5"
+		return 5
 	}
-	return "10"
+	return 10
 }
 
 // mapStatus maps Replicate status to our status format

@@ -293,13 +293,23 @@ func (h *GenerateHandler) processVideo(
 	var lastFrameS3URL string
 	if lastFramePath != "" {
 		lastFrameS3Key := fmt.Sprintf("videos/%s/clip-%d-last-frame.jpg", jobID, clipNumber)
-		lastFrameS3URL, err = h.s3Service.UploadFile(ctx, h.assetsBucket, lastFrameS3Key, lastFramePath, "image/jpeg")
+		_, err = h.s3Service.UploadFile(ctx, h.assetsBucket, lastFrameS3Key, lastFramePath, "image/jpeg")
 		if err != nil {
 			h.logger.Warn("Failed to upload last frame, continuing",
 				zap.String("job_id", jobID),
 				zap.Error(err),
 			)
 			lastFrameS3URL = "" // Continue without last frame URL
+		} else {
+			// Generate presigned URL for Kling API access (valid for 1 hour)
+			lastFrameS3URL, err = h.s3Service.GetPresignedURL(ctx, lastFrameS3Key, 1*time.Hour)
+			if err != nil {
+				h.logger.Warn("Failed to generate presigned URL for last frame, continuing",
+					zap.String("job_id", jobID),
+					zap.Error(err),
+				)
+				lastFrameS3URL = "" // Continue without last frame URL
+			}
 		}
 	}
 
