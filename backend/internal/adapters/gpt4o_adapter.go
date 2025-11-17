@@ -44,6 +44,9 @@ type ScriptGenerationRequest struct {
 
 	// Enhanced prompt options (optional)
 	EnhancedOptions *prompts.EnhancedPromptOptions
+
+	// Style reference image - will be analyzed and converted to text description
+	StyleReferenceImage string
 }
 
 // GPT4oRequest matches the Replicate OpenAI GPT-4o API schema
@@ -66,6 +69,20 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 		zap.String("prompt", req.Prompt[:min(100, len(req.Prompt))]),
 		zap.Int("duration", req.Duration),
 	)
+
+	// Analyze style reference image if provided
+	var styleDescription string
+	if req.StyleReferenceImage != "" {
+		var err error
+		styleDescription, err = g.AnalyzeStyleReference(ctx, req.StyleReferenceImage)
+		if err != nil {
+			g.logger.Warn("Failed to analyze style reference image, continuing without it",
+				zap.Error(err),
+			)
+			// Continue without style description rather than failing completely
+			styleDescription = ""
+		}
+	}
 
 	// Build user prompt from request
 	userPrompt := buildUserPrompt(req)
@@ -203,7 +220,7 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 	)
 
 	// Parse JSON into Script struct
-	script, err := parseScriptJSON(scriptJSON)
+	script, err := g.parseScriptJSON(scriptJSON, styleDescription)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse script JSON: %w", err)
 	}
@@ -256,6 +273,138 @@ func (g *GPT4oAdapter) pollStatus(ctx context.Context, predictionID string) (*GP
 	return &gpt4oResp, nil
 }
 
+// AnalyzeStyleReference uses GPT-4o Vision to analyze a reference image and extract style description
+func (g *GPT4oAdapter) AnalyzeStyleReference(ctx context.Context, imageURL string) (string, error) {
+	g.logger.Info("Analyzing style reference image with GPT-4o Vision",
+		zap.String("image_url", imageURL[:min(100, len(imageURL))]),
+	)
+
+	// Build vision request with image
+	gpt4oReq := GPT4oRequest{
+		Version: g.modelVersion,
+		Input: map[string]interface{}{
+			"messages": []map[string]interface{}{
+				{
+					"role": "user",
+					"content": []map[string]interface{}{
+						{
+							"type": "text",
+							"text": `Analyze this image and describe its visual style in detail for video generation. Focus on:
+
+1. **Color Palette**: Dominant colors, color grading, saturation level
+2. **Lighting**: Lighting style (natural, dramatic, soft, hard), shadows, highlights
+3. **Mood & Atmosphere**: Overall feeling, emotional tone
+4. **Composition**: Framing style, visual balance, focal points
+5. **Texture & Detail**: Surface qualities, level of detail, sharpness
+6. **Cinematography**: Camera feel (static, dynamic), depth of field, perspective
+
+Provide a concise 2-3 sentence description that captures the essence of this visual style, suitable for adding to video generation prompts.`,
+						},
+						{
+							"type": "image_url",
+							"image_url": map[string]string{
+								"url": imageURL,
+							},
+						},
+					},
+				},
+			},
+			"temperature":           0.3, // Lower temperature for consistent style analysis
+			"max_completion_tokens": 500,
+		},
+	}
+
+	payload, err := json.Marshal(gpt4oReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Submit prediction to Replicate
+	httpReq, err := http.NewRequestWithContext(ctx, "POST",
+		"https://api.replicate.com/v1/predictions",
+		bytes.NewReader(payload))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+g.apiToken)
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Prefer", "wait") // Wait for completion
+
+	resp, err := g.httpClient.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var gpt4oResp GPT4oResponse
+	if err := json.Unmarshal(body, &gpt4oResp); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// If output not ready, poll for completion
+	if gpt4oResp.Status != "succeeded" && gpt4oResp.Output == nil {
+		g.logger.Info("Waiting for GPT-4o Vision analysis",
+			zap.String("prediction_id", gpt4oResp.ID),
+		)
+
+		// Poll for completion (max 1 minute)
+		maxAttempts := 12 // 12 * 5s = 1 minute
+		pollInterval := 5 * time.Second
+
+		for attempt := 0; attempt < maxAttempts; attempt++ {
+			select {
+			case <-ctx.Done():
+				return "", fmt.Errorf("context cancelled: %w", ctx.Err())
+			default:
+			}
+
+			time.Sleep(pollInterval)
+
+			pollResp, err := g.pollStatus(ctx, gpt4oResp.ID)
+			if err != nil {
+				g.logger.Warn("Failed to poll status, retrying", zap.Error(err))
+				continue
+			}
+
+			if pollResp.Status == "succeeded" && len(pollResp.Output) > 0 {
+				gpt4oResp = *pollResp
+				break
+			}
+
+			if pollResp.Status == "failed" || pollResp.Status == "canceled" {
+				return "", fmt.Errorf("Vision analysis failed: %s", pollResp.Error)
+			}
+		}
+	}
+
+	// Extract style description from output
+	if len(gpt4oResp.Output) == 0 {
+		return "", fmt.Errorf("no output from GPT-4o Vision")
+	}
+
+	// Concatenate all output chunks (GPT-4o streams response)
+	var styleDescription string
+	for _, chunk := range gpt4oResp.Output {
+		styleDescription += chunk
+	}
+
+	g.logger.Info("Style analysis complete",
+		zap.String("style_description", styleDescription[:min(200, len(styleDescription))]),
+	)
+
+	return styleDescription, nil
+}
+
 // buildUserPrompt constructs the user prompt from request parameters
 func buildUserPrompt(req *ScriptGenerationRequest) string {
 	prompt := fmt.Sprintf(`Create a %d-second advertisement video script based on this creative direction:
@@ -285,13 +434,27 @@ func buildUserPrompt(req *ScriptGenerationRequest) string {
 }
 
 // parseScriptJSON parses the GPT-4o JSON output into a Script struct
-func parseScriptJSON(scriptJSON string) (*domain.Script, error) {
+func (g *GPT4oAdapter) parseScriptJSON(scriptJSON string, styleDescription string) (*domain.Script, error) {
 	// Try to extract JSON if wrapped in markdown code blocks
 	cleaned := extractJSON(scriptJSON)
 
 	var script domain.Script
 	if err := json.Unmarshal([]byte(cleaned), &script); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal script: %w (JSON: %s)", err, cleaned[:min(200, len(cleaned))])
+	}
+
+	// Add style description to script and append to each scene's generation_prompt
+	if styleDescription != "" {
+		script.StyleDescription = styleDescription
+		g.logger.Info("Appending style description to scene prompts",
+			zap.String("style_description", styleDescription[:min(150, len(styleDescription))]),
+			zap.Int("num_scenes", len(script.Scenes)),
+		)
+
+		for i := range script.Scenes {
+			// Append style description to each scene's generation_prompt
+			script.Scenes[i].GenerationPrompt = script.Scenes[i].GenerationPrompt + ". Style: " + styleDescription
+		}
 	}
 
 	return &script, nil

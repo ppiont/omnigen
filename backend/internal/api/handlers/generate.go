@@ -57,7 +57,10 @@ type GenerateRequest struct {
 	Prompt      string `json:"prompt" binding:"required,min=10,max=2000"`
 	Duration    int    `json:"duration" binding:"required,min=10,max=60"`
 	AspectRatio string `json:"aspect_ratio" binding:"required,oneof=16:9 9:16 1:1"`
-	StartImage  string `json:"start_image,omitempty" binding:"omitempty,url"`
+
+	// Image options - TWO separate use cases:
+	StartImage         string `json:"start_image,omitempty" binding:"omitempty,url"`          // Used ONLY for first scene initialization
+	StyleReferenceImage string `json:"style_reference_image,omitempty" binding:"omitempty,url"` // Used to guide visual style across ALL clips
 
 	// Enhanced prompt options (Phase 1 - all optional)
 	Style             string `json:"style,omitempty" binding:"omitempty,oneof=cinematic documentary energetic minimal dramatic playful"`

@@ -60,6 +60,9 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		AspectRatio: req.AspectRatio,
 		StartImage:  req.StartImage,
 
+		// Style reference image - will be analyzed and converted to text
+		StyleReferenceImage: req.StyleReferenceImage,
+
 		// Enhanced prompt options (Phase 1)
 		Style:             req.Style,
 		Tone:              req.Tone,
@@ -115,7 +118,8 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 
 	// STEP 2: Generate video clips sequentially
 	var clipVideos []ClipVideo
-	var lastFrameURL string
+	// Initialize lastFrameURL with user's start_image (for first scene)
+	var lastFrameURL string = req.StartImage
 
 	for i, scene := range script.Scenes {
 		updateStage(fmt.Sprintf("scene_%d_generating", i+1), map[string]interface{}{
@@ -129,8 +133,21 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 			zap.Int("total", len(script.Scenes)),
 		)
 
-		// Merge last frame URL into scene for visual coherence
+		// Image selection logic (style is now handled via text in generation_prompt):
+		// 1. First scene: use user's start_image if provided
+		// 2. Subsequent scenes: use last frame from previous clip for visual continuity
 		scene.StartImageURL = lastFrameURL
+		if i == 0 && lastFrameURL != "" {
+			h.logger.Info("Using start image for first scene",
+				zap.String("job_id", job.JobID),
+				zap.String("start_image_url", lastFrameURL),
+			)
+		} else if lastFrameURL != "" {
+			h.logger.Info("Using last frame for visual continuity",
+				zap.String("job_id", job.JobID),
+				zap.Int("scene", i+1),
+			)
+		}
 
 		// Call Kling API (synchronous polling in this goroutine)
 		clipResult, err := h.generateClip(jobCtx, job.JobID, scene, req.AspectRatio, i+1)
