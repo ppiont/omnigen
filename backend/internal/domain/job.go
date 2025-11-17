@@ -12,12 +12,27 @@ type Job struct {
 	Title        string                 `dynamodbav:"title,omitempty" json:"title,omitempty"` // Video title
 	Duration     int                    `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
 	AspectRatio  string                 `dynamodbav:"aspect_ratio,omitempty" json:"aspect_ratio,omitempty"`
-	VideoKey     string                 `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"` // S3 key
-	CreatedAt    int64                  `dynamodbav:"created_at" json:"created_at"`
-	UpdatedAt    int64                  `dynamodbav:"updated_at" json:"updated_at"`
-	CompletedAt  *int64                 `dynamodbav:"completed_at,omitempty" json:"completed_at,omitempty"`
-	ErrorMessage *string                `dynamodbav:"error_message,omitempty" json:"error_message,omitempty"`
-	TTL          int64                  `dynamodbav:"ttl" json:"ttl"` // Unix timestamp for auto-deletion
+
+	// Enhanced prompt options (Phase 1 - all optional)
+	Style             string `dynamodbav:"style,omitempty" json:"style,omitempty"`
+	Tone              string `dynamodbav:"tone,omitempty" json:"tone,omitempty"`
+	Tempo             string `dynamodbav:"tempo,omitempty" json:"tempo,omitempty"`
+	Platform          string `dynamodbav:"platform,omitempty" json:"platform,omitempty"`
+	Audience          string `dynamodbav:"audience,omitempty" json:"audience,omitempty"`
+	Goal              string `dynamodbav:"goal,omitempty" json:"goal,omitempty"`
+	CallToAction      string `dynamodbav:"call_to_action,omitempty" json:"call_to_action,omitempty"`
+	ProCinematography bool   `dynamodbav:"pro_cinematography,omitempty" json:"pro_cinematography,omitempty"`
+	CreativeBoost     bool   `dynamodbav:"creative_boost,omitempty" json:"creative_boost,omitempty"`
+
+	// Embedded script data
+	Scenes []Scene `dynamodbav:"scenes,omitempty" json:"scenes,omitempty"`
+
+	VideoKey     string  `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"` // S3 key
+	CreatedAt    int64   `dynamodbav:"created_at" json:"created_at"`
+	UpdatedAt    int64   `dynamodbav:"updated_at" json:"updated_at"`
+	CompletedAt  *int64  `dynamodbav:"completed_at,omitempty" json:"completed_at,omitempty"`
+	ErrorMessage *string `dynamodbav:"error_message,omitempty" json:"error_message,omitempty"`
+	TTL          int64   `dynamodbav:"ttl" json:"ttl"` // Unix timestamp for auto-deletion
 }
 
 // GenerateRequest represents a video generation request
