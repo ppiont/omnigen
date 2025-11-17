@@ -276,8 +276,16 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 
 	// Combine output array into single string
 	var scriptJSON string
-	for _, part := range gpt4oResp.Output {
+	for i, part := range gpt4oResp.Output {
 		scriptJSON += part
+		// Log suspicious chunks
+		if i < 5 || i >= len(gpt4oResp.Output)-5 {
+			g.logger.Debug("Output chunk",
+				zap.Int("chunk_index", i),
+				zap.Int("chunk_length", len(part)),
+				zap.String("chunk_preview", part[:min(50, len(part))]),
+			)
+		}
 	}
 
 	g.logger.Info("Received GPT-4o output",
@@ -287,6 +295,19 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 		zap.String("output_preview", scriptJSON[:min(500, len(scriptJSON))]),
 		zap.String("output_end", scriptJSON[max(0, len(scriptJSON)-200):]),
 	)
+
+	// Try to find where valid JSON ends
+	lastBrace := strings.LastIndex(scriptJSON, "}")
+	if lastBrace > 0 && lastBrace < len(scriptJSON)-1 {
+		g.logger.Warn("Found content after last closing brace",
+			zap.Int("json_end_pos", lastBrace),
+			zap.Int("total_length", len(scriptJSON)),
+			zap.String("garbage_after_json", scriptJSON[lastBrace+1:min(lastBrace+100, len(scriptJSON))]),
+		)
+		// Truncate to last valid JSON closing brace
+		scriptJSON = scriptJSON[:lastBrace+1]
+		g.logger.Info("Truncated to last valid JSON brace", zap.Int("new_length", len(scriptJSON)))
+	}
 
 	// Log full output for debugging truncation issues
 	g.logger.Debug("Full GPT-4o output", zap.String("full_output", scriptJSON))
