@@ -25,6 +25,12 @@ function Signup() {
     const { name, value } = event.target;
     setValues((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
+
+    // Validate password field on every keystroke if already touched
+    if (name === "password" && touched.password) {
+      // Use setTimeout to validate with the new value
+      setTimeout(() => validateField("password"), 0);
+    }
   };
 
   const handleBlur = (field) => {
@@ -335,7 +341,7 @@ function Signup() {
                     {errors.password}
                   </p>
                 )}
-                {touched.password && (
+                {values.password && (
                   <PasswordStrength password={values.password} />
                 )}
               </div>
