@@ -339,6 +339,33 @@ function Create() {
             );
           }
         } catch (error) {
+          // Handle authentication errors - refresh token and retry
+          if (error.status === 401) {
+            console.warn(
+              `[CREATE] 🔄 Authentication expired during polling (poll #${pollCount}). Refreshing token...`
+            );
+            try {
+              // Refresh the session via backend
+              await auth.refresh();
+              console.log(
+                `[CREATE] ✅ Token refreshed successfully. Retrying poll...`
+              );
+              // Retry immediately after refresh
+              progressPollTimeoutRef = setTimeout(pollProgress, 1000);
+              return;
+            } catch (refreshError) {
+              console.error(
+                `[CREATE] ❌ Failed to refresh token:`,
+                refreshError
+              );
+              setError(
+                "Your session has expired. Please log in again and retry."
+              );
+              setIsGenerating(false);
+              return;
+            }
+          }
+
           // Handle rate limit errors
           if (error.status === 429) {
             const retryAfter = error.details?.reset_in || 60;
