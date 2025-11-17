@@ -125,7 +125,7 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 				},
 			},
 			"temperature":           temperature,
-			"max_completion_tokens": 16384, // Increased for complex scripts with many scenes
+			"max_completion_tokens": 8192, // Sufficient for complex 60s scripts with multiple scenes
 			"top_p":                 0.9,
 		},
 	}
@@ -174,8 +174,9 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 			zap.String("status", gpt4oResp.Status),
 		)
 
-		// Poll for completion (max 2 minutes)
-		maxAttempts := 24 // 24 * 5s = 2 minutes
+		// Poll for completion (max 5 minutes for script generation)
+		// Longer timeout because script generation can be complex with vision analysis
+		maxAttempts := 60 // 60 * 5s = 5 minutes
 		pollInterval := 5 * time.Second
 
 		for attempt := 0; attempt < maxAttempts; attempt++ {
