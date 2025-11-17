@@ -30,6 +30,12 @@ type LoginRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
+// ChangePasswordRequest represents the request body for password change endpoint
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required,min=1"`
+	NewPassword     string `json:"new_password" binding:"required,min=8"`
+}
+
 // UserResponse represents the user data returned to frontend
 type UserResponse struct {
 	UserID           string `json:"user_id"`
@@ -160,5 +166,65 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Logged out successfully",
+	})
+}
+
+// @Summary Change password
+// @Description Change the authenticated user's password (frontend handles Cognito interaction)
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body ChangePasswordRequest true "Password change details"
+// @Success 200 {object} map[string]string "Password changed successfully"
+// @Failure 400 {object} errors.ErrorResponse "Invalid request"
+// @Failure 401 {object} errors.ErrorResponse "Not authenticated"
+// @Failure 422 {object} errors.ErrorResponse "Validation failed"
+// @Router /api/v1/auth/change-password [post]
+// @Security BearerAuth
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("Invalid request body", zap.Error(err))
+		c.JSON(http.StatusBadRequest, errors.NewAPIError(
+			errors.ErrInvalidRequest,
+			"Invalid request body: "+err.Error(),
+			nil,
+		))
+		return
+	}
+
+	// Get user claims from JWT
+	claims, ok := auth.GetUserClaims(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, errors.NewAPIError(
+			errors.ErrUnauthorized,
+			"User not authenticated",
+			nil,
+		))
+		return
+	}
+
+	// Basic password validation (frontend handles more complex validation)
+	if len(req.NewPassword) < 8 {
+		c.JSON(http.StatusUnprocessableEntity, errors.NewAPIError(
+			errors.ErrInvalidRequest,
+			"New password must be at least 8 characters long",
+			map[string]interface{}{
+				"field": "new_password",
+				"min_length": 8,
+			},
+		))
+		return
+	}
+
+	h.logger.Info("Password change requested",
+		zap.String("user_id", claims.Sub),
+		zap.String("email", claims.Email),
+	)
+
+	// Note: The actual password change is handled by the frontend calling Cognito directly
+	// This endpoint serves as a validation layer and logging point
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Password change validation successful. Frontend should proceed with Cognito password change.",
 	})
 }

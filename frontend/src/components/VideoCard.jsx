@@ -59,7 +59,6 @@ function VideoCard({ video, onDownload, onDelete }) {
           title={isCompleted ? "Download" : "Video must be completed"}
         >
           <Download size={16} />
-          <span>Download</span>
         </button>
         <button
           type="button"

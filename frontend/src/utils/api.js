@@ -159,6 +159,22 @@ export const auth = {
     apiRequest('/api/v1/auth/refresh', {
       method: 'POST',
     }),
+
+  /**
+   * Change user password
+   * @param {Object} passwords - Password data
+   * @param {string} passwords.currentPassword - Current password
+   * @param {string} passwords.newPassword - New password
+   * @returns {Promise<{message: string}>}
+   */
+  changePassword: (passwords) =>
+    apiRequest('/api/v1/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        current_password: passwords.currentPassword,
+        new_password: passwords.newPassword,
+      }),
+    }),
 };
 
 /**
