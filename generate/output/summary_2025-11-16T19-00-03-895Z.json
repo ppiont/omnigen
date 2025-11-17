@@ -1,0 +1,52 @@
+{
+  "generatedAt": "2025-11-16T19:00:03.895Z",
+  "totalClips": 2,
+  "clips": [
+    {
+      "index": 1,
+      "url": "https://replicate.delivery/xezq/tC96zk8DdUJsNNEodSkonAQnvdpjg95oQkDcJkan3cSMQf0KA/tmptuy988ca.mp4",
+      "localFile": "clip_1_with_audio_1763319546243.mp4",
+      "scene": {
+        "prompt": "A dimly lit gaming arena, buzzing with tension and anticipation. Spotlight sweeps across a gamer, intensely focused on the screen, fingers flying over the keyboard. The neon-lit CrackFuel energy drink can sits beside the keyboard, glowing in the ambient light. The camera starts with a dramatic dolly-in from a wide shot of the arena to a medium close-up of the gamer's concentrated face, highlighting beads of sweat. The arena's LED screens flash dynamic graphics, enhancing the scene's electric atmosphere.",
+        "description": "The scene opens in a high-stakes gaming arena, focusing on a gamer in the heat of competition. The energy and tension are palpable as the gamer prepares for a critical match moment. The presence of CrackFuel subtly suggests it as the source of focus and energy.",
+        "duration": "8-10 seconds",
+        "sceneNumber": 1,
+        "structure": {
+          "camera": "Dramatic dolly-in from wide to medium close-up",
+          "lighting": "Dim ambient with spotlight and neon highlights",
+          "subject": "Gamer focused on screen, intense concentration",
+          "mood": "Tense, anticipatory, charged with energy",
+          "pacing": "Building tension with a gradual dolly-in",
+          "style": "Edgy, modern, with neon and LED accents",
+          "transition": "Match cut on the gamer's intense expression to the next scene"
+        }
+      },
+      "model": "Kling V2.5 Turbo Pro",
+      "generationTime": "132.2",
+      "error": null
+    },
+    {
+      "index": 2,
+      "url": "https://replicate.delivery/xezq/t2mCuihGvQa4GF1gj0ngMPYqQNaVeG7Ilf2oZTKWlElxC9pVA/tmppjpppouc.mp4",
+      "localFile": "clip_2_with_audio_1763319586921.mp4",
+      "scene": {
+        "prompt": "The moment transitions to the climax of the championship match. The gamer, now visibly energized, makes a clutch play as the crowd erupts in cheers. The camera captures a dynamic tracking shot around the gamer, highlighting the CrackFuel can on the desk, now prominently featured, as the gamer clenches a fist in victory. Bright, celebratory lights fill the arena, creating a triumphant atmosphere. The screen displays 'Champion!' in bold, flashing letters.",
+        "description": "The scene culminates in the gamer's victory moment, fueled by CrackFuel. The energy drink is associated with the clutch performance and the resulting championship win, creating a powerful visual tie between the product and success.",
+        "duration": "8-10 seconds",
+        "sceneNumber": 2,
+        "structure": {
+          "camera": "Dynamic tracking shot around the gamer",
+          "lighting": "Bright, celebratory with colorful arena lights",
+          "subject": "Gamer making a game-winning play, celebrating",
+          "mood": "Triumphant, exhilarating, victorious",
+          "pacing": "Fast-paced to capture the excitement of victory",
+          "style": "Vibrant, dynamic, with celebratory lighting",
+          "transition": "Fade out on the cheering crowd and 'Champion!' screen"
+        }
+      },
+      "model": "Kling V2.5 Turbo Pro",
+      "generationTime": "191.2",
+      "error": null
+    }
+  ]
+}
