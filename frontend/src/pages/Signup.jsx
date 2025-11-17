@@ -372,7 +372,7 @@ function Signup() {
               </div>
 
               <div className="auth-meta">
-                <span>Password must be 8+ characters</span>
+                <span>Password must be 8+ characters with uppercase, lowercase, number, and special character</span>
                 <Link to="/login">Sign in</Link>
               </div>
 
