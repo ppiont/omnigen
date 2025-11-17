@@ -148,7 +148,6 @@ function VideoMetadata({ jobData }) {
       label: "Aspect Ratio",
       value: jobData.aspect_ratio || "Not specified",
     },
-    { label: "Style", value: jobData.style || "Not specified" },
     { label: "Generated", value: formattedCreatedTime },
   ];
 
@@ -212,7 +211,6 @@ function VideoMetadata({ jobData }) {
             placeholder={DEFAULT_TITLE}
             aria-label="Video title"
           />
-          <p className="metadata-helper">Title saves locally on this device</p>
         </div>
 
         <div className="metadata-field metadata-status">
@@ -220,11 +218,6 @@ function VideoMetadata({ jobData }) {
           <span className={`status-badge ${statusVariant.className}`}>
             {statusVariant.label}
           </span>
-        </div>
-
-        <div className="metadata-field metadata-job-id">
-          <span className="metadata-label">Job ID</span>
-          <code className="metadata-code">{jobData.job_id}</code>
         </div>
 
         <div className="metadata-grid">

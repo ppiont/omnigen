@@ -1535,3 +1535,179 @@
     height: 18px;
   }
 }
+
+/* Refinement Modal Styles */
+.refinement-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(3, 17, 8, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-16);
+  animation: fadeIn 0.2s ease;
+}
+
+.refinement-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-32);
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease;
+}
+
+.refinement-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-24);
+}
+
+.refinement-modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.refinement-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-base);
+  transition: all 0.2s ease;
+}
+
+.refinement-modal-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.refinement-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.refinement-progress-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+.refinement-progress-bar {
+  flex: 1;
+  height: 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.refinement-progress-fill {
+  height: 100%;
+  background: linear-gradient(135deg, var(--aurora-green), var(--aurora-teal));
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px var(--glow-green);
+}
+
+.refinement-progress-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 45px;
+  text-align: right;
+}
+
+.refinement-stage-text {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0;
+}
+
+.refinement-info-text {
+  font-size: 0.875rem;
+  color: var(--text-tertiary);
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.refinement-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  text-align: center;
+}
+
+.refinement-error-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--error);
+  margin: 0;
+}
+
+.refinement-error-message {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Chat message error styling */
+.chat-message--error {
+  background: rgba(239, 68, 68, 0.1);
+  border-left-color: var(--error);
+}
+
+.chat-message--error .chat-message-content p {
+  color: var(--error);
+}
+
+@media (max-width: 767px) {
+  .refinement-modal-content {
+    padding: var(--space-24);
+    max-width: 100%;
+  }
+
+  .refinement-modal-header h2 {
+    font-size: 1.25rem;
+  }
+}

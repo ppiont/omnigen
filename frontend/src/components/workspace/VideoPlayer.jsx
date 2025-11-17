@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
+import { Play, Pause, SkipBack, SkipForward, Volume2, Maximize, Minimize } from "lucide-react";
 
 const ASPECT_RATIO_CLASSES = {
   "16:9": "video-aspect-16-9",
@@ -312,7 +313,7 @@ function VideoPlayer({ videoUrl, status, aspectRatio, onError, onRefresh }) {
             onClick={togglePlay}
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
-            {isPlaying ? "⏸" : "▶️"}
+            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
           </button>
 
           <button
@@ -322,7 +323,7 @@ function VideoPlayer({ videoUrl, status, aspectRatio, onError, onRefresh }) {
             aria-label="Seek to beginning"
             disabled={!duration}
           >
-            ⏮
+            <SkipBack size={18} />
           </button>
 
           <button
@@ -332,7 +333,7 @@ function VideoPlayer({ videoUrl, status, aspectRatio, onError, onRefresh }) {
             aria-label="Seek to end"
             disabled={!duration}
           >
-            ⏭
+            <SkipForward size={18} />
           </button>
 
           <span className="time-display">
@@ -362,7 +363,7 @@ function VideoPlayer({ videoUrl, status, aspectRatio, onError, onRefresh }) {
         <div className="controls-right">
           <div className="volume-control">
             <span className="volume-icon" aria-hidden="true">
-              🔊
+              <Volume2 size={18} />
             </span>
             <input
               type="range"
@@ -382,7 +383,7 @@ function VideoPlayer({ videoUrl, status, aspectRatio, onError, onRefresh }) {
             onClick={toggleFullscreen}
             aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
           >
-            {isFullscreen ? "🗗" : "⛶"}
+            {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
           </button>
         </div>
       </div>
