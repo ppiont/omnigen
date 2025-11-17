@@ -5,14 +5,6 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend.yml'
-  push:
-    branches:
-      - master
-    paths:
-      - 'backend/**'
-      - '.github/workflows/backend.yml'
-    paths-ignore:
-      - 'infrastructure/**'  # Don't run if infra changed (workflow_run will handle it)
   workflow_dispatch:
   workflow_run:
     workflows: ["Infrastructure (Terraform)"]
