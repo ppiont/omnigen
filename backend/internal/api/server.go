@@ -33,6 +33,7 @@ type ServerConfig struct {
 	CookieConfig     auth.CookieConfig // Cookie configuration for httpOnly tokens
 	CloudFrontDomain string            // For CORS in production
 	CognitoDomain    string            // Cognito hosted UI domain for CORS
+	OpenAIKey        string            // OpenAI API key for title generation
 	ReadTimeout      time.Duration
 	WriteTimeout     time.Duration
 }
@@ -135,8 +136,21 @@ func (s *Server) setupRoutes() {
 
 	// API v1 routes
 	v1 := s.router.Group("/api/v1")
-	v1.Use(auth.JWTAuthMiddleware(s.config.JWTValidator, s.config.Logger))
-	s.config.Logger.Info("Auth enabled for API routes")
+
+	// Only enable auth in production
+	if s.config.Environment == "production" {
+		v1.Use(auth.JWTAuthMiddleware(s.config.JWTValidator, s.config.Logger))
+		s.config.Logger.Info("Auth enabled for API routes")
+	} else {
+		// In development, inject a mock user ID for testing
+		v1.Use(func(c *gin.Context) {
+			c.Set("user_id", "dev-user-123")
+			c.Set("email", "dev@localhost")
+			c.Set("subscription_tier", "pro")
+			c.Next()
+		})
+		s.config.Logger.Warn("Auth disabled for development/local testing - using mock user")
+	}
 
 	{
 		// Initialize handlers with goroutine-based async architecture
@@ -165,9 +179,15 @@ func (s *Server) setupRoutes() {
 			s.config.Logger,
 		)
 
+		titleHandler := handlers.NewGenerateTitleHandler(
+			s.config.OpenAIKey,
+			s.config.Logger,
+		)
+
 		// Generation routes
 		v1.POST("/generate", generateHandler.Generate)
 		v1.POST("/parse", parserHandler.Parse)
+		v1.POST("/generate-title", titleHandler.GenerateTitle)
 
 		// Script routes (GET/PUT - no quota enforcement needed)
 		v1.GET("/scripts/:id", parserHandler.GetScript)

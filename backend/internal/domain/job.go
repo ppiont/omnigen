@@ -9,6 +9,7 @@ type Job struct {
 	Stage        string                 `dynamodbav:"stage,omitempty" json:"stage,omitempty"`       // Granular progress: script_generating, scene_1_complete, etc.
 	Metadata     map[string]interface{} `dynamodbav:"metadata,omitempty" json:"metadata,omitempty"` // Stores script, thumbnails, progress data
 	Prompt       string                 `dynamodbav:"prompt,omitempty" json:"prompt,omitempty"`
+	Title        string                 `dynamodbav:"title,omitempty" json:"title,omitempty"` // Video title
 	Duration     int                    `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
 	AspectRatio  string                 `dynamodbav:"aspect_ratio,omitempty" json:"aspect_ratio,omitempty"`
 	VideoKey     string                 `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"` // S3 key

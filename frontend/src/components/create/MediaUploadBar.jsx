@@ -112,9 +112,9 @@ function MediaUploadBar({
           onClick={() => !referenceImage && referenceInputRef.current?.click()}
           title="Optional: Add image to guide style"
         >
-          <span className="media-icon">🎨</span>
+          <span className="media-icon">+</span>
           <span className="media-label">
-            {referenceImage ? "Reference Style Img" : "Reference Style Img"}
+            {referenceImage ? "Reference Style Img" : "Add Reference Style Img"}
           </span>
           {referenceImage && (
             <button
@@ -179,9 +179,9 @@ function MediaUploadBar({
           onClick={() => !templateImage && templateInputRef.current?.click()}
           title="Optional: Add image to start your video"
         >
-          <span className="media-icon">🖼️</span>
+          <span className="media-icon">+</span>
           <span className="media-label">
-            {templateImage ? "Starting Img" : "Starting Img"}
+            {templateImage ? "Starting Img" : "Add Starting Img"}
           </span>
           {templateImage && (
             <button

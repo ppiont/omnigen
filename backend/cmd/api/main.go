@@ -142,9 +142,14 @@ func main() {
 
 	// Fetch JWKS keys at startup
 	if err := jwtValidator.FetchJWKS(); err != nil {
-		zapLogger.Fatal("Failed to fetch JWKS", zap.Error(err))
+		if cfg.Environment == "production" {
+			zapLogger.Fatal("Failed to fetch JWKS", zap.Error(err))
+		} else {
+			zapLogger.Warn("Failed to fetch JWKS (continuing in development mode)", zap.Error(err))
+		}
+	} else {
+		zapLogger.Info("JWT validator initialized successfully")
 	}
-	zapLogger.Info("JWT validator initialized successfully")
 
 	// Cookie configuration for httpOnly tokens
 	cookieConfig := auth.CookieConfig{
@@ -170,6 +175,7 @@ func main() {
 		CookieConfig:     cookieConfig,
 		CloudFrontDomain: cfg.CloudFrontDomain,
 		CognitoDomain:    cfg.CognitoDomain,
+		OpenAIKey:        cfg.OpenAIKey,
 		ReadTimeout:      time.Duration(cfg.ReadTimeout) * time.Second,
 		WriteTimeout:     time.Duration(cfg.WriteTimeout) * time.Second,
 	})
@@ -231,6 +237,9 @@ type Config struct {
 
 	// Frontend configuration (optional, for CORS)
 	CloudFrontDomain string `envconfig:"CLOUDFRONT_DOMAIN"`
+
+	// OpenAI configuration (optional, for title generation)
+	OpenAIKey string `envconfig:"GPT4O_API_KEY"` // OpenAI API key for title generation
 }
 
 func loadConfig() (*Config, error) {

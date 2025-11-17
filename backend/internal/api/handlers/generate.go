@@ -58,6 +58,7 @@ type GenerateRequest struct {
 	Duration    int    `json:"duration" binding:"required,min=10,max=60"`
 	AspectRatio string `json:"aspect_ratio" binding:"required,oneof=16:9 9:16 1:1"`
 	StartImage  string `json:"start_image,omitempty" binding:"omitempty,url"`
+	Title       string `json:"title,omitempty" binding:"omitempty,max=100"` // Optional video title
 }
 
 // GenerateResponse represents a video generation response
@@ -128,6 +129,11 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		TTL:         time.Now().Add(7 * 24 * time.Hour).Unix(),
+	}
+
+	// Set title if provided
+	if req.Title != "" {
+		job.Title = req.Title
 	}
 
 	// Save job to database
