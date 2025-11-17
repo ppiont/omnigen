@@ -1,6 +1,18 @@
 import { useMemo } from "react";
 
 function PasswordStrength({ password }) {
+  const requirements = useMemo(() => {
+    if (!password) return null;
+
+    return {
+      length: password.length >= 8,
+      lowercase: /[a-z]/.test(password),
+      uppercase: /[A-Z]/.test(password),
+      number: /[0-9]/.test(password),
+      special: /[^a-zA-Z0-9]/.test(password),
+    };
+  }, [password]);
+
   const strength = useMemo(() => {
     if (!password) return { level: 0, text: "", bars: 0 };
 
@@ -41,6 +53,23 @@ function PasswordStrength({ password }) {
       <p className={`strength-text ${strength.text.toLowerCase()}`}>
         {strength.text} password
       </p>
+      <ul className="password-requirements">
+        <li className={requirements.length ? "met" : "unmet"}>
+          {requirements.length ? "✓" : "○"} At least 8 characters
+        </li>
+        <li className={requirements.uppercase ? "met" : "unmet"}>
+          {requirements.uppercase ? "✓" : "○"} Uppercase letter
+        </li>
+        <li className={requirements.lowercase ? "met" : "unmet"}>
+          {requirements.lowercase ? "✓" : "○"} Lowercase letter
+        </li>
+        <li className={requirements.number ? "met" : "unmet"}>
+          {requirements.number ? "✓" : "○"} Number
+        </li>
+        <li className={requirements.special ? "met" : "unmet"}>
+          {requirements.special ? "✓" : "○"} Special character
+        </li>
+      </ul>
     </div>
   );
 }

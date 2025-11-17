@@ -338,6 +338,26 @@
   color: var(--aurora-green);
 }
 
+.password-requirements {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-8) 0 0 0;
+  font-size: 0.85rem;
+}
+
+.password-requirements li {
+  padding: var(--space-4) 0;
+  transition: color 0.2s ease;
+}
+
+.password-requirements li.met {
+  color: var(--aurora-green);
+}
+
+.password-requirements li.unmet {
+  color: var(--text-secondary);
+}
+
 @keyframes authFadeUp {
   from {
     opacity: 0;

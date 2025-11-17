@@ -22,6 +22,13 @@ const styles = ["Cinematic", "Modern", "Minimalist", "Bold", "Playful"];
 const durations = ["10s", "20s", "30s", "40s", "50s", "60s"]; // Must be multiple of 10
 const aspects = ["16:9", "9:16", "1:1"]; // Backend only supports these
 
+// Phase 1: Enhanced prompt options
+const visualStyles = ["cinematic", "documentary", "energetic", "minimal", "dramatic", "playful"];
+const tones = ["premium", "friendly", "edgy", "inspiring", "humorous"];
+const tempos = ["slow", "medium", "fast"];
+const platforms = ["instagram", "tiktok", "youtube", "facebook"];
+const goals = ["awareness", "sales", "engagement", "signups"];
+
 function IconChevronDown() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -65,6 +72,17 @@ function Create() {
   const [videoPreview, setVideoPreview] = useState(null);
   const [generationError, setGenerationError] = useState(null);
   const [generatedJobId, setGeneratedJobId] = useState(null);
+
+  // Phase 1: Enhanced prompt options (all optional)
+  const [visualStyle, setVisualStyle] = useState("");
+  const [tone, setTone] = useState("");
+  const [tempo, setTempo] = useState("");
+  const [platform, setPlatform] = useState("");
+  const [audience, setAudience] = useState("");
+  const [goal, setGoal] = useState("");
+  const [callToAction, setCallToAction] = useState("");
+  const [proCinematography, setProCinematography] = useState(false);
+  const [creativeBoost, setCreativeBoost] = useState(false);
 
   const characterLimit = 2000;
   const characterCount = prompt.length;
@@ -138,22 +156,56 @@ function Create() {
         aspect_ratio: selectedAspect,
       };
 
-      // Add start_image only if it's a valid URL (data URI or http/https)
+      // Add enhanced prompt options (Phase 1 - all optional)
+      if (visualStyle) generateParams.style = visualStyle;
+      if (tone) generateParams.tone = tone;
+      if (tempo) generateParams.tempo = tempo;
+      if (platform) generateParams.platform = platform;
+      if (audience) generateParams.audience = audience;
+      if (goal) generateParams.goal = goal;
+      if (callToAction) generateParams.call_to_action = callToAction;
+      if (proCinematography) generateParams.pro_cinematography = true;
+      if (creativeBoost) generateParams.creative_boost = true;
+
+      // Add style_reference_image (🎨 Reference Style Img - guides style for ALL clips)
       if (referenceImage) {
         // Use preview (data URI) if available, otherwise skip
         if (
           referenceImage.preview &&
           referenceImage.preview.startsWith("data:image/")
         ) {
-          generateParams.start_image = referenceImage.preview;
-          console.log("[CREATE] 📸 Using start image (data URI)");
+          generateParams.style_reference_image = referenceImage.preview;
+          console.log("[CREATE] 🎨 Using style reference image (data URI)");
         } else if (
           referenceImage.url &&
           (referenceImage.url.startsWith("http://") ||
             referenceImage.url.startsWith("https://"))
         ) {
-          generateParams.start_image = referenceImage.url;
-          console.log("[CREATE] 📸 Using start image (URL)");
+          generateParams.style_reference_image = referenceImage.url;
+          console.log("[CREATE] 🎨 Using style reference image (URL)");
+        } else {
+          console.log(
+            "[CREATE] ⚠️ Style reference image provided but not a valid URL, skipping"
+          );
+        }
+      }
+
+      // Add start_image (🖼️ Starting Img - used ONLY for first scene)
+      if (templateImage) {
+        // Use preview (data URI) if available, otherwise skip
+        if (
+          templateImage.preview &&
+          templateImage.preview.startsWith("data:image/")
+        ) {
+          generateParams.start_image = templateImage.preview;
+          console.log("[CREATE] 🖼️ Using start image for first scene (data URI)");
+        } else if (
+          templateImage.url &&
+          (templateImage.url.startsWith("http://") ||
+            templateImage.url.startsWith("https://"))
+        ) {
+          generateParams.start_image = templateImage.url;
+          console.log("[CREATE] 🖼️ Using start image for first scene (URL)");
         } else {
           console.log(
             "[CREATE] ⚠️ Start image provided but not a valid URL, skipping"
@@ -287,6 +339,33 @@ function Create() {
             );
           }
         } catch (error) {
+          // Handle authentication errors - refresh token and retry
+          if (error.status === 401) {
+            console.warn(
+              `[CREATE] 🔄 Authentication expired during polling (poll #${pollCount}). Refreshing token...`
+            );
+            try {
+              // Refresh the session via backend
+              await auth.refresh();
+              console.log(
+                `[CREATE] ✅ Token refreshed successfully. Retrying poll...`
+              );
+              // Retry immediately after refresh
+              progressPollTimeoutRef = setTimeout(pollProgress, 1000);
+              return;
+            } catch (refreshError) {
+              console.error(
+                `[CREATE] ❌ Failed to refresh token:`,
+                refreshError
+              );
+              setError(
+                "Your session has expired. Please log in again and retry."
+              );
+              setIsGenerating(false);
+              return;
+            }
+          }
+
           // Handle rate limit errors
           if (error.status === 429) {
             const retryAfter = error.details?.reset_in || 60;
@@ -489,13 +568,14 @@ function Create() {
         {isAdvancedOpen && (
           <div className="advanced-content">
             <div className="options-grid">
-              {/* Brand Preset Selector */}
-              <BrandPresetSelector
+              {/* Brand Preset Selector - Commented out for now */}
+              {/* <BrandPresetSelector
                 selectedPreset={selectedBrandPreset}
                 onChange={setSelectedBrandPreset}
-              />
+              /> */}
 
-              <div className="option-group">
+              {/* Category Selector - Commented out for now */}
+              {/* <div className="option-group">
                 <label className="option-label">Category</label>
                 <select
                   className="dropdown-field"
@@ -511,7 +591,7 @@ function Create() {
                 <p className="option-helper">
                   Choose the type of content you're creating
                 </p>
-              </div>
+              </div> */}
 
               <div className="option-group">
                 <label className="option-label">Style</label>
@@ -556,7 +636,140 @@ function Create() {
                 </p>
               </div>
 
+              {/* Phase 1: Enhanced Prompt Options */}
               <div className="option-group">
+                <label className="option-label">Visual Style (Optional)</label>
+                <select
+                  className="dropdown-field"
+                  value={visualStyle}
+                  onChange={(e) => setVisualStyle(e.target.value)}
+                >
+                  <option value="">Default</option>
+                  {visualStyles.map((style) => (
+                    <option key={style} value={style}>
+                      {style.charAt(0).toUpperCase() + style.slice(1)}
+                    </option>
+                  ))}
+                </select>
+                <p className="option-helper">
+                  Choose the overall visual aesthetic (cinematic, documentary, etc.)
+                </p>
+              </div>
+
+              <div className="option-group">
+                <label className="option-label">Tone (Optional)</label>
+                <select
+                  className="dropdown-field"
+                  value={tone}
+                  onChange={(e) => setTone(e.target.value)}
+                >
+                  <option value="">Default</option>
+                  {tones.map((t) => (
+                    <option key={t} value={t}>
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </option>
+                  ))}
+                </select>
+                <p className="option-helper">
+                  Set the emotional tone (premium, friendly, inspiring, etc.)
+                </p>
+              </div>
+
+              <div className="option-group">
+                <label className="option-label">Platform (Optional)</label>
+                <select
+                  className="dropdown-field"
+                  value={platform}
+                  onChange={(e) => setPlatform(e.target.value)}
+                >
+                  <option value="">Default</option>
+                  {platforms.map((p) => (
+                    <option key={p} value={p}>
+                      {p.charAt(0).toUpperCase() + p.slice(1)}
+                    </option>
+                  ))}
+                </select>
+                <p className="option-helper">
+                  Optimize for specific platform (Instagram, TikTok, YouTube, Facebook)
+                </p>
+              </div>
+
+              <div className="option-group">
+                <label className="option-label">Marketing Goal (Optional)</label>
+                <select
+                  className="dropdown-field"
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                >
+                  <option value="">Default</option>
+                  {goals.map((g) => (
+                    <option key={g} value={g}>
+                      {g.charAt(0).toUpperCase() + g.slice(1)}
+                    </option>
+                  ))}
+                </select>
+                <p className="option-helper">
+                  Campaign objective (awareness, sales, engagement, signups)
+                </p>
+              </div>
+
+              <div className="option-group">
+                <label className="option-label">Target Audience (Optional)</label>
+                <input
+                  type="text"
+                  className="dropdown-field"
+                  placeholder="e.g., Tech-savvy millennials, 25-35"
+                  value={audience}
+                  onChange={(e) => setAudience(e.target.value)}
+                  maxLength={200}
+                />
+                <p className="option-helper">
+                  Describe your target demographic
+                </p>
+              </div>
+
+              <div className="option-group">
+                <label className="option-label">Call to Action (Optional)</label>
+                <input
+                  type="text"
+                  className="dropdown-field"
+                  placeholder="e.g., Shop Now, Learn More, Sign Up Today"
+                  value={callToAction}
+                  onChange={(e) => setCallToAction(e.target.value)}
+                  maxLength={100}
+                />
+                <p className="option-helper">
+                  Custom call-to-action text
+                </p>
+              </div>
+
+              <div className="option-group">
+                <label className="option-label">Advanced Features</label>
+                <div className="toggle-group">
+                  <div className="toggle-item">
+                    <ToggleSwitch
+                      checked={proCinematography}
+                      onChange={() => setProCinematography(!proCinematography)}
+                      label="Pro Cinematography"
+                    />
+                    <span className="toggle-label">Professional Film Techniques</span>
+                  </div>
+                  <div className="toggle-item">
+                    <ToggleSwitch
+                      checked={creativeBoost}
+                      onChange={() => setCreativeBoost(!creativeBoost)}
+                      label="Creative Boost"
+                    />
+                    <span className="toggle-label">Boost Creativity (Higher Temperature)</span>
+                  </div>
+                </div>
+                <p className="option-helper">
+                  Use advanced cinematography terms and boost creative output
+                </p>
+              </div>
+
+              {/* Options - Commented out (not currently implemented in backend) */}
+              {/* <div className="option-group">
                 <label className="option-label">Options</label>
                 <div className="toggle-group">
                   <div className="toggle-item">
@@ -579,7 +792,7 @@ function Create() {
                 <p className="option-helper">
                   Additional video enhancements and playback options
                 </p>
-              </div>
+              </div> */}
 
               {/* Batch Generation Toggle */}
               <BatchGenerationToggle />

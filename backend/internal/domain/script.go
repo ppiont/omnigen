@@ -2,17 +2,18 @@ package domain
 
 // Script represents a complete ad creative script with production-ready scene specifications
 type Script struct {
-	ScriptID      string    `json:"script_id" dynamodbav:"script_id"`
-	UserID        string    `json:"user_id" dynamodbav:"user_id"`
-	Title         string    `json:"title" dynamodbav:"title"`
-	TotalDuration int       `json:"total_duration" dynamodbav:"total_duration"` // seconds
-	Scenes        []Scene   `json:"scenes" dynamodbav:"scenes"`
-	AudioSpec     AudioSpec `json:"audio_spec" dynamodbav:"audio_spec"`
-	Metadata      Metadata  `json:"metadata" dynamodbav:"metadata"`
-	CreatedAt     int64     `json:"created_at" dynamodbav:"created_at"`                     // Unix timestamp
-	UpdatedAt     int64     `json:"updated_at" dynamodbav:"updated_at"`                     // Unix timestamp
-	Status        string    `json:"status" dynamodbav:"status"`                             // "draft", "approved", "generating", "completed"
-	ExpiresAt     int64     `json:"expires_at,omitempty" dynamodbav:"expires_at,omitempty"` // TTL timestamp
+	ScriptID         string    `json:"script_id" dynamodbav:"script_id"`
+	UserID           string    `json:"user_id" dynamodbav:"user_id"`
+	Title            string    `json:"title" dynamodbav:"title"`
+	TotalDuration    int       `json:"total_duration" dynamodbav:"total_duration"` // seconds
+	Scenes           []Scene   `json:"scenes" dynamodbav:"scenes"`
+	AudioSpec        AudioSpec `json:"audio_spec" dynamodbav:"audio_spec"`
+	Metadata         Metadata  `json:"metadata" dynamodbav:"metadata"`
+	StyleDescription string    `json:"style_description,omitempty" dynamodbav:"style_description,omitempty"` // Extracted from style reference image
+	CreatedAt        int64     `json:"created_at" dynamodbav:"created_at"`                                   // Unix timestamp
+	UpdatedAt        int64     `json:"updated_at" dynamodbav:"updated_at"`                                   // Unix timestamp
+	Status           string    `json:"status" dynamodbav:"status"`                                           // "draft", "approved", "generating", "completed"
+	ExpiresAt        int64     `json:"expires_at,omitempty" dynamodbav:"expires_at,omitempty"`               // TTL timestamp
 }
 
 // Scene represents a single shot/scene in the advertisement with cinematography details
