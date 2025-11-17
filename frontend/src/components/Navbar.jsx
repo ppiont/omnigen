@@ -99,7 +99,7 @@ function Navbar() {
               <Link to="/dashboard" className="navbar-link">
                 Dashboard
               </Link>
-              <span className="navbar-user">{user?.email}</span>
+              <span className="navbar-user">{user?.name || user?.email}</span>
               <button
                 onClick={logout}
                 className="navbar-link navbar-link-secondary"
