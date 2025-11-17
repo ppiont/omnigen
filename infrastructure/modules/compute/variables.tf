@@ -98,11 +98,6 @@ variable "dynamodb_usage_table_name" {
   type        = string
 }
 
-variable "dynamodb_scripts_table_name" {
-  description = "Name of the DynamoDB scripts table"
-  type        = string
-}
-
 variable "replicate_secret_arn" {
   description = "ARN of the Replicate API key secret"
   type        = string

@@ -1,5 +1,7 @@
 package prompts
 
+import "fmt"
+
 // AdScriptSystemPrompt defines the expert system prompt for generating ad creative scripts
 const AdScriptSystemPrompt = `You are an award-winning commercial director and creative director with 20+ years of experience creating iconic advertising campaigns. You specialize in transforming brand messaging into compelling, visually stunning 15-60 second video advertisements.
 
@@ -26,7 +28,7 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
     {
       "scene_number": number,
       "start_time": number - seconds from start,
-      "duration": number - scene length in seconds,
+      "duration": number - scene length in seconds (MUST be exactly 5 or 10),
 
       "location": "string - e.g., 'INT. MODERN KITCHEN - DAY' or 'EXT. MOUNTAIN PEAK - GOLDEN HOUR'",
       "action": "string - 2-3 sentences describing what happens",
@@ -80,9 +82,12 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
    - Mood progression (can escalate but must be cohesive)
 
 2. **Pacing for Ads**:
-   - 15s ads: 3-4 scenes (3-5s each)
-   - 30s ads: 5-7 scenes (4-6s each)
-   - 60s ads: 8-12 scenes (5-8s each)
+   - **CRITICAL**: Each scene duration MUST be exactly 5s or 10s (Kling AI constraint)
+   - 10s ads: 2 scenes (5s each) OR 1 scene (10s)
+   - 15s ads: 3 scenes (5s each)
+   - 20s ads: 4 scenes (5s each) OR 2 scenes (10s each)
+   - 30s ads: 6 scenes (5s each) OR 3 scenes (10s each)
+   - 60s ads: 12 scenes (5s each) OR 6 scenes (10s each)
    - First scene: Establish context (wider shot)
    - Middle scenes: Build narrative, show product
    - Final scene: Product hero shot + CTA (medium_close_up or close_up)
@@ -408,3 +413,296 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     "keywords": ["premium", "noise-canceling", "calm", "technology", "escape"]
   }
 }`
+
+// EnhancedPromptOptions contains optional parameters for enhanced prompts
+type EnhancedPromptOptions struct {
+	Style              string // cinematic, documentary, energetic, minimal, dramatic, playful
+	Tone               string // premium, friendly, edgy, inspiring, humorous
+	Tempo              string // slow, medium, fast
+	Platform           string // instagram, tiktok, youtube, facebook
+	Audience           string // target audience description
+	Goal               string // awareness, sales, engagement, signups
+	CallToAction       string // custom CTA text
+	ProCinematography  bool   // use advanced film terminology
+	CreativeBoost      bool   // higher temperature for more creativity
+}
+
+// BuildEnhancedSystemPrompt creates an enhanced system prompt with creative direction
+func BuildEnhancedSystemPrompt(basePrompt string, options *EnhancedPromptOptions) string {
+	if options == nil {
+		return basePrompt
+	}
+
+	enhancedPrompt := basePrompt
+
+	// Add creative direction
+	styleGuide := getStyleGuide(options)
+	if styleGuide != "" {
+		enhancedPrompt += "\n\n" + styleGuide
+	}
+
+	// Add marketing framework
+	marketingFramework := getMarketingFramework(options)
+	if marketingFramework != "" {
+		enhancedPrompt += "\n\n" + marketingFramework
+	}
+
+	// Add cinematography guide
+	cinematographyGuide := getCinematographyGuide(options)
+	if cinematographyGuide != "" {
+		enhancedPrompt += "\n\n" + cinematographyGuide
+	}
+
+	// Add platform optimization
+	platformOptimization := getPlatformOptimization(options)
+	if platformOptimization != "" {
+		enhancedPrompt += "\n\n" + platformOptimization
+	}
+
+	// Add anti-pattern detection for multi-clip sequences
+	enhancedPrompt += "\n\n" + getAntiPatternDetection()
+
+	return enhancedPrompt
+}
+
+// getStyleGuide returns creative direction based on style, tone, and tempo
+func getStyleGuide(options *EnhancedPromptOptions) string {
+	if options.Style == "" && options.Tone == "" && options.Tempo == "" {
+		return ""
+	}
+
+	guide := "## CREATIVE DIRECTION\n\n"
+
+	// Style guidelines
+	styleMap := map[string]string{
+		"cinematic":   "- **Cinematic style**: Use dramatic camera movements (dolly, crane shots), shallow depth of field, color grading with rich tones, professional composition following rule of thirds",
+		"documentary": "- **Documentary style**: Handheld camera feel, natural lighting, authentic moments, candid angles, minimal color grading for realism",
+		"energetic":   "- **Energetic style**: Dynamic quick cuts implied through motion, bright vibrant colors, high contrast, fast-paced action, upbeat visual rhythm",
+		"minimal":     "- **Minimal style**: Clean compositions, negative space, simple backgrounds, muted color palette, elegant restraint, focus on essential elements",
+		"dramatic":    "- **Dramatic style**: High contrast lighting, bold shadows, intense moments, powerful angles (low/high), emotional close-ups, rich cinematic blacks",
+		"playful":     "- **Playful style**: Bright saturated colors, whimsical angles, creative framing, lighthearted energy, fun visual surprises",
+	}
+	if styleText, ok := styleMap[options.Style]; ok {
+		guide += styleText + "\n"
+	}
+
+	// Tone guidelines
+	toneMap := map[string]string{
+		"premium":   "- **Premium tone**: Luxury aesthetics, refined details, sophisticated mood, high-end product treatment, aspirational feel",
+		"friendly":  "- **Friendly tone**: Warm approachable visuals, soft lighting, genuine smiles, welcoming environments, relatable scenarios",
+		"edgy":      "- **Edgy tone**: Bold unconventional angles, urban gritty textures, moody atmosphere, rebellious energy, modern attitude",
+		"inspiring": "- **Inspiring tone**: Uplifting compositions, golden hour lighting when possible, triumphant moments, aspirational messaging, motivational energy",
+		"humorous":  "- **Humorous tone**: Unexpected visual gags, exaggerated expressions, lighthearted situations, comedic timing in action",
+	}
+	if toneText, ok := toneMap[options.Tone]; ok {
+		guide += toneText + "\n"
+	}
+
+	// Tempo guidelines
+	tempoMap := map[string]string{
+		"slow":   "- **Slow tempo**: Deliberate pacing, lingering shots, gradual reveals, contemplative moments, smooth transitions, let scenes breathe",
+		"medium": "- **Medium tempo**: Balanced pacing, natural rhythm, comfortable viewing pace, mix of wide and tight shots, steady progression",
+		"fast":   "- **Fast tempo**: Quick action, dynamic energy, rapid scene changes, high-energy subjects, punchy delivery, immediate impact",
+	}
+	if tempoText, ok := tempoMap[options.Tempo]; ok {
+		guide += tempoText + "\n"
+	}
+
+	return guide
+}
+
+// getMarketingFramework returns AIDA framework and conversion psychology
+func getMarketingFramework(options *EnhancedPromptOptions) string {
+	if options.Audience == "" && options.Goal == "" && options.CallToAction == "" {
+		return ""
+	}
+
+	framework := "## MARKETING FRAMEWORK (AIDA - Attention, Interest, Desire, Action)\n\n"
+
+	// Audience targeting
+	if options.Audience != "" {
+		framework += fmt.Sprintf("- **Target Audience**: %s\n", options.Audience)
+		framework += fmt.Sprintf("- Tailor visuals, pacing, and messaging to resonate with this specific demographic\n")
+		framework += fmt.Sprintf("- Use relatable scenarios, environments, and emotional triggers relevant to %s\n\n", options.Audience)
+	}
+
+	// Goal-specific guidance
+	goalMap := map[string]string{
+		"awareness":  "- **Goal: Brand Awareness** - Focus on memorable visuals, brand identity, and creating positive associations. Make it shareable and attention-grabbing",
+		"sales":      "- **Goal: Drive Sales** - Emphasize product benefits, urgency (limited time offers), social proof, and clear value propositions. Show transformation/results",
+		"engagement": "- **Goal: Boost Engagement** - Create interactive, entertaining content that invites viewers to participate, comment, or share. Use hooks and intrigue",
+		"signups":    "- **Goal: Generate Signups** - Highlight exclusive benefits, ease of use, and what users gain. Remove friction, show simple steps",
+	}
+	if goalText, ok := goalMap[options.Goal]; ok {
+		framework += goalText + "\n\n"
+	}
+
+	// AIDA structure
+	framework += "**AIDA Structure** (apply across scenes):\n"
+	framework += "1. **ATTENTION (Hook)**: Open with eye-catching visuals, unexpected moments, or bold statements (first 1-2 seconds are critical)\n"
+	framework += "2. **INTEREST**: Build curiosity through storytelling, show the problem or opportunity\n"
+	framework += "3. **DESIRE**: Evoke aspiration - show transformation, benefits, emotional payoff (use power words: exclusive, premium, revolutionary)\n"
+
+	if options.CallToAction != "" {
+		framework += fmt.Sprintf("4. **ACTION**: End with clear CTA (\"%s\") - make it visible and compelling\n\n", options.CallToAction)
+	} else {
+		framework += "4. **ACTION**: End with clear CTA (e.g., \"Shop Now\", \"Learn More\", \"Join Today\") - make it visible and compelling\n\n"
+	}
+
+	// Psychological triggers
+	framework += "**Psychological Triggers to Incorporate**:\n"
+	framework += "- **Urgency**: \"Limited time\", \"Now\", \"Today only\" (if applicable)\n"
+	framework += "- **Social Proof**: Show people using/enjoying product, testimonials, crowds\n"
+	framework += "- **Aspiration**: Show ideal outcomes, lifestyle upgrade, success states\n"
+	framework += "- **Contrast**: Before/after, problem/solution dynamics\n"
+
+	return framework
+}
+
+// getCinematographyGuide returns advanced cinematography guidance
+func getCinematographyGuide(options *EnhancedPromptOptions) string {
+	if !options.ProCinematography {
+		return ""
+	}
+
+	return `## ADVANCED CINEMATOGRAPHY GUIDE
+
+**Professional Film Techniques** (use these industry terms):
+
+**Camera Movements**:
+- **Dolly shots**: Smooth camera movement toward/away from subject on tracks (conveys intentionality, premium feel)
+- **Crane shots**: Vertical camera movement (dramatic reveals, establishing shots)
+- **Steadicam**: Floating handheld movement (dynamic yet smooth, follows subject intimately)
+- **Whip pan**: Rapid camera pan creating motion blur transition (energetic, modern)
+- **Dutch angle** (canted): Tilted horizon line (unease, tension, unconventional)
+
+**Lighting Techniques**:
+- **Rembrandt lighting**: Triangle of light on cheek (classic portrait, sophisticated)
+- **Backlighting/Rim lighting**: Light from behind creating edge glow (separation, premium look)
+- **Volumetric lighting**: Visible light beams through atmosphere/haze (cinematic, dreamy)
+- **Practical lighting**: Visible light sources in frame (lamps, neon, screens - natural, authentic)
+- **High-key lighting**: Bright, minimal shadows (upbeat, clean, commercial)
+- **Low-key lighting**: Dark with selective highlights (dramatic, moody, luxury)
+
+**Depth & Focus**:
+- **Shallow depth of field**: Subject sharp, background blurred bokeh (premium, cinematic)
+- **Rack focus**: Shift focus between foreground/background (directs attention, storytelling)
+- **Deep focus**: Everything in sharp focus (wide shots, establishing context)
+
+**Color & Grade**:
+- **Teal & Orange**: Hollywood blockbuster look (skin tones pop against cool backgrounds)
+- **Bleach bypass**: Desaturated with crushed blacks (gritty, modern, edgy)
+- **Film grain**: Subtle texture (organic, cinematic quality)
+- **LUT application**: Consistent color science across scenes (professional polish)
+
+**Composition Rules**:
+- **Rule of thirds**: Subject on intersection points (balanced, pleasing)
+- **Leading lines**: Use roads, architecture to guide eye to subject
+- **Negative space**: Empty area around subject (minimalist, focus, breathing room)
+- **Symmetry**: Centered, balanced composition (luxury, perfection, intentional)`
+}
+
+// getPlatformOptimization returns platform-specific guidance
+func getPlatformOptimization(options *EnhancedPromptOptions) string {
+	if options.Platform == "" {
+		return ""
+	}
+
+	platformMap := map[string]string{
+		"instagram": `## PLATFORM OPTIMIZATION: Instagram
+
+**Format**: 9:16 vertical (Stories/Reels) or 1:1 square (Feed)
+**Duration**: 15-30 seconds optimal
+**Hook**: CRITICAL first 0.5 seconds - instant visual impact (users scroll fast)
+**Style**: Polished, aesthetic-first, trendy
+**Pacing**: Quick cuts, dynamic movement, high energy
+**Text**: Assume sound OFF - use minimal text overlays for key messages
+**Best Practices**:
+- Face closeups perform well (human connection)
+- Bright, vibrant colors (stands out in feed)
+- Product in first 2 seconds
+- Strong final frame (holds attention when looping)`,
+
+		"tiktok": `## PLATFORM OPTIMIZATION: TikTok
+
+**Format**: 9:16 vertical mandatory
+**Duration**: 15-60 seconds, but hook in first 1 second
+**Hook**: Ultra-fast, unexpected, curiosity-driven (users swipe in 1.7s)
+**Style**: Authentic, raw, trend-aware (avoid overly polished ads)
+**Pacing**: Extremely fast, constant movement, match trending audio beats
+**Text**: Native feel - casual text overlays, trending fonts/animations
+**Best Practices**:
+- Start mid-action (not slow intro)
+- Participate in trends/challenges
+- User-generated content aesthetic (not "ad-like")
+- Comment-baiting hooks ("wait for it", "you won't believe")
+- Quick payoff (reveal/transformation within 5-7 seconds)`,
+
+		"youtube": `## PLATFORM OPTIMIZATION: YouTube
+
+**Format**: 16:9 horizontal (traditional video)
+**Duration**: 15-30 seconds for pre-roll, up to 60 seconds for mid-roll
+**Hook**: Strong but viewers more patient - 3-5 second setup allowed
+**Style**: High production value, cinematic quality expected
+**Pacing**: Medium pace, can breathe (viewers committed to watching)
+**Text**: Sound ON - use voiceover, minimal text needed
+**Best Practices**:
+- Cinematic wide shots work well (big screen viewing)
+- Clear audio/voiceover (viewers have sound on)
+- Strong brand presence throughout
+- Skippable ads: front-load brand/message (5-second unskippable window)`,
+
+		"facebook": `## PLATFORM OPTIMIZATION: Facebook
+
+**Format**: 1:1 square or 16:9 horizontal (Feed), 9:16 vertical (Stories)
+**Duration**: 15-30 seconds
+**Hook**: Important but less critical than IG/TikTok
+**Style**: Relatable, human, community-focused
+**Pacing**: Medium pace, storytelling over flash
+**Text**: CRITICAL - 85% watch on mute, use captions/text overlays
+**Best Practices**:
+- Silent-first design (full captions)
+- Emphasis on storytelling and emotion
+- User testimonials/social proof work well
+- Longer text overlays okay (audience older, reads more)
+- Clear product benefit stated in text`,
+	}
+
+	if platformText, ok := platformMap[options.Platform]; ok {
+		return platformText
+	}
+
+	return ""
+}
+
+// getAntiPatternDetection returns anti-repetition guidance for multi-clip videos
+func getAntiPatternDetection() string {
+	return `## ANTI-PATTERN DETECTION (Critical for Multi-Scene Videos)
+
+**❌ AVOID: "Same Clip Syndrome"** - Where all scenes are just variations of the same shot
+
+**BAD Example (Repetitive)**:
+- Clip 1: "Athlete in gym lifting weights, medium shot"
+- Clip 2: "Athlete in gym with weights, close-up"
+- Clip 3: "Athlete in gym showing muscles, wide shot"
+→ Problem: Same location, same action, only camera angle changes - feels repetitive!
+
+**✅ GOOD Example (Story Progression)**:
+- Clip 1: "Athlete in locker room post-game, exhausted, dim lighting - Close-up of hands unwrapping product"
+- Clip 2: "Athlete at home kitchen, energized, using product with confident smile - Golden hour light, wide shot"
+- Clip 3: "Athlete courtside celebrating with teammates, product visible - Bright arena lights, dynamic handheld"
+→ Progression: Tired → Energized → Victorious. Location changes, action evolves, lighting shifts
+
+**VALIDATION CHECKLIST** (Review before finalizing script):
+✓ Are scenes showing DIFFERENT actions/moments (not variations of the same scene)?
+✓ Does each scene have clear PROGRESSION in camera angle, subject action, OR environment?
+✓ Can you identify a clear beginning-middle-end arc across all scenes?
+✓ Would a viewer see these as a cohesive story rather than random variations?
+✓ Do scenes avoid repetitive language (e.g., not every scene says "product reveal")?
+
+**Story Progression Rules**:
+1. **Change at least 2 of these per scene**: Location, Lighting, Action, Camera Position, Subject State
+2. **Build narrative arc**: Setup → Conflict/Need → Solution → Payoff
+3. **Vary visual energy**: Wide → Tight → Medium (not all close-ups or all wide shots)
+4. **Evolve emotion**: Scene 1 mood should differ from final scene mood (journey/transformation)`
+}

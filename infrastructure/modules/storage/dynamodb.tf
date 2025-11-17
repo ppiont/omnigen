@@ -16,11 +16,6 @@ resource "aws_dynamodb_table" "jobs" {
   }
 
   attribute {
-    name = "status"
-    type = "S"
-  }
-
-  attribute {
     name = "created_at"
     type = "N"
   }
@@ -29,14 +24,6 @@ resource "aws_dynamodb_table" "jobs" {
   global_secondary_index {
     name            = "UserJobsIndex"
     hash_key        = "user_id"
-    range_key       = "created_at"
-    projection_type = "ALL"
-  }
-
-  # Global Secondary Index for querying by status
-  global_secondary_index {
-    name            = "StatusIndex"
-    hash_key        = "status"
     range_key       = "created_at"
     projection_type = "ALL"
   }
@@ -97,55 +84,5 @@ resource "aws_dynamodb_table" "usage" {
 
   tags = {
     Name = "${var.project_name}-usage"
-  }
-}
-
-# DynamoDB Table for Scripts
-resource "aws_dynamodb_table" "scripts" {
-  name         = "${var.project_name}-scripts"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "script_id"
-
-  attribute {
-    name = "script_id"
-    type = "S"
-  }
-
-  attribute {
-    name = "user_id"
-    type = "S"
-  }
-
-  attribute {
-    name = "created_at"
-    type = "N"
-  }
-
-  # Global Secondary Index for querying by user
-  global_secondary_index {
-    name            = "UserScriptsIndex"
-    hash_key        = "user_id"
-    range_key       = "created_at"
-    projection_type = "ALL"
-  }
-
-  # Time To Live configuration
-  ttl {
-    attribute_name = "ttl"
-    enabled        = true
-  }
-
-  # Point-in-time recovery
-  point_in_time_recovery {
-    enabled = var.dynamodb_point_in_time_recovery
-  }
-
-  # Server-side encryption
-  server_side_encryption {
-    enabled = true
-  }
-
-  tags = {
-    Name = "${var.project_name}-scripts"
   }
 }

@@ -6,6 +6,7 @@ import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import Landing from "./pages/Landing.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
+import Verify from "./pages/Verify.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Create from "./pages/Create.jsx";
@@ -18,7 +19,7 @@ function App() {
   const location = useLocation();
 
   // Navbar only on public pages
-  const publicRoutes = ["/", "/login", "/signup", "/forgot-password"];
+  const publicRoutes = ["/", "/login", "/signup", "/verify", "/forgot-password"];
   const showNavbar = publicRoutes.includes(location.pathname);
 
   return (
@@ -30,6 +31,7 @@ function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/verify" element={<Verify />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
 
           {/* Routes with AppLayout (Sidebar) */}

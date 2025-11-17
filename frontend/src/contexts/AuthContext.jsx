@@ -117,8 +117,9 @@ export function AuthProvider({ children }) {
           error: "An account with this email already exists",
         };
       } else if (err.code === "InvalidPasswordException") {
-        setError("Password does not meet requirements");
-        return { success: false, error: "Password does not meet requirements" };
+        const errorMsg = "Password must contain: uppercase, lowercase, number, and special character (min 8 chars)";
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
       }
 
       const errorMsg = err.message || "Signup failed";
@@ -227,8 +228,9 @@ export function AuthProvider({ children }) {
         setError("Reset code has expired");
         return { success: false, error: "Reset code has expired" };
       } else if (err.code === "InvalidPasswordException") {
-        setError("Password does not meet requirements");
-        return { success: false, error: "Password does not meet requirements" };
+        const errorMsg = "Password must contain: uppercase, lowercase, number, and special character (min 8 chars)";
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
       }
 
       const errorMsg = err.message || "Password reset failed";

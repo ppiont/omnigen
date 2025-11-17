@@ -94,7 +94,14 @@ export async function apiRequest(endpoint, options = {}) {
       error.code || error.Code || 'UNKNOWN_ERROR',
       error.details || error.Details || null
     );
-    console.error(`[API] ${new Date().toISOString()} ✗ ${method} ${endpoint} (${response.status}) [${duration}ms]`, apiError);
+
+    // Don't log 401 errors as errors (they're expected when not logged in)
+    if (response.status === 401) {
+      console.log(`[API] ${new Date().toISOString()} ← ${method} ${endpoint} (${response.status}) [${duration}ms] (Unauthenticated)`);
+    } else {
+      console.error(`[API] ${new Date().toISOString()} ✗ ${method} ${endpoint} (${response.status}) [${duration}ms]`, apiError);
+    }
+
     throw apiError;
   } catch (error) {
     // Re-throw API errors

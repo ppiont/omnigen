@@ -34,6 +34,7 @@ type LoginRequest struct {
 type UserResponse struct {
 	UserID           string `json:"user_id"`
 	Email            string `json:"email"`
+	Name             string `json:"name"`
 	SubscriptionTier string `json:"subscription_tier"`
 }
 
@@ -81,6 +82,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, UserResponse{
 		UserID:           claims.Sub,
 		Email:            claims.Email,
+		Name:             claims.Name,
 		SubscriptionTier: claims.SubscriptionTier,
 	})
 }
@@ -134,6 +136,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	c.JSON(http.StatusOK, UserResponse{
 		UserID:           claims.Sub,
 		Email:            claims.Email,
+		Name:             claims.Name,
 		SubscriptionTier: claims.SubscriptionTier,
 	})
 }

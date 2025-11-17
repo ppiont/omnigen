@@ -174,11 +174,6 @@ func (s *Server) setupRoutes() {
 			s.config.Logger,
 		)
 
-		parserHandler := handlers.NewParserHandler(
-			s.config.ParserService,
-			s.config.Logger,
-		)
-
 		titleHandler := handlers.NewGenerateTitleHandler(
 			s.config.OpenAIKey,
 			s.config.Logger,
@@ -186,12 +181,7 @@ func (s *Server) setupRoutes() {
 
 		// Generation routes
 		v1.POST("/generate", generateHandler.Generate)
-		v1.POST("/parse", parserHandler.Parse)
-		v1.POST("/generate-title", titleHandler.GenerateTitle)
-
-		// Script routes (GET/PUT - no quota enforcement needed)
-		v1.GET("/scripts/:id", parserHandler.GetScript)
-		v1.PUT("/scripts/:id", parserHandler.UpdateScript)
+		v1.POST("/generate/title", titleHandler.GenerateTitle)
 
 		// Job routes
 		v1.GET("/jobs/:id", jobsHandler.GetJob)

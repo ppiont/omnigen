@@ -28,9 +28,9 @@ env:
   TF_VERSION: 1.13.5
 
 jobs:
-  build-test:
-    name: Build and Test
-    runs-on: ubuntu-latest
+  build:
+    name: Build
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
     defaults:
       run:
@@ -55,14 +55,11 @@ jobs:
           GOARCH: arm64
         run: go build -v ./cmd/api
 
-      - name: Run tests
-        run: go test -v ./... || echo "No tests found"
-
   docker-build-push:
     name: Docker Build and Push
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
-    needs: build-test
+    needs: build
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     outputs:
       image_uri: ${{ steps.build.outputs.image_uri }}

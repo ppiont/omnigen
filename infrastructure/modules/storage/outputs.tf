@@ -52,13 +52,3 @@ output "dynamodb_usage_table_arn" {
   description = "ARN of the DynamoDB usage table"
   value       = aws_dynamodb_table.usage.arn
 }
-
-output "dynamodb_scripts_table_name" {
-  description = "Name of the DynamoDB scripts table"
-  value       = aws_dynamodb_table.scripts.name
-}
-
-output "dynamodb_scripts_table_arn" {
-  description = "ARN of the DynamoDB scripts table"
-  value       = aws_dynamodb_table.scripts.arn
-}
