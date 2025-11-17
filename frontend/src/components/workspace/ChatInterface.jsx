@@ -1,85 +1,116 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
-import { useNavigate } from "react-router-dom";
-
-const PLACEHOLDER_MESSAGE =
-  "✨ Want to refine this video?\n\nEdit functionality is coming soon! For now, you can:\n\n→ Create a refined version with your changes";
 
 /**
- * ChatInterface renders the placeholder chat experience for refining videos.
+ * ChatInterface renders a functional chat experience for refining videos.
  *
- * @param {{jobData: Object}} props - Component props
+ * @param {{jobData: Object, onRefine: Function}} props - Component props
  * @returns {JSX.Element} Chat interface container
  */
-function ChatInterface({ jobData }) {
-  const navigate = useNavigate();
+function ChatInterface({ jobData, onRefine }) {
   const storageKey = useMemo(
     () => (jobData?.job_id ? `chat-history-${jobData.job_id}` : null),
     [jobData?.job_id]
   );
 
-  const initialSystemMessage = useMemo(
-    () => ({
-      id: `system-welcome-${jobData?.job_id || "pending"}`,
-      type: "system",
-      text: PLACEHOLDER_MESSAGE,
-    }),
-    [jobData?.job_id]
-  );
+  const messagesEndRef = useRef(null);
 
-  const messages = useMemo(() => {
-    if (!storageKey) {
-      return [initialSystemMessage];
-    }
-
+  // Load messages from localStorage
+  const [messages, setMessages] = useState(() => {
+    if (!storageKey) return [];
+    
     try {
       const storedMessages = window.localStorage.getItem(storageKey);
       if (storedMessages) {
-        const parsedMessages = JSON.parse(storedMessages);
-        const hasSystemMessage = parsedMessages.some((message) =>
-          message.id?.startsWith("system-welcome")
-        );
-        return hasSystemMessage
-          ? parsedMessages
-          : [initialSystemMessage, ...parsedMessages];
+        return JSON.parse(storedMessages);
       }
-      return [initialSystemMessage];
-    } catch {
-      return [initialSystemMessage];
+    } catch (error) {
+      console.error("[CHAT] Failed to load chat history:", error);
     }
-  }, [initialSystemMessage, storageKey]);
-  const [inputValue, setInputValue] = useState("");
+    return [];
+  });
 
+  const [inputValue, setInputValue] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Save messages to localStorage whenever they change
   useEffect(() => {
     if (!storageKey || !messages.length) return;
 
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(messages));
-    } catch {
-      // Silently ignore quota/storage issues
+    } catch (error) {
+      console.error("[CHAT] Failed to save chat history:", error);
     }
   }, [messages, storageKey]);
 
-  /**
-   * Navigates to the Create page with the existing prompt pre-filled.
-   */
-  const handleCreateNewVideo = () => {
-    navigate("/create", {
-      state: {
-        prefillPrompt: jobData?.prompt || "",
-        sourceVideoId: jobData?.job_id || null,
-        isRefinement: true, // Indicate this is a refinement of current video
-      },
-    });
-  };
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   /**
-   * Prevents form submission until chat functionality ships.
+   * Handles form submission for refinement requests.
    *
    * @param {Event} event - Submit event
    */
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    
+    const trimmedInput = inputValue.trim();
+    if (!trimmedInput || isSubmitting) {
+      return;
+    }
+
+    if (!onRefine) {
+      console.warn("[CHAT] No onRefine handler provided");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    // Add user message to chat
+    const userMessage = {
+      id: `user-${Date.now()}-${Math.random()}`,
+      type: "user",
+      text: trimmedInput,
+      timestamp: Date.now(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue("");
+
+    try {
+      console.log("[CHAT] 🎬 Starting refinement with prompt:", trimmedInput);
+      
+      // Call the refinement handler from parent
+      await onRefine(trimmedInput);
+
+      // Add system confirmation message
+      const systemMessage = {
+        id: `system-${Date.now()}-${Math.random()}`,
+        type: "system",
+        text: "Refinement started! Your video is being generated...",
+        timestamp: Date.now(),
+      };
+
+      setMessages((prev) => [...prev, systemMessage]);
+    } catch (error) {
+      console.error("[CHAT] ❌ Refinement failed:", error);
+      
+      // Add error message
+      const errorMessage = {
+        id: `error-${Date.now()}-${Math.random()}`,
+        type: "system",
+        text: `Failed to start refinement: ${error.message || "Unknown error"}`,
+        timestamp: Date.now(),
+        isError: true,
+      };
+
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -89,31 +120,30 @@ function ChatInterface({ jobData }) {
           <p className="chat-eyebrow">AI Assistant</p>
           <h2>Iterate with Chat</h2>
         </div>
-        <span className="chat-badge" aria-live="polite">
-          Coming Soon
-        </span>
       </header>
 
       <div className="chat-messages" aria-live="polite">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`chat-message chat-message--${message.type}`}
-          >
+        {messages.length === 0 ? (
+          <div className="chat-message chat-message--system">
             <div className="chat-message-content">
-              <p>{message.text}</p>
-              {message.id.startsWith("system-welcome") && (
-                <button
-                  type="button"
-                  className="btn-create-new"
-                  onClick={handleCreateNewVideo}
-                >
-                  Refine This Video
-                </button>
-              )}
+              <p>Start a conversation to refine your video. Describe the changes you'd like to make.</p>
             </div>
           </div>
-        ))}
+        ) : (
+          messages.map((message) => (
+            <div
+              key={message.id}
+              className={`chat-message chat-message--${message.type} ${
+                message.isError ? "chat-message--error" : ""
+              }`}
+            >
+              <div className="chat-message-content">
+                <p>{message.text}</p>
+              </div>
+            </div>
+          ))
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
       <form className="chat-input-container" onSubmit={handleSubmit}>
@@ -122,16 +152,16 @@ function ChatInterface({ jobData }) {
           placeholder="Describe how you'd like to refine this video..."
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}
-          disabled
+          disabled={isSubmitting}
           rows={3}
         />
         <button
           type="submit"
           className="chat-submit-btn"
-          disabled
-          title="Refine functionality coming in Phase 2"
+          disabled={!inputValue.trim() || isSubmitting}
+          title={isSubmitting ? "Processing..." : "Refine video"}
         >
-          Refine (Coming Soon)
+          {isSubmitting ? "Processing..." : "Refine"}
         </button>
       </form>
     </div>
@@ -143,6 +173,7 @@ ChatInterface.propTypes = {
     job_id: PropTypes.string.isRequired,
     prompt: PropTypes.string,
   }).isRequired,
+  onRefine: PropTypes.func.isRequired,
 };
 
 export default ChatInterface;
