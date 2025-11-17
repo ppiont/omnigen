@@ -211,7 +211,6 @@ type Config struct {
 	AssetsBucket       string `envconfig:"ASSETS_BUCKET" required:"true"`
 	JobTable           string `envconfig:"JOB_TABLE" required:"true"`
 	UsageTable         string `envconfig:"USAGE_TABLE" required:"true"`
-	ScriptsTable       string `envconfig:"SCRIPTS_TABLE" required:"true"`
 	ReplicateSecretARN string `envconfig:"REPLICATE_SECRET_ARN" required:"true"`
 
 	// Authentication configuration
