@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import ToggleSwitch from "../components/ToggleSwitch.jsx";
 import BrandPresetSelector from "../components/create/BrandPresetSelector.jsx";
 import MediaUploadBar from "../components/create/MediaUploadBar.jsx";
@@ -29,6 +29,22 @@ const tempos = ["slow", "medium", "fast"];
 const platforms = ["instagram", "tiktok", "youtube", "facebook"];
 const goals = ["awareness", "sales", "engagement", "signups"];
 
+/**
+ * Maps a style from preset to brand preset ID
+ * @param {string} style - The preset style
+ * @returns {string} Brand preset ID
+ */
+function mapStyleToBrandPreset(style) {
+  const mapping = {
+    "Minimalist": "tech-minimal",
+    "Bold": "bold-vibrant",
+    "Modern": "corporate-clean",
+    "Cinematic": "default",
+    "Playful": "warm-organic",
+  };
+  return mapping[style] || "default";
+}
+
 function IconChevronDown() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -46,6 +62,9 @@ function IconChevronDown() {
 
 function Create() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const presetAppliedRef = useRef(false);
+  
   const [prompt, setPrompt] = useState("");
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("Ad Creative");
@@ -86,6 +105,35 @@ function Create() {
 
   const characterLimit = 2000;
   const characterCount = prompt.length;
+
+  // Apply preset from location state on mount
+  useEffect(() => {
+    // Only apply preset once on initial mount
+    if (presetAppliedRef.current) {
+      return;
+    }
+
+    const preset = location.state?.preset;
+    if (!preset) {
+      presetAppliedRef.current = true;
+      return;
+    }
+
+    // Validate and map preset style to valid Create page style
+    const validStyle = styles.includes(preset.style) 
+      ? preset.style 
+      : "Cinematic"; // Fallback to default
+
+    // Apply preset settings
+    setSelectedStyle(validStyle);
+    setSelectedBrandPreset(mapStyleToBrandPreset(validStyle));
+    setSelectedCategory("Ad Creative"); // Default as specified
+    setSelectedDuration("30s"); // Default as specified
+    setSelectedAspect("16:9"); // Default as specified
+    // Leave prompt empty for user input
+
+    presetAppliedRef.current = true;
+  }, [location.state]);
 
   const getEstimatedTime = () => {
     const durationNum = parseInt(selectedDuration);
