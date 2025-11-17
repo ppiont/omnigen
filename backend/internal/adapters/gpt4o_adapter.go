@@ -168,7 +168,7 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 	}
 
 	// If output not ready, poll for completion
-	if gpt4oResp.Status != "succeeded" && gpt4oResp.Output == nil {
+	if gpt4oResp.Status != "succeeded" {
 		g.logger.Info("Waiting for GPT-4o completion",
 			zap.String("prediction_id", gpt4oResp.ID),
 			zap.String("status", gpt4oResp.Status),
@@ -352,7 +352,7 @@ Provide a concise 2-3 sentence description that captures the essence of this vis
 	}
 
 	// If output not ready, poll for completion
-	if gpt4oResp.Status != "succeeded" && gpt4oResp.Output == nil {
+	if gpt4oResp.Status != "succeeded" {
 		g.logger.Info("Waiting for GPT-4o Vision analysis",
 			zap.String("prediction_id", gpt4oResp.ID),
 		)
