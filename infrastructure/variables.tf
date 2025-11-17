@@ -74,7 +74,7 @@ variable "replicate_api_key_secret_arn" {
 variable "ecs_min_tasks" {
   description = "Minimum number of ECS tasks"
   type        = number
-  default     = 2 # Run 2 tasks for load balancing
+  default     = 1
 
   validation {
     condition     = var.ecs_min_tasks >= 1 && var.ecs_min_tasks <= 10
