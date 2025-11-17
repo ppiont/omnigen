@@ -1,6 +1,40 @@
 import { ChevronLeft, ChevronRight, Sun, Moon, LogOut } from "lucide-react";
 import Logo from "./Logo.jsx";
-import { useTheme } from "../context/ThemeContext.jsx";
+import { useTheme } from "../context/useTheme.js";
+import { useAuth } from "../contexts/useAuth.js";
+
+/**
+ * Format user name to "First L" (first name + last initial)
+ */
+function formatUserName(fullName) {
+  if (!fullName) return "";
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  const firstName = parts[0];
+  const lastInitial = parts[parts.length - 1][0];
+  return `${firstName} ${lastInitial}`;
+}
+
+/**
+ * Get user initials for avatar (first letter of first and last name)
+ */
+function getUserInitials(fullName) {
+  if (!fullName) return "U";
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/**
+ * Format subscription tier for display
+ */
+function formatPlanName(tier) {
+  if (!tier || tier === "free") return "Free Plan";
+  if (tier === "max") return "Max Plan";
+  if (tier === "pro") return "Pro Plan";
+  // Capitalize first letter
+  return tier.charAt(0).toUpperCase() + tier.slice(1) + " Plan";
+}
 
 function Sidebar({
   tabs = [],
@@ -11,7 +45,18 @@ function Sidebar({
   isCollapsed = false,
   onToggleCollapse,
 }) {
+  const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+
+  const displayName = formatUserName(user?.name || "User");
+  const initials = getUserInitials(user?.name || "User");
+  const planName = formatPlanName(user?.subscription_tier);
+
+  const handleSignOut = async () => {
+    if (logout) {
+      await logout();
+    }
+  };
 
   const handleSelect = (tabId) => {
     if (onSelect) {
@@ -20,11 +65,6 @@ function Sidebar({
     if (onClose) {
       onClose();
     }
-  };
-
-  const handleSignOut = () => {
-    // TODO: Implement sign out logic
-    console.log("Sign out clicked");
   };
 
   const sidebarClasses = [
@@ -36,10 +76,7 @@ function Sidebar({
     .join(" ");
 
   return (
-    <nav
-      className={sidebarClasses}
-      aria-label="Primary navigation"
-    >
+    <nav className={sidebarClasses} aria-label="Primary navigation">
       <div className="sidebar-brand">
         {isCollapsed ? (
           <button
@@ -89,19 +126,14 @@ function Sidebar({
                 aria-current={isActive ? "page" : undefined}
                 disabled={tab.disabled}
                 aria-label={isCollapsed ? tab.label : undefined}
-                title={isCollapsed ? `${tab.label}${tab.description ? ` - ${tab.description}` : ""}` : undefined}
+                title={isCollapsed ? tab.label : undefined}
               >
                 <span className="tab-icon" aria-hidden="true">
                   {tab.icon}
                 </span>
                 {!isCollapsed && (
                   <>
-                    <span className="tab-content">
-                      <span className="tab-label">{tab.label}</span>
-                      {tab.description && (
-                        <span className="tab-description">{tab.description}</span>
-                      )}
-                    </span>
+                    <span className="tab-label">{tab.label}</span>
                     {tab.badge && (
                       <span className="tab-badge">{tab.badge}</span>
                     )}
@@ -118,29 +150,33 @@ function Sidebar({
 
       <div className="sidebar-profile">
         {isCollapsed ? (
-          <div className="profile-avatar">AP</div>
+          <div className="profile-avatar">{initials}</div>
         ) : (
           <>
             <div className="profile-card">
-              <div className="profile-avatar">AP</div>
+              <div className="profile-avatar">{initials}</div>
               <div className="profile-info">
-                <p className="profile-name">Akhil Patel</p>
-                <span className="profile-plan">Max Plan</span>
+                <p className="profile-name">{displayName}</p>
+                <span className="profile-plan">{planName}</span>
               </div>
             </div>
             <div className="profile-actions">
               <button
                 type="button"
-                className="theme-toggle"
+                className="profile-action-btn"
                 onClick={toggleTheme}
-                aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
-                title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+                aria-label={`Switch to ${
+                  theme === "light" ? "dark" : "light"
+                } theme`}
+                title={`Switch to ${
+                  theme === "light" ? "dark" : "light"
+                } theme`}
               >
                 {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
               </button>
               <button
                 type="button"
-                className="sign-out-btn"
+                className="profile-action-btn"
                 onClick={handleSignOut}
                 aria-label="Sign out"
                 title="Sign out"

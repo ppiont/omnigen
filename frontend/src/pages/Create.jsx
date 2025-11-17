@@ -1,11 +1,26 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import ToggleSwitch from "../components/ToggleSwitch.jsx";
-import AppLayout from "../components/AppLayout.jsx";
+import BrandPresetSelector from "../components/create/BrandPresetSelector.jsx";
+import MediaUploadBar from "../components/create/MediaUploadBar.jsx";
+import ValidationMessage from "../components/create/ValidationMessage.jsx";
+import BatchGenerationToggle from "../components/create/BatchGenerationToggle.jsx";
+import GenerationState from "../components/create/GenerationState.jsx";
+import ScenePreviewGrid from "../components/create/ScenePreviewGrid.jsx";
+import { generate, jobs } from "../utils/api.js";
+import "../styles/dashboard.css";
+import "../styles/create.css";
 
-const categories = ["Ad Creative", "Product Demo", "Explainer", "Social Media", "Tutorial"];
+const categories = [
+  "Ad Creative",
+  "Product Demo",
+  "Explainer",
+  "Social Media",
+  "Tutorial",
+];
 const styles = ["Cinematic", "Modern", "Minimalist", "Bold", "Playful"];
-const durations = ["15s", "30s", "60s", "90s"];
-const aspects = ["16:9", "9:16", "1:1", "4:5"];
+const durations = ["10s", "20s", "30s", "40s", "50s", "60s"]; // Must be multiple of 10
+const aspects = ["16:9", "9:16", "1:1"]; // Backend only supports these
 
 function IconChevronDown() {
   return (
@@ -23,6 +38,7 @@ function IconChevronDown() {
 }
 
 function Create() {
+  const navigate = useNavigate();
   const [prompt, setPrompt] = useState("");
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("Ad Creative");
@@ -33,6 +49,22 @@ function Create() {
   const [loopVideo, setLoopVideo] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
+
+  // Phase 1 additions
+  const [selectedBrandPreset, setSelectedBrandPreset] = useState("default");
+  const [referenceImage, setReferenceImage] = useState(null);
+  const [templateImage, setTemplateImage] = useState(null);
+  const [validationError, setValidationError] = useState("");
+
+  // Phase 2 additions - State Machine
+  const [generationState, setGenerationState] = useState("idle");
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [scenes, setScenes] = useState([]);
+  const [sceneCount, setSceneCount] = useState(0);
+  const [currentScene, setCurrentScene] = useState(0);
+  const [videoPreview, setVideoPreview] = useState(null);
+  const [generationError, setGenerationError] = useState(null);
+  const [generatedJobId, setGeneratedJobId] = useState(null);
 
   const characterLimit = 2000;
   const characterCount = prompt.length;
@@ -51,35 +83,320 @@ function Create() {
     return `$${cost.toFixed(2)}`;
   };
 
-  const handleGenerate = () => {
-    if (!prompt.trim() || isGenerating) return;
+  const handleGenerate = async () => {
+    console.log("=".repeat(80));
+    console.log("🎬 [CREATE] VIDEO GENERATION PIPELINE STARTED");
+    console.log("=".repeat(80));
+    console.log("[CREATE] 📝 User Input:", {
+      prompt: prompt.trim(),
+      category: selectedCategory,
+      style: selectedStyle,
+      duration: selectedDuration,
+      aspectRatio: selectedAspect,
+      brandPreset: selectedBrandPreset,
+    });
 
+    // Validation
+    if (!prompt.trim()) {
+      console.warn("[CREATE] ⚠️ Validation failed: Empty prompt");
+      setValidationError("Please describe your video to get started");
+      return;
+    }
+
+    if (isGenerating) {
+      console.warn("[CREATE] ⚠️ Already generating, ignoring request");
+      return;
+    }
+
+    // Validate duration is multiple of 10
+    const durationNum = parseInt(selectedDuration);
+    if (durationNum % 10 !== 0) {
+      console.warn(
+        "[CREATE] ⚠️ Validation failed: Duration must be multiple of 10"
+      );
+      setValidationError("Duration must be 10, 20, 30, 40, 50, or 60 seconds");
+      return;
+    }
+
+    // Clear validation error and reset state
+    setValidationError("");
     setIsGenerating(true);
-    setProgress(0);
+    setGenerationError(null);
 
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsGenerating(false);
-          return 100;
+    try {
+      console.log("\n" + "=".repeat(80));
+      console.log("🎥 [GENERATE] Starting video generation");
+      console.log("=".repeat(80));
+
+      setGenerationState("rendering");
+      setGenerationProgress(0);
+
+      // Prepare generate request with required fields
+      const generateParams = {
+        prompt: prompt.trim(),
+        duration: durationNum,
+        aspect_ratio: selectedAspect,
+      };
+
+      // Add start_image only if it's a valid URL (data URI or http/https)
+      if (referenceImage) {
+        // Use preview (data URI) if available, otherwise skip
+        if (
+          referenceImage.preview &&
+          referenceImage.preview.startsWith("data:image/")
+        ) {
+          generateParams.start_image = referenceImage.preview;
+          console.log("[CREATE] 📸 Using start image (data URI)");
+        } else if (
+          referenceImage.url &&
+          (referenceImage.url.startsWith("http://") ||
+            referenceImage.url.startsWith("https://"))
+        ) {
+          generateParams.start_image = referenceImage.url;
+          console.log("[CREATE] 📸 Using start image (URL)");
+        } else {
+          console.log(
+            "[CREATE] ⚠️ Start image provided but not a valid URL, skipping"
+          );
         }
-        return prev + 10;
-      });
-    }, 500);
+      }
+
+      console.log("[CREATE] 📡 API Call: POST /api/v1/generate");
+      console.log("[CREATE] 📦 Request payload:", generateParams);
+
+      const generateResponse = await generate.create(generateParams);
+
+      const jobId = generateResponse.job_id;
+      console.log("[CREATE] ✅ Video generation job created");
+      console.log("[CREATE] 🆔 Job ID:", jobId);
+      console.log("[CREATE] 📊 Status:", generateResponse.status);
+      console.log(
+        "[CREATE] ⏱️ Estimated completion:",
+        generateResponse.estimated_completion_seconds || "N/A",
+        "seconds"
+      );
+
+      setGeneratedJobId(jobId);
+      setGenerationProgress(5); // Initial progress
+
+      // ============================================
+      // Poll for job status
+      // ============================================
+      console.log("\n" + "=".repeat(80));
+      console.log("📊 [POLLING] Starting job status polling");
+      console.log("=".repeat(80));
+      console.log("[POLLING] Polling GET /api/v1/jobs/:id every 7 seconds");
+
+      let pollCount = 0;
+      const progressPollInterval = 7000; // 7 seconds between polls (stays under 10/min limit)
+      const maxPollAttempts = 300; // ~35 minutes max (300 * 7s = 2100s = 35min)
+      const startTime = Date.now();
+      let progressPollTimeoutRef = null;
+
+      const pollProgress = async () => {
+        pollCount++;
+        const elapsedTime = Date.now() - startTime;
+
+        // Check max polling attempts
+        if (pollCount > maxPollAttempts) {
+          console.error(
+            `[CREATE] ⚠️ Max polling attempts (${maxPollAttempts}) reached. Job may be stuck.`
+          );
+          if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
+          setGenerationState("error");
+          setGenerationError(
+            "Video generation is taking longer than expected. Please check back later or try again."
+          );
+          setIsGenerating(false);
+          return;
+        }
+
+        try {
+          console.log(
+            `[CREATE] 🔄 Polling job status (poll #${pollCount}, elapsed: ${Math.round(
+              elapsedTime / 1000
+            )}s)...`
+          );
+
+          // Get job status directly (progress endpoint returns 501)
+          const job = await jobs.get(jobId);
+
+          console.log(`[CREATE] 📊 Job status update:`, {
+            status: job.status,
+            stage: job.stage,
+            progress_percent: job.progress_percent,
+            metadata: job.metadata,
+          });
+
+          // Update progress from backend's calculated progress_percent
+          setGenerationProgress(job.progress_percent || 0);
+
+          // Update scene information from metadata if available
+          if (job.metadata) {
+            if (job.metadata.num_scenes) {
+              setSceneCount(job.metadata.num_scenes);
+            }
+            if (job.metadata.current_scene) {
+              setCurrentScene(job.metadata.current_scene);
+            }
+            if (job.metadata.scenes_complete !== undefined) {
+              setCurrentScene(job.metadata.scenes_complete);
+            }
+          }
+
+          // Update generation state based on stage
+          if (job.stage) {
+            if (job.stage === "script_generating") {
+              setGenerationState("planning");
+            } else if (
+              job.stage.startsWith("scene_") ||
+              job.stage === "audio_generating" ||
+              job.stage === "composing"
+            ) {
+              setGenerationState("rendering");
+            }
+          }
+
+          if (job.status === "completed") {
+            console.log("[CREATE] ✅ Video generation completed!");
+            if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
+            setGenerationState("ready");
+            setGenerationProgress(100);
+
+            if (job.video_url) {
+              console.log("[CREATE] 🎬 Video URL:", job.video_url);
+              setVideoPreview(job.video_url);
+            } else if (job.video_key) {
+              // Fallback: construct URL from key (though backend should provide video_url)
+              const videoUrl = `https://your-s3-bucket.s3.amazonaws.com/${job.video_key}`;
+              console.log("[CREATE] 🎬 Video URL (constructed):", videoUrl);
+              setVideoPreview(videoUrl);
+            }
+            setIsGenerating(false);
+          } else if (job.status === "failed") {
+            console.error("[CREATE] ❌ Video generation failed");
+            if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
+            setGenerationState("error");
+            setGenerationError(job.error_message || "Video generation failed");
+            setIsGenerating(false);
+          } else {
+            // Continue polling
+            progressPollTimeoutRef = setTimeout(
+              pollProgress,
+              progressPollInterval
+            );
+          }
+        } catch (error) {
+          // Handle rate limit errors
+          if (error.status === 429) {
+            const retryAfter = error.details?.reset_in || 60;
+            console.warn(
+              `[CREATE] ⚠️ Rate limit hit during progress polling. Waiting ${retryAfter} seconds...`
+            );
+            // Wait and retry
+            progressPollTimeoutRef = setTimeout(
+              pollProgress,
+              retryAfter * 1000
+            );
+            return;
+          }
+
+          console.error(
+            `[CREATE] ⚠️ Error polling progress (poll #${pollCount}):`,
+            error
+          );
+          // Continue polling on other errors after delay
+          progressPollTimeoutRef = setTimeout(
+            pollProgress,
+            progressPollInterval
+          );
+        }
+      };
+
+      // Start polling
+      progressPollTimeoutRef = setTimeout(pollProgress, progressPollInterval);
+      window._createPollTimeout = progressPollTimeoutRef;
+    } catch (error) {
+      console.error("\n" + "=".repeat(80));
+      console.error("❌ [ERROR] VIDEO GENERATION PIPELINE ERROR");
+      console.error("=".repeat(80));
+      console.error("[ERROR] Generation failed:", error);
+      setGenerationState("error");
+      setGenerationError(error.message || "Generation failed");
+      setIsGenerating(false);
+    }
+
+    console.log("=".repeat(80));
+  };
+
+  // Get character counter class based on count
+  const getCharCounterClass = () => {
+    if (characterCount >= characterLimit) return "char-counter danger";
+    if (characterCount >= characterLimit * 0.9) return "char-counter warning";
+    return "char-counter normal";
   };
 
   const toggleAdvanced = () => setIsAdvancedOpen(!isAdvancedOpen);
 
+  // Handle viewing in workspace
+  const handleViewWorkspace = () => {
+    if (!generatedJobId) {
+      console.warn("[CREATE] ⚠️ Cannot navigate to workspace: No job ID");
+      return;
+    }
+
+    console.log("[CREATE] 🚀 Navigating to workspace:", generatedJobId);
+    navigate(`/workspace/${generatedJobId}`, {
+      state: {
+        prompt,
+        scenes,
+        videoPreview,
+        config: {
+          category: selectedCategory,
+          style: selectedStyle,
+          duration: selectedDuration,
+          aspectRatio: selectedAspect,
+          brandPreset: selectedBrandPreset,
+          autoEnhance,
+          loopVideo,
+          referenceImage: referenceImage?.name || null,
+          templateImage: templateImage?.name || null,
+        },
+        generatedAt: Date.now(),
+      },
+    });
+  };
+
+  // Handle retry/generate another
+  const handleRetry = () => {
+    console.log("[CREATE] 🔄 Resetting generation state");
+
+    // Clear any polling timeouts
+    if (window._createPollTimeout) {
+      clearTimeout(window._createPollTimeout);
+      window._createPollTimeout = null;
+    }
+
+    setGenerationState("idle");
+    setGenerationProgress(0);
+    setScenes([]);
+    setSceneCount(0);
+    setCurrentScene(0);
+    setGenerationError(null);
+    setVideoPreview(null);
+    setGeneratedJobId(null);
+    setIsGenerating(false);
+  };
+
   return (
-    <AppLayout>
+    <>
       <div className="generation-grid">
         <section className="prompt-card">
           <h2 className="card-title">Generate a video</h2>
           <div className="prompt-section">
             <label className="prompt-label">
               Video Prompt
-              <span className="char-counter">
+              <span className={getCharCounterClass()}>
                 {characterCount} / {characterLimit}
               </span>
             </label>
@@ -87,45 +404,71 @@ function Create() {
               className="prompt-textarea"
               placeholder="Describe your video ad... (e.g., 'Product showcase video for wireless headphones with modern aesthetic')"
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={(e) => {
+                setPrompt(e.target.value);
+                if (validationError) setValidationError("");
+              }}
               maxLength={characterLimit}
               rows={6}
             />
+
+            {/* Media Upload Bar - Below prompt */}
+            <MediaUploadBar
+              referenceImage={referenceImage}
+              onReferenceImageSelect={setReferenceImage}
+              templateImage={templateImage}
+              onTemplateImageSelect={setTemplateImage}
+              durations={durations}
+              selectedDuration={selectedDuration}
+              onDurationChange={setSelectedDuration}
+            />
+
+            {validationError && (
+              <ValidationMessage message={validationError} type="error" />
+            )}
           </div>
         </section>
 
         <section className="preview-card">
           <h3 className="card-subtitle">Preview</h3>
           <div className="preview-container">
-            {isGenerating ? (
-              <div className="preview-generating">
-                <div className="preview-progress-bar">
-                  <div
-                    className="preview-progress-fill"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-                <p className="preview-status">Generating video... {progress}%</p>
-              </div>
-            ) : (
-              <div className="preview-placeholder">
-                <div className="preview-aspect-ratio">
-                  <span className="preview-aspect-text">{selectedAspect}</span>
-                </div>
-                <p className="preview-placeholder-text">Your video will appear here</p>
-              </div>
-            )}
+            <GenerationState
+              state={generationState}
+              progress={generationProgress}
+              error={generationError}
+              sceneCount={sceneCount}
+              currentScene={currentScene}
+              videoPreview={videoPreview}
+              onRetry={handleRetry}
+              onViewWorkspace={handleViewWorkspace}
+              aspectRatio={selectedAspect}
+            />
+
+            {/* Scene Preview Grid - show during PLANNING, RENDERING, STITCHING, READY */}
+            <ScenePreviewGrid
+              scenes={scenes}
+              isVisible={[
+                "planning",
+                "rendering",
+                "stitching",
+                "ready",
+              ].includes(generationState)}
+            />
           </div>
-          <div className="estimation-grid">
-            <div className="estimation-item">
-              <span className="estimation-label">Estimated time</span>
-              <span className="estimation-value">{getEstimatedTime()}</span>
+
+          {/* Estimation - only show when idle */}
+          {generationState === "idle" && (
+            <div className="estimation-grid">
+              <div className="estimation-item">
+                <span className="estimation-label">Estimated time</span>
+                <span className="estimation-value">{getEstimatedTime()}</span>
+              </div>
+              <div className="estimation-item">
+                <span className="estimation-label">Estimated cost</span>
+                <span className="estimation-value">{getEstimatedCost()}</span>
+              </div>
             </div>
-            <div className="estimation-item">
-              <span className="estimation-label">Estimated cost</span>
-              <span className="estimation-value">{getEstimatedCost()}</span>
-            </div>
-          </div>
+          )}
         </section>
       </div>
 
@@ -137,13 +480,21 @@ function Create() {
           aria-expanded={isAdvancedOpen}
         >
           <span>Advanced options</span>
-          <span className={`advanced-chevron ${isAdvancedOpen ? "is-open" : ""}`}>
+          <span
+            className={`advanced-chevron ${isAdvancedOpen ? "is-open" : ""}`}
+          >
             <IconChevronDown />
           </span>
         </button>
         {isAdvancedOpen && (
           <div className="advanced-content">
             <div className="options-grid">
+              {/* Brand Preset Selector */}
+              <BrandPresetSelector
+                selectedPreset={selectedBrandPreset}
+                onChange={setSelectedBrandPreset}
+              />
+
               <div className="option-group">
                 <label className="option-label">Category</label>
                 <select
@@ -157,6 +508,9 @@ function Create() {
                     </option>
                   ))}
                 </select>
+                <p className="option-helper">
+                  Choose the type of content you're creating
+                </p>
               </div>
 
               <div className="option-group">
@@ -166,29 +520,18 @@ function Create() {
                     <button
                       key={style}
                       type="button"
-                      className={`style-btn ${selectedStyle === style ? "is-active" : ""}`}
+                      className={`style-btn ${
+                        selectedStyle === style ? "is-active" : ""
+                      }`}
                       onClick={() => setSelectedStyle(style)}
                     >
                       {style}
                     </button>
                   ))}
                 </div>
-              </div>
-
-              <div className="option-group">
-                <label className="option-label">Duration</label>
-                <div className="button-group">
-                  {durations.map((dur) => (
-                    <button
-                      key={dur}
-                      type="button"
-                      className={`duration-btn ${selectedDuration === dur ? "is-active" : ""}`}
-                      onClick={() => setSelectedDuration(dur)}
-                    >
-                      {dur}
-                    </button>
-                  ))}
-                </div>
+                <p className="option-helper">
+                  Choose the visual aesthetic for your video
+                </p>
               </div>
 
               <div className="option-group">
@@ -198,13 +541,19 @@ function Create() {
                     <button
                       key={aspect}
                       type="button"
-                      className={`aspect-btn ${selectedAspect === aspect ? "is-active" : ""}`}
+                      className={`aspect-btn ${
+                        selectedAspect === aspect ? "is-active" : ""
+                      }`}
                       onClick={() => setSelectedAspect(aspect)}
                     >
                       {aspect}
                     </button>
                   ))}
                 </div>
+                <p className="option-helper">
+                  16:9 for YouTube, 9:16 for TikTok/Stories, 1:1 for Instagram
+                  feed
+                </p>
               </div>
 
               <div className="option-group">
@@ -227,7 +576,13 @@ function Create() {
                     <span className="toggle-label">Loop video</span>
                   </div>
                 </div>
+                <p className="option-helper">
+                  Additional video enhancements and playback options
+                </p>
               </div>
+
+              {/* Batch Generation Toggle */}
+              <BatchGenerationToggle />
             </div>
           </div>
         )}
@@ -236,12 +591,12 @@ function Create() {
       <button
         type="button"
         className="generate-button"
-        disabled={!prompt.trim() || isGenerating}
+        disabled={!prompt.trim() || isGenerating || generationState !== "idle"}
         onClick={handleGenerate}
       >
         {isGenerating ? "Generating..." : "Generate Video"}
       </button>
-    </AppLayout>
+    </>
   );
 }
 

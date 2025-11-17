@@ -1,9 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import * as cognito from '../services/cognito';
-import { auth as authAPI } from '../utils/api';
-
-const AuthContext = createContext(null);
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import * as cognito from "../services/cognito";
+import { auth as authAPI } from "../utils/api";
+import { AuthContext } from "./authContext.js";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -22,7 +21,7 @@ export function AuthProvider({ children }) {
       // Try to get user info from backend (checks httpOnly cookie)
       const userData = await authAPI.me();
       setUser(userData);
-    } catch (err) {
+    } catch {
       // Not authenticated or session expired
       setUser(null);
     } finally {
@@ -47,26 +46,30 @@ export function AuthProvider({ children }) {
       setUser(userData);
       return { success: true };
     } catch (err) {
-      console.error('Login error:', err);
+      console.error("Login error:", err);
 
       // Handle specific Cognito errors
-      if (err.code === 'UserNotConfirmedException') {
-        setError('Please verify your email before logging in');
+      if (err.code === "UserNotConfirmedException") {
+        setError("Please verify your email before logging in");
         return {
           success: false,
-          error: 'Please verify your email before logging in',
-          code: 'UserNotConfirmedException',
+          error: "Please verify your email before logging in",
+          code: "UserNotConfirmedException",
           email,
         };
-      } else if (err.code === 'NotAuthorizedException') {
-        setError('Invalid email or password');
-        return { success: false, error: 'Invalid email or password' };
-      } else if (err.code === 'NewPasswordRequired') {
-        setError('Please set a new password');
-        return { success: false, error: 'Please set a new password', code: 'NewPasswordRequired' };
+      } else if (err.code === "NotAuthorizedException") {
+        setError("Invalid email or password");
+        return { success: false, error: "Invalid email or password" };
+      } else if (err.code === "NewPasswordRequired") {
+        setError("Please set a new password");
+        return {
+          success: false,
+          error: "Please set a new password",
+          code: "NewPasswordRequired",
+        };
       }
 
-      const errorMsg = err.message || 'Login failed';
+      const errorMsg = err.message || "Login failed";
       setError(errorMsg);
       return { success: false, error: errorMsg };
     } finally {
@@ -88,22 +91,25 @@ export function AuthProvider({ children }) {
         success: true,
         userConfirmed: result.userConfirmed,
         message: result.userConfirmed
-          ? 'Account created successfully! You can now log in.'
-          : 'Account created! Please check your email for a verification code.',
+          ? "Account created successfully! You can now log in."
+          : "Account created! Please check your email for a verification code.",
       };
     } catch (err) {
-      console.error('Signup error:', err);
+      console.error("Signup error:", err);
 
       // Handle specific Cognito errors
-      if (err.code === 'UsernameExistsException') {
-        setError('An account with this email already exists');
-        return { success: false, error: 'An account with this email already exists' };
-      } else if (err.code === 'InvalidPasswordException') {
-        setError('Password does not meet requirements');
-        return { success: false, error: 'Password does not meet requirements' };
+      if (err.code === "UsernameExistsException") {
+        setError("An account with this email already exists");
+        return {
+          success: false,
+          error: "An account with this email already exists",
+        };
+      } else if (err.code === "InvalidPasswordException") {
+        setError("Password does not meet requirements");
+        return { success: false, error: "Password does not meet requirements" };
       }
 
-      const errorMsg = err.message || 'Signup failed';
+      const errorMsg = err.message || "Signup failed";
       setError(errorMsg);
       return { success: false, error: errorMsg };
     } finally {
@@ -123,20 +129,20 @@ export function AuthProvider({ children }) {
 
       return {
         success: true,
-        message: 'Email verified successfully! You can now log in.'
+        message: "Email verified successfully! You can now log in.",
       };
     } catch (err) {
-      console.error('Confirmation error:', err);
+      console.error("Confirmation error:", err);
 
-      if (err.code === 'CodeMismatchException') {
-        setError('Invalid verification code');
-        return { success: false, error: 'Invalid verification code' };
-      } else if (err.code === 'ExpiredCodeException') {
-        setError('Verification code has expired');
-        return { success: false, error: 'Verification code has expired' };
+      if (err.code === "CodeMismatchException") {
+        setError("Invalid verification code");
+        return { success: false, error: "Invalid verification code" };
+      } else if (err.code === "ExpiredCodeException") {
+        setError("Verification code has expired");
+        return { success: false, error: "Verification code has expired" };
       }
 
-      const errorMsg = err.message || 'Verification failed';
+      const errorMsg = err.message || "Verification failed";
       setError(errorMsg);
       return { success: false, error: errorMsg };
     } finally {
@@ -151,10 +157,10 @@ export function AuthProvider({ children }) {
     try {
       setError(null);
       await cognito.resendConfirmationCode(email);
-      return { success: true, message: 'Verification code sent to your email' };
+      return { success: true, message: "Verification code sent to your email" };
     } catch (err) {
-      console.error('Resend code error:', err);
-      const errorMsg = err.message || 'Failed to resend code';
+      console.error("Resend code error:", err);
+      const errorMsg = err.message || "Failed to resend code";
       setError(errorMsg);
       return { success: false, error: errorMsg };
     }
@@ -172,12 +178,12 @@ export function AuthProvider({ children }) {
 
       return {
         success: true,
-        message: 'Password reset code sent to your email'
+        message: "Password reset code sent to your email",
       };
     } catch (err) {
-      console.error('Forgot password error:', err);
+      console.error("Forgot password error:", err);
 
-      const errorMsg = err.message || 'Failed to send reset code';
+      const errorMsg = err.message || "Failed to send reset code";
       setError(errorMsg);
       return { success: false, error: errorMsg };
     } finally {
@@ -197,23 +203,23 @@ export function AuthProvider({ children }) {
 
       return {
         success: true,
-        message: 'Password reset successfully! You can now log in.'
+        message: "Password reset successfully! You can now log in.",
       };
     } catch (err) {
-      console.error('Reset password error:', err);
+      console.error("Reset password error:", err);
 
-      if (err.code === 'CodeMismatchException') {
-        setError('Invalid reset code');
-        return { success: false, error: 'Invalid reset code' };
-      } else if (err.code === 'ExpiredCodeException') {
-        setError('Reset code has expired');
-        return { success: false, error: 'Reset code has expired' };
-      } else if (err.code === 'InvalidPasswordException') {
-        setError('Password does not meet requirements');
-        return { success: false, error: 'Password does not meet requirements' };
+      if (err.code === "CodeMismatchException") {
+        setError("Invalid reset code");
+        return { success: false, error: "Invalid reset code" };
+      } else if (err.code === "ExpiredCodeException") {
+        setError("Reset code has expired");
+        return { success: false, error: "Reset code has expired" };
+      } else if (err.code === "InvalidPasswordException") {
+        setError("Password does not meet requirements");
+        return { success: false, error: "Password does not meet requirements" };
       }
 
-      const errorMsg = err.message || 'Password reset failed';
+      const errorMsg = err.message || "Password reset failed";
       setError(errorMsg);
       return { success: false, error: errorMsg };
     } finally {
@@ -233,12 +239,12 @@ export function AuthProvider({ children }) {
       await authAPI.logout();
 
       setUser(null);
-      navigate('/login');
+      navigate("/login");
     } catch (err) {
-      console.error('Logout error:', err);
+      console.error("Logout error:", err);
       // Force logout even if backend call fails
       setUser(null);
-      navigate('/login');
+      navigate("/login");
     }
   };
 
@@ -265,15 +271,4 @@ export function AuthProvider({ children }) {
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-/**
- * Hook to use auth context
- */
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 }

@@ -12,6 +12,7 @@ type User struct {
 	Email            string    `json:"email"`             // User email
 	EmailVerified    bool      `json:"email_verified"`    // Email verification status
 	Username         string    `json:"username"`          // Cognito username
+	Name             string    `json:"name"`              // User's full name
 	SubscriptionTier string    `json:"subscription_tier"` // Subscription level (free, pro, enterprise)
 	CreatedAt        time.Time `json:"created_at"`        // Account creation time
 	LastLogin        time.Time `json:"last_login"`        // Last login timestamp
@@ -24,6 +25,7 @@ type UserClaims struct {
 	Email            string `json:"email"`                        // User email
 	EmailVerified    bool   `json:"email_verified"`               // Email verification status
 	CognitoUsername  string `json:"cognito:username"`             // Cognito username
+	Name             string `json:"name"`                         // User's full name
 	SubscriptionTier string `json:"custom:subscription_tier"`     // Custom attribute
 	TokenUse         string `json:"token_use"`                    // "access" or "id"
 	AuthTime         int64  `json:"auth_time"`                    // Authentication timestamp
@@ -36,6 +38,7 @@ func (uc *UserClaims) ToUser() *User {
 		Email:            uc.Email,
 		EmailVerified:    uc.EmailVerified,
 		Username:         uc.CognitoUsername,
+		Name:             uc.Name,
 		SubscriptionTier: uc.SubscriptionTier,
 		LastLogin:        time.Unix(uc.AuthTime, 0),
 	}

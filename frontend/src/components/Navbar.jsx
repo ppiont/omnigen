@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/useAuth.js";
 import "../styles/navbar.css";
 
 function Navbar() {
@@ -99,8 +99,11 @@ function Navbar() {
               <Link to="/dashboard" className="navbar-link">
                 Dashboard
               </Link>
-              <span className="navbar-user">{user?.email}</span>
-              <button onClick={logout} className="navbar-link navbar-link-secondary">
+              <span className="navbar-user">{user?.name || user?.email}</span>
+              <button
+                onClick={logout}
+                className="navbar-link navbar-link-secondary"
+              >
                 Logout
               </button>
             </>

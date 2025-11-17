@@ -3,11 +3,12 @@ import {
   CognitoUser,
   AuthenticationDetails,
   CognitoUserAttribute,
-} from 'amazon-cognito-identity-js';
+} from "amazon-cognito-identity-js";
 
 const poolData = {
-  UserPoolId: import.meta.env.VITE_COGNITO_USER_POOL_ID || 'us-east-1_PLACEHOLDER',
-  ClientId: import.meta.env.VITE_COGNITO_CLIENT_ID || 'PLACEHOLDER_CLIENT_ID',
+  UserPoolId:
+    import.meta.env.VITE_COGNITO_USER_POOL_ID || "us-east-1_PLACEHOLDER",
+  ClientId: import.meta.env.VITE_COGNITO_CLIENT_ID || "PLACEHOLDER_CLIENT_ID",
 };
 
 const userPool = new CognitoUserPool(poolData);
@@ -45,8 +46,8 @@ export function loginUser(email, password) {
       newPasswordRequired: (userAttributes) => {
         // User needs to set a new password
         reject({
-          code: 'NewPasswordRequired',
-          message: 'Please set a new password',
+          code: "NewPasswordRequired",
+          message: "Please set a new password",
           userAttributes,
         });
       },
@@ -65,11 +66,11 @@ export function signupUser(name, email, password) {
   return new Promise((resolve, reject) => {
     const attributeList = [
       new CognitoUserAttribute({
-        Name: 'email',
+        Name: "email",
         Value: email,
       }),
       new CognitoUserAttribute({
-        Name: 'name',
+        Name: "name",
         Value: name,
       }),
     ];
@@ -172,7 +173,7 @@ export function confirmPassword(email, code, newPassword) {
 
     cognitoUser.confirmPassword(code, newPassword, {
       onSuccess: () => {
-        resolve('Password reset successful');
+        resolve("Password reset successful");
       },
       onFailure: (err) => {
         reject(err);
@@ -190,7 +191,7 @@ export function getCurrentSession() {
     const cognitoUser = userPool.getCurrentUser();
 
     if (!cognitoUser) {
-      reject(new Error('No user found'));
+      reject(new Error("No user found"));
       return;
     }
 
@@ -201,7 +202,7 @@ export function getCurrentSession() {
       }
 
       if (!session.isValid()) {
-        reject(new Error('Session is invalid'));
+        reject(new Error("Session is invalid"));
         return;
       }
 
@@ -223,7 +224,7 @@ export function refreshSession() {
     const cognitoUser = userPool.getCurrentUser();
 
     if (!cognitoUser) {
-      reject(new Error('No user found'));
+      reject(new Error("No user found"));
       return;
     }
 
@@ -270,11 +271,11 @@ export function getUserAttributes() {
     const cognitoUser = userPool.getCurrentUser();
 
     if (!cognitoUser) {
-      reject(new Error('No user found'));
+      reject(new Error("No user found"));
       return;
     }
 
-    cognitoUser.getSession((err, session) => {
+    cognitoUser.getSession((err) => {
       if (err) {
         reject(err);
         return;
