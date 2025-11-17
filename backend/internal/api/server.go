@@ -160,18 +160,8 @@ func (s *Server) setupRoutes() {
 			s.config.Logger,
 		)
 
-		parserHandler := handlers.NewParserHandler(
-			s.config.ParserService,
-			s.config.Logger,
-		)
-
 		// Generation routes
 		v1.POST("/generate", generateHandler.Generate)
-		v1.POST("/parse", parserHandler.Parse)
-
-		// Script routes (GET/PUT - no quota enforcement needed)
-		v1.GET("/scripts/:id", parserHandler.GetScript)
-		v1.PUT("/scripts/:id", parserHandler.UpdateScript)
 
 		// Job routes
 		v1.GET("/jobs/:id", jobsHandler.GetJob)

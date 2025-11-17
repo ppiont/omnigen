@@ -77,7 +77,25 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		zap.String("job_id", job.JobID),
 		zap.String("script_id", script.ScriptID),
 		zap.Int("num_scenes", len(script.Scenes)),
+		zap.String("audio_mood", script.AudioSpec.MusicMood),
+		zap.String("audio_style", script.AudioSpec.MusicStyle),
 	)
+
+	// Log each scene for visibility
+	for i, scene := range script.Scenes {
+		h.logger.Info("Scene details",
+			zap.String("job_id", job.JobID),
+			zap.Int("scene_number", i+1),
+			zap.Float64("start_time", scene.StartTime),
+			zap.Float64("duration", scene.Duration),
+			zap.String("shot_type", string(scene.ShotType)),
+			zap.String("camera_angle", string(scene.CameraAngle)),
+			zap.String("lighting", string(scene.Lighting)),
+			zap.String("color_grade", string(scene.ColorGrade)),
+			zap.String("mood", string(scene.Mood)),
+			zap.String("generation_prompt", scene.GenerationPrompt),
+		)
+	}
 
 	// STEP 2: Generate video clips sequentially
 	var clipVideos []ClipVideo
@@ -234,11 +252,14 @@ func (h *GenerateHandler) generateClip(
 			return ClipVideo{}, fmt.Errorf("kling generation failed: %s", result.Error)
 		}
 
-		h.logger.Debug("Kling still processing",
-			zap.String("job_id", jobID),
-			zap.Int("attempt", attempt),
-			zap.String("status", result.Status),
-		)
+		// Log only every 12th attempt (every minute instead of every 5 seconds)
+		if attempt%12 == 0 {
+			h.logger.Debug("Kling still processing",
+				zap.String("job_id", jobID),
+				zap.Int("attempt", attempt),
+				zap.String("status", result.Status),
+			)
+		}
 	}
 
 	return ClipVideo{}, fmt.Errorf("clip generation timed out after %d attempts", maxAttempts)
@@ -259,12 +280,21 @@ func (h *GenerateHandler) processVideo(
 	defer os.RemoveAll(tmpDir)
 
 	// Download video from Replicate URL
+	h.logger.Info("Downloading video from Replicate",
+		zap.String("job_id", jobID),
+		zap.Int("clip", clipNumber),
+		zap.String("url", videoURL),
+	)
 	videoPath := filepath.Join(tmpDir, "video.mp4")
 	if err := h.downloadFile(ctx, videoURL, videoPath); err != nil {
 		return "", "", fmt.Errorf("failed to download video: %w", err)
 	}
 
 	// Extract last frame using ffmpeg
+	h.logger.Info("Extracting last frame with ffmpeg",
+		zap.String("job_id", jobID),
+		zap.Int("clip", clipNumber),
+	)
 	lastFramePath := filepath.Join(tmpDir, "last_frame.jpg")
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-sseof", "-1",
@@ -280,9 +310,18 @@ func (h *GenerateHandler) processVideo(
 			zap.Error(err),
 		)
 		lastFramePath = "" // Continue without last frame
+	} else {
+		h.logger.Info("Last frame extracted successfully",
+			zap.String("job_id", jobID),
+			zap.Int("clip", clipNumber),
+		)
 	}
 
 	// Upload video to S3
+	h.logger.Info("Uploading video to S3",
+		zap.String("job_id", jobID),
+		zap.Int("clip", clipNumber),
+	)
 	videoS3Key := fmt.Sprintf("videos/%s/clip-%d.mp4", jobID, clipNumber)
 	videoS3URL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, videoS3Key, videoPath, "video/mp4")
 	if err != nil {
@@ -375,10 +414,13 @@ func (h *GenerateHandler) generateAudio(
 			return "", fmt.Errorf("minimax generation failed: %s", result.Error)
 		}
 
-		h.logger.Debug("Minimax still processing",
-			zap.String("job_id", jobID),
-			zap.Int("attempt", attempt),
-		)
+		// Log only every 12th attempt (every minute instead of every 5 seconds)
+		if attempt%12 == 0 {
+			h.logger.Debug("Minimax still processing",
+				zap.String("job_id", jobID),
+				zap.Int("attempt", attempt),
+			)
+		}
 	}
 
 	return "", fmt.Errorf("audio generation timed out")
@@ -393,12 +435,19 @@ func (h *GenerateHandler) processAudio(ctx context.Context, jobID string, audioU
 	defer os.RemoveAll(tmpDir)
 
 	// Download audio
+	h.logger.Info("Downloading audio from Replicate",
+		zap.String("job_id", jobID),
+		zap.String("url", audioURL),
+	)
 	audioPath := filepath.Join(tmpDir, "music.mp3")
 	if err := h.downloadFile(ctx, audioURL, audioPath); err != nil {
 		return "", fmt.Errorf("failed to download audio: %w", err)
 	}
 
 	// Upload to S3
+	h.logger.Info("Uploading audio to S3",
+		zap.String("job_id", jobID),
+	)
 	audioS3Key := fmt.Sprintf("videos/%s/music.mp3", jobID)
 	audioS3URL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, audioS3Key, audioPath, "audio/mpeg")
 	if err != nil {
@@ -428,6 +477,10 @@ func (h *GenerateHandler) composeVideo(
 	defer os.RemoveAll(tmpDir)
 
 	// Download all clips from S3
+	h.logger.Info("Downloading clips from S3 for composition",
+		zap.String("job_id", jobID),
+		zap.Int("num_clips", len(clips)),
+	)
 	var clipPaths []string
 	for i, clip := range clips {
 		clipPath := filepath.Join(tmpDir, fmt.Sprintf("clip-%d.mp4", i+1))
@@ -438,6 +491,9 @@ func (h *GenerateHandler) composeVideo(
 	}
 
 	// Download audio from S3
+	h.logger.Info("Downloading audio from S3 for composition",
+		zap.String("job_id", jobID),
+	)
 	audioPath := filepath.Join(tmpDir, "music.mp3")
 	if err := h.s3Service.DownloadFile(ctx, h.assetsBucket, extractS3Key(audioURL), audioPath); err != nil {
 		return "", fmt.Errorf("failed to download audio: %w", err)
@@ -455,6 +511,10 @@ func (h *GenerateHandler) composeVideo(
 	f.Close()
 
 	// Concatenate clips
+	h.logger.Info("Concatenating video clips with ffmpeg",
+		zap.String("job_id", jobID),
+		zap.Int("num_clips", len(clipPaths)),
+	)
 	videoNoAudio := filepath.Join(tmpDir, "video_no_audio.mp4")
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-f", "concat",
@@ -473,6 +533,9 @@ func (h *GenerateHandler) composeVideo(
 	}
 
 	// Add audio
+	h.logger.Info("Merging audio track with ffmpeg",
+		zap.String("job_id", jobID),
+	)
 	finalVideo := filepath.Join(tmpDir, "final.mp4")
 	cmd = exec.CommandContext(ctx, "ffmpeg",
 		"-i", videoNoAudio,
@@ -492,6 +555,9 @@ func (h *GenerateHandler) composeVideo(
 	}
 
 	// Upload final video to S3
+	h.logger.Info("Uploading final video to S3",
+		zap.String("job_id", jobID),
+	)
 	finalS3Key := fmt.Sprintf("videos/%s/final.mp4", jobID)
 	finalURL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, finalS3Key, finalVideo, "video/mp4")
 	if err != nil {

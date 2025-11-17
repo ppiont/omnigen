@@ -59,11 +59,6 @@ func JWTAuthMiddleware(validator *JWTValidator, logger *zap.Logger) gin.HandlerF
 		// Store user information in context
 		SetUserClaims(c, claims)
 
-		logger.Debug("User authenticated",
-			zap.String("user_id", claims.Sub),
-			zap.String("email", claims.Email),
-			zap.String("subscription_tier", claims.SubscriptionTier))
-
 		// Continue to next handler
 		c.Next()
 	}
