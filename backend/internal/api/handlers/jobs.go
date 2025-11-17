@@ -220,11 +220,13 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 		jobResponses = append(jobResponses, JobResponse{
 			JobID:        job.JobID,
 			Status:       job.Status,
+			Stage:        job.Stage,
+			Metadata:     job.Metadata,
 			Prompt:       job.Prompt,
 			Duration:     job.Duration,
-			Style:        job.Style,
 			VideoURL:     videoURL,
 			CreatedAt:    job.CreatedAt,
+			UpdatedAt:    job.UpdatedAt,
 			CompletedAt:  job.CompletedAt,
 			ErrorMessage: job.ErrorMessage,
 		})
