@@ -59,8 +59,11 @@ type GenerateRequest struct {
 	AspectRatio string `json:"aspect_ratio" binding:"required,oneof=16:9 9:16 1:1"`
 
 	// Image options - TWO separate use cases:
-	StartImage         string `json:"start_image,omitempty" binding:"omitempty,url"`          // Used ONLY for first scene initialization
+	StartImage          string `json:"start_image,omitempty" binding:"omitempty,url"`           // Used ONLY for first scene initialization
 	StyleReferenceImage string `json:"style_reference_image,omitempty" binding:"omitempty,url"` // Used to guide visual style across ALL clips
+
+	// Video title (Phase 1 - UI enhancement)
+	Title string `json:"title,omitempty" binding:"omitempty,max=100"` // Optional video title
 
 	// Enhanced prompt options (Phase 1 - all optional)
 	Style             string `json:"style,omitempty" binding:"omitempty,oneof=cinematic documentary energetic minimal dramatic playful"`
@@ -154,6 +157,11 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		TTL:         time.Now().Add(7 * 24 * time.Hour).Unix(),
+	}
+
+	// Set title if provided
+	if req.Title != "" {
+		job.Title = req.Title
 	}
 
 	// Save job to database

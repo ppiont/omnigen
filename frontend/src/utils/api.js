@@ -274,6 +274,16 @@ export const jobs = {
    * @returns {Promise<{job_id: string, status: string, progress: number, current_stage: string, estimated_time_remaining: number, stages_completed: Array, stages_pending: Array}>}
    */
   progress: (id) => apiRequest(`/api/v1/jobs/${id}/progress`),
+
+  /**
+   * Delete a job
+   * @param {string} id - Job ID
+   * @returns {Promise<void>}
+   */
+  delete: (id) =>
+    apiRequest(`/api/v1/jobs/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 /**
@@ -287,10 +297,23 @@ export const generate = {
    * @param {number} params.duration - Duration in seconds
    * @param {string} params.aspect_ratio - Aspect ratio (16:9, 9:16, 1:1)
    * @param {string} params.style - Visual style
+   * @param {string} params.title - Optional video title
    * @returns {Promise<{job_id: string, status: string}>}
    */
   create: (params) =>
     apiRequest('/api/v1/generate', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  /**
+   * Generate a catchy video title from prompt
+   * @param {Object} params - Title generation parameters
+   * @param {string} params.prompt - Video description
+   * @returns {Promise<{title: string}>}
+   */
+  title: (params) =>
+    apiRequest('/api/v1/generate-title', {
       method: 'POST',
       body: JSON.stringify(params),
     }),

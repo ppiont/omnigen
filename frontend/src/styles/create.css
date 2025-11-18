@@ -12,6 +12,131 @@
 }
 
 /* ===================================
+   Title Generation
+   =================================== */
+
+.prompt-textarea-wrapper {
+  position: relative;
+}
+
+.generate-title-btn {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(180, 76, 255, 0.1);
+  border: 1px solid rgba(180, 76, 255, 0.3);
+  border-radius: 6px;
+  color: var(--aurora-purple, #b44cff);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 1;
+}
+
+.generate-title-btn:hover:not(:disabled) {
+  background: rgba(180, 76, 255, 0.15);
+  border-color: var(--aurora-purple, #b44cff);
+  transform: translateY(-1px);
+}
+
+.generate-title-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(180, 76, 255, 0.3);
+  border-top-color: var(--aurora-purple, #b44cff);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.title-section {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.title-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary, #9ca3b8);
+}
+
+.title-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--create-input-bg);
+  border: 1px solid var(--create-input-border);
+  border-radius: 8px;
+  color: var(--text-primary, #e8edf5);
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease;
+}
+
+.title-input:focus {
+  outline: none;
+  border-color: var(--create-input-focus);
+}
+
+.suggested-title {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.suggested-title .title-input {
+  flex: 1;
+  background: rgba(180, 76, 255, 0.05);
+  border-color: rgba(180, 76, 255, 0.3);
+}
+
+.title-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.title-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.title-btn.accept {
+  background: rgba(124, 255, 0, 0.1);
+  border-color: rgba(124, 255, 0, 0.3);
+  color: var(--aurora-green, #7cff00);
+}
+
+.title-btn.accept:hover {
+  background: rgba(124, 255, 0, 0.15);
+  border-color: var(--aurora-green, #7cff00);
+}
+
+.title-btn.edit {
+  background: transparent;
+  border-color: var(--create-input-border);
+  color: var(--text-secondary, #9ca3b8);
+}
+
+.title-btn.edit:hover {
+  border-color: var(--text-secondary, #9ca3b8);
+  color: var(--text-primary, #e8edf5);
+}
+
+/* ===================================
    Media Upload Bar (Reference & Template Images)
    =================================== */
 
@@ -69,6 +194,8 @@
 
 .media-icon {
   font-size: 1.25rem;
+  font-weight: 300;
+  line-height: 1;
 }
 
 .media-label {
@@ -245,7 +372,6 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-left: auto;
   padding-left: 1rem;
   border-left: 1px solid var(--create-input-border);
 }
@@ -297,7 +423,9 @@
    =================================== */
 
 .brand-preset-selector {
-  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8, 8px);
 }
 
 .preset-select-wrapper {
@@ -309,6 +437,20 @@
 
 .preset-dropdown {
   flex: 1;
+  padding-right: 2.5rem;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23999999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+}
+
+[data-theme="light"] .preset-dropdown {
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23333333' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
 }
 
 .preset-color-swatches {

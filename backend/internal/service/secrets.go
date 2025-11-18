@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
@@ -68,6 +69,12 @@ func (s *SecretsService) GetAPIKeys(ctx context.Context) ([]string, error) {
 
 // GetReplicateAPIKey retrieves the Replicate API key
 func (s *SecretsService) GetReplicateAPIKey(ctx context.Context) (string, error) {
+	// Check environment variable first (for local development)
+	if apiKey := os.Getenv("REPLICATE_API_KEY"); apiKey != "" {
+		s.logger.Info("Using Replicate API key from environment variable")
+		return apiKey, nil
+	}
+
 	s.logger.Info("Retrieving Replicate API key from Secrets Manager",
 		zap.String("secret_arn", s.replicateSecretARN),
 	)
