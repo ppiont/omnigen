@@ -839,12 +839,40 @@ function Workspace() {
         {/* Timeline Editor - Full Width at Bottom */}
         <div className="workspace-timeline-section">
           <div className="workspace-timeline-card">
-            <Timeline 
-              videoDuration={jobData.duration || 30}
-              scenes={jobData.scenes || []}
-              audioSpec={jobData.audio_spec || null}
-              audioUrl={jobData.audio_url || null}
-            />
+            {(() => {
+              // Extract scenes from various possible locations in the data structure
+              const scenes = 
+                jobData.scenes || 
+                jobData.metadata?.scenes || 
+                jobData.metadata?.script?.scenes || 
+                [];
+              
+              // Extract audio spec from various possible locations
+              const audioSpec = 
+                jobData.audio_spec || 
+                jobData.metadata?.audio_spec || 
+                jobData.metadata?.script?.audio_spec || 
+                null;
+              
+              // Debug logging
+              console.log("[WORKSPACE] Timeline data:", {
+                videoDuration: jobData.duration || 30,
+                scenesCount: scenes.length,
+                scenes: scenes,
+                audioSpec: audioSpec,
+                audioUrl: jobData.audio_url,
+                fullJobData: jobData,
+              });
+              
+              return (
+                <Timeline 
+                  videoDuration={jobData.duration || 30}
+                  scenes={scenes}
+                  audioSpec={audioSpec}
+                  audioUrl={jobData.audio_url || null}
+                />
+              );
+            })()}
           </div>
         </div>
       </div>

@@ -12,16 +12,31 @@ function Timeline({
   audioUrl = null,
   onSeek 
 }) {
+  // Debug logging
+  console.log("[TIMELINE] Received props:", {
+    videoDuration,
+    scenesCount: scenes.length,
+    scenes: scenes,
+    audioSpec: audioSpec,
+    audioUrl: audioUrl,
+  });
+  
   // Map scenes to video track segments
   const videoTrack = {
-    segments: scenes.map((scene, index) => ({
-      id: scene.scene_number || index + 1,
-      start: scene.start_time || 0,
-      end: (scene.start_time || 0) + (scene.duration || 0),
-      label: scene.location || `Scene ${scene.scene_number || index + 1}`,
-      action: scene.action,
-    })),
+    segments: scenes.map((scene, index) => {
+      const segment = {
+        id: scene.scene_number || scene.sceneNumber || index + 1,
+        start: scene.start_time || scene.startTime || 0,
+        end: (scene.start_time || scene.startTime || 0) + (scene.duration || 0),
+        label: scene.location || `Scene ${scene.scene_number || scene.sceneNumber || index + 1}`,
+        action: scene.action,
+      };
+      console.log(`[TIMELINE] Mapped scene ${index + 1}:`, segment);
+      return segment;
+    }),
   };
+  
+  console.log("[TIMELINE] Video track segments:", videoTrack.segments);
 
   // Map audio to music track (if audio is enabled and URL exists)
   const musicTrack = {
