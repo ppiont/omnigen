@@ -91,7 +91,7 @@
 }
 
 .password-input-wrapper .form-input.success {
-  border-color: var(--aurora-green);
+  border-color: var(--mint-accent);
   box-shadow: 0 0 0 1px rgba(124, 255, 0, 0.4);
 }
 
@@ -100,7 +100,7 @@
   right: 56px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--aurora-green);
+  color: var(--mint-accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -139,7 +139,7 @@
   border-radius: var(--radius-base);
   background: rgba(124, 255, 0, 0.12);
   border: 1px solid rgba(124, 255, 0, 0.3);
-  color: var(--aurora-green);
+  color: var(--mint-accent);
   font-size: 0.9rem;
   font-weight: 600;
 }
@@ -150,8 +150,8 @@
   padding: var(--space-12) var(--space-24);
   font-size: 1rem;
   font-weight: 600;
-  color: #0a0e1a;
-  background: linear-gradient(120deg, var(--aurora-green), var(--aurora-teal));
+  color: #000000;
+  background: linear-gradient(120deg, var(--mint-accent), var(--blue-medium));
   box-shadow: 0 10px 30px rgba(124, 255, 0, 0.25);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -176,7 +176,7 @@
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
   background: rgba(180, 76, 255, 0.15);
-  color: var(--aurora-purple);
+  color: var(--blue-accent);
   font-size: 0.85rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -267,7 +267,7 @@
 }
 
 .api-key-table .status.active {
-  color: var(--aurora-green);
+  color: var(--mint-accent);
 }
 
 .api-key-table .status.inactive {
@@ -306,7 +306,7 @@
 }
 
 .strength-bar.filled {
-  background: var(--aurora-green);
+  background: var(--mint-accent);
 }
 
 .strength-bar.filled.weak {
@@ -314,7 +314,7 @@
 }
 
 .strength-bar.filled.medium {
-  background: #ffa500;
+  background: var(--warning);
 }
 
 .strength-text {
@@ -327,11 +327,11 @@
 }
 
 .strength-text.medium {
-  color: #ffa500;
+  color: var(--warning);
 }
 
 .strength-text.strong {
-  color: var(--aurora-green);
+  color: var(--mint-accent);
 }
 
 @keyframes checkmarkFadeIn {

@@ -90,8 +90,8 @@ function Sidebar({
         ) : (
           <>
             <div className="brand-content">
-              <Logo size="small" />
-              <span className="brand-mark">OMNIGEN</span>
+              <Logo size="large" />
+              <span className="brand-mark">PharmaGen</span>
             </div>
             <button
               type="button"

@@ -14,6 +14,7 @@ import VideoLibrary from "./pages/VideoLibrary.jsx";
 import Workspace from "./pages/Workspace.jsx";
 import Settings from "./pages/Settings.jsx";
 import NotFound from "./pages/NotFound.jsx";
+import Onboarding from "./pages/Onboarding.jsx";
 
 function App() {
   const location = useLocation();
@@ -74,6 +75,14 @@ function App() {
             element={
               <AppLayout>
                 <Settings />
+              </AppLayout>
+            }
+          />
+          <Route
+            path="/onboarding"
+            element={
+              <AppLayout>
+                <Onboarding />
               </AppLayout>
             }
           />

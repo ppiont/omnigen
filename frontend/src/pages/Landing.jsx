@@ -1,30 +1,31 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/useAuth.js";
+import { LayoutGrid, Palette, Zap, DollarSign } from "lucide-react";
 import FeatureCard from "../components/FeatureCard.jsx";
 import "../styles/aurora.css";
 import "../styles/landing.css";
 
 const features = [
   {
-    icon: "📱",
+    icon: LayoutGrid,
     title: "Multi-Format Export",
     description:
       "Generate videos in 16:9, 9:16, and 1:1 aspect ratios simultaneously for all platforms.",
   },
   {
-    icon: "🎨",
+    icon: Palette,
     title: "Brand Consistency",
     description:
       "Apply your brand colors, fonts, and style guidelines across every variation automatically.",
   },
   {
-    icon: "⚡",
+    icon: Zap,
     title: "A/B Test Ready",
     description:
       "Create multiple creative variations instantly to see which concepts drive the best performance.",
   },
   {
-    icon: "💰",
+    icon: DollarSign,
     title: "Cost Efficient",
     description:
       "Generate professional-quality videos at under $2 per minute with optimized AI pipelines.",

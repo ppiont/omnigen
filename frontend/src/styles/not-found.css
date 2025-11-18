@@ -20,8 +20,8 @@
   margin: 0;
   background: linear-gradient(
     135deg,
-    var(--aurora-green),
-    var(--aurora-purple)
+    var(--mint-accent),
+    var(--blue-accent)
   );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -63,14 +63,14 @@
 }
 
 .btn-primary {
-  background: linear-gradient(120deg, var(--aurora-green), var(--aurora-teal));
-  color: #031108;
-  box-shadow: 0 0 20px var(--glow-green);
+  background: linear-gradient(120deg, var(--mint-accent), var(--blue-medium));
+  color: #000000;
+  box-shadow: 0 0 20px var(--glow-mint);
 }
 
 .btn-primary:hover,
 .btn-primary:focus-visible {
   filter: brightness(1.05);
-  box-shadow: 0 0 30px var(--glow-green);
+  box-shadow: 0 0 30px var(--glow-mint);
   transform: translateY(-1px);
 }

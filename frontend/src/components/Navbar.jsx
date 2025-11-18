@@ -19,12 +19,11 @@ function Navbar() {
           >
             {/* <!-- Background is transparent on purpose --> */}
             <defs>
-              {/* <!-- Aurora gradient for prism --> */}
+              {/* <!-- Mint green and baby blue gradient for prism --> */}
               <linearGradient id="omnigen-aurora" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#7cff00" />
-                <stop offset="30%" stopColor="#00ffd1" />
-                <stop offset="65%" stopColor="#b44cff" />
-                <stop offset="100%" stopColor="#ff00ff" />
+                <stop offset="0%" stopColor="#A8E6CF" />
+                <stop offset="50%" stopColor="#7FD4B0" />
+                <stop offset="100%" stopColor="#B3E5FC" />
               </linearGradient>
 
               {/* <!-- Soft glow --> */}
@@ -50,9 +49,9 @@ function Navbar() {
                 x2="1"
                 y2="0"
               >
-                <stop offset="0%" stopColor="#e8edf5" />
-                <stop offset="40%" stopColor="#9ca3b8" />
-                <stop offset="100%" stopColor="#b44cff" />
+                <stop offset="0%" stopColor="#1A1A1A" />
+                <stop offset="50%" stopColor="#5EC19A" />
+                <stop offset="100%" stopColor="#4FC3F7" />
               </linearGradient>
             </defs>
 
@@ -66,7 +65,7 @@ function Navbar() {
               {/* <!-- Inner highlight facet --> */}
               <path
                 d="M42 8 L66 20 L66 50 L42 62 L18 50 L18 20 Z"
-                fill="rgba(10,14,26,0.75)"
+                fill="rgba(255,255,255,0.3)"
               />
               {/* <!-- Light diagonal highlight --> */}
               <path
@@ -87,7 +86,7 @@ function Navbar() {
                 letterSpacing="0.04em"
                 fill="url(#omnigen-text-gradient)"
               >
-                OmniGen
+                PharmaGen
               </text>
             </g>
           </svg>

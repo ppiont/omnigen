@@ -59,8 +59,7 @@ function Create() {
 
   // Phase 1 additions
   const [selectedBrandPreset, setSelectedBrandPreset] = useState("default");
-  const [referenceImage, setReferenceImage] = useState(null);
-  const [templateImage, setTemplateImage] = useState(null);
+  const [productImage, setProductImage] = useState(null);
   const [validationError, setValidationError] = useState("");
 
   // Phase 2 additions - State Machine
@@ -167,48 +166,25 @@ function Create() {
       if (proCinematography) generateParams.pro_cinematography = true;
       if (creativeBoost) generateParams.creative_boost = true;
 
-      // Add style_reference_image (🎨 Reference Style Img - guides style for ALL clips)
-      if (referenceImage) {
+      // Add start_image (Product Image - used ONLY for first scene)
+      if (productImage) {
         // Use preview (data URI) if available, otherwise skip
         if (
-          referenceImage.preview &&
-          referenceImage.preview.startsWith("data:image/")
+          productImage.preview &&
+          productImage.preview.startsWith("data:image/")
         ) {
-          generateParams.style_reference_image = referenceImage.preview;
-          console.log("[CREATE] 🎨 Using style reference image (data URI)");
+          generateParams.start_image = productImage.preview;
+          console.log("[CREATE] 📸 Using product image for first scene (data URI)");
         } else if (
-          referenceImage.url &&
-          (referenceImage.url.startsWith("http://") ||
-            referenceImage.url.startsWith("https://"))
+          productImage.url &&
+          (productImage.url.startsWith("http://") ||
+            productImage.url.startsWith("https://"))
         ) {
-          generateParams.style_reference_image = referenceImage.url;
-          console.log("[CREATE] 🎨 Using style reference image (URL)");
+          generateParams.start_image = productImage.url;
+          console.log("[CREATE] 📸 Using product image for first scene (URL)");
         } else {
           console.log(
-            "[CREATE] ⚠️ Style reference image provided but not a valid URL, skipping"
-          );
-        }
-      }
-
-      // Add start_image (🖼️ Starting Img - used ONLY for first scene)
-      if (templateImage) {
-        // Use preview (data URI) if available, otherwise skip
-        if (
-          templateImage.preview &&
-          templateImage.preview.startsWith("data:image/")
-        ) {
-          generateParams.start_image = templateImage.preview;
-          console.log("[CREATE] 🖼️ Using start image for first scene (data URI)");
-        } else if (
-          templateImage.url &&
-          (templateImage.url.startsWith("http://") ||
-            templateImage.url.startsWith("https://"))
-        ) {
-          generateParams.start_image = templateImage.url;
-          console.log("[CREATE] 🖼️ Using start image for first scene (URL)");
-        } else {
-          console.log(
-            "[CREATE] ⚠️ Start image provided but not a valid URL, skipping"
+            "[CREATE] ⚠️ Product image provided but not a valid URL, skipping"
           );
         }
       }
@@ -438,8 +414,7 @@ function Create() {
           brandPreset: selectedBrandPreset,
           autoEnhance,
           loopVideo,
-          referenceImage: referenceImage?.name || null,
-          templateImage: templateImage?.name || null,
+          productImage: productImage?.name || null,
         },
         generatedAt: Date.now(),
       },
@@ -493,10 +468,8 @@ function Create() {
 
             {/* Media Upload Bar - Below prompt */}
             <MediaUploadBar
-              referenceImage={referenceImage}
-              onReferenceImageSelect={setReferenceImage}
-              templateImage={templateImage}
-              onTemplateImageSelect={setTemplateImage}
+              productImage={productImage}
+              onProductImageSelect={setProductImage}
               durations={durations}
               selectedDuration={selectedDuration}
               onDurationChange={setSelectedDuration}

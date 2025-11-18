@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { FileText, Info } from "lucide-react";
 import VideoPlayer from "../components/workspace/VideoPlayer";
-import ChatInterface from "../components/workspace/ChatInterface";
 import VideoMetadata from "../components/workspace/VideoMetadata";
+import ScriptEditor from "../components/workspace/ScriptEditor";
+import Timeline from "../components/workspace/Timeline";
 import ActionsToolbar from "../components/workspace/ActionsToolbar";
-import RefinementModal from "../components/workspace/RefinementModal";
-import { jobs, generate } from "../utils/api";
+import { jobs } from "../utils/api";
+import { addRecentlyOpenedVideo } from "../utils/recentVideos";
 import "../styles/workspace.css";
 
 /**
@@ -22,8 +24,9 @@ function Workspace() {
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState(null);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(null);
-  const [refinementModalOpen, setRefinementModalOpen] = useState(false);
-  const [refinementJobId, setRefinementJobId] = useState(null);
+  const [activeSidebarTab, setActiveSidebarTab] = useState("metadata");
+  const [script, setScript] = useState("");
+  const scriptJobIdRef = useRef(null);
   const pollingIntervalRef = useRef(null);
   const pollingTimeoutRef = useRef(null);
   const retryTimeoutRef = useRef(null);
@@ -32,8 +35,10 @@ function Workspace() {
   /**
    * Flag used to disable UUID validation during early development. Set to
    * false when enforcing strict routing requirements.
+   * 
+   * TEMPORARILY DISABLED FOR TESTING - Allows any videoId to work
    */
-  const SKIP_UUID_VALIDATION = false;
+  const SKIP_UUID_VALIDATION = true;
 
   /**
    * Validates whether the provided ID string is a UUID or job-{UUID} format.
@@ -132,6 +137,11 @@ function Workspace() {
         setJobData(data);
         setRateLimitCountdown(null);
         linkRefreshAttemptsRef.current = 0;
+        
+        // Track this video as recently opened
+        if (data.job_id) {
+          addRecentlyOpenedVideo(data.job_id);
+        }
 
         if (data.status === "failed") {
           console.error("[WORKSPACE] ❌ Job failed:", data.error_message);
@@ -360,120 +370,43 @@ function Workspace() {
   };
 
   /**
-   * Handles video refinement request from chat interface.
-   * Creates a new generation job with the refinement prompt.
+   * Handles script changes from the script editor.
    *
-   * @param {string} refinementPrompt - User's refinement request
+   * @param {string} newScript - Updated script text
    */
-  const handleRefine = useCallback(
-    async (refinementPrompt) => {
-      if (!jobData) {
-        console.warn("[WORKSPACE] ⚠️ Cannot refine: No job data");
-        throw new Error("No video data available");
-      }
+  const handleScriptChange = useCallback((newScript) => {
+    setScript(newScript);
+    // TODO: Save script to backend or local storage
+  }, []);
 
-      console.log("=".repeat(80));
-      console.log("[WORKSPACE] 🎬 REFINEMENT REQUEST");
-      console.log("=".repeat(80));
-      console.log("[WORKSPACE] Original prompt:", jobData.prompt);
-      console.log("[WORKSPACE] Refinement prompt:", refinementPrompt);
-      console.log("[WORKSPACE] Original job ID:", jobData.job_id);
-
-      try {
-        // Build the refinement prompt by combining original prompt with refinement request
-        // For now, we'll use the refinement prompt directly (backend doesn't support parent_job_id yet)
-        const generateParams = {
-          prompt: refinementPrompt,
-          duration: jobData.duration || 10,
-          aspect_ratio: jobData.aspect_ratio || "16:9",
-        };
-
-        console.log("[WORKSPACE] 📡 Calling POST /api/v1/generate with params:", generateParams);
-
-        const generateResponse = await generate.create(generateParams);
-
-        const newJobId = generateResponse.job_id;
-        console.log("[WORKSPACE] ✅ Refinement job created");
-        console.log("[WORKSPACE] 🆔 New Job ID:", newJobId);
-
-        // Open modal and start tracking
-        setRefinementJobId(newJobId);
-        setRefinementModalOpen(true);
-
-        // Poll for completion and update video player when done
-        const pollForCompletion = async () => {
-          let pollCount = 0;
-          const maxPollAttempts = 300;
-          const pollInterval = 7000;
-
-          const poll = async () => {
-            pollCount++;
-            if (pollCount > maxPollAttempts) {
-              console.warn("[WORKSPACE] ⚠️ Max polling attempts reached for refinement");
-              return;
-            }
-
-            try {
-              const updatedJob = await jobs.get(newJobId);
-              console.log("[WORKSPACE] 📊 Refinement job status:", updatedJob.status);
-
-              if (updatedJob.status === "completed") {
-                console.log("[WORKSPACE] ✅ Refinement completed!");
-                console.log("[WORKSPACE] 🎬 New video URL:", updatedJob.video_url);
-
-                // Update the current job data with the new video
-                setJobData((prev) => ({
-                  ...prev,
-                  video_url: updatedJob.video_url,
-                  status: "completed",
-                }));
-
-                // Close modal after a brief delay
-                setTimeout(() => {
-                  setRefinementModalOpen(false);
-                  setRefinementJobId(null);
-                }, 1500);
-              } else if (updatedJob.status === "failed") {
-                console.error("[WORKSPACE] ❌ Refinement failed");
-                setRefinementModalOpen(false);
-                setRefinementJobId(null);
-              } else {
-                // Continue polling
-                setTimeout(poll, pollInterval);
-              }
-            } catch (error) {
-              console.error("[WORKSPACE] ⚠️ Error polling refinement:", error);
-              // Continue polling on error
-              setTimeout(poll, pollInterval);
-            }
-          };
-
-          // Start polling
-          setTimeout(poll, pollInterval);
-        };
-
-        // Start polling for completion
-        pollForCompletion();
-      } catch (error) {
-        console.error("[WORKSPACE] ❌ Refinement failed:", error);
-        throw error;
-      }
-    },
-    [jobData]
-  );
-
-  /**
-   * Closes the refinement modal.
-   */
-  const handleCloseRefinementModal = () => {
-    setRefinementModalOpen(false);
-    setRefinementJobId(null);
-  };
+  // MOCK DATA FOR TESTING - Set this to true to use mock data instead of API calls
+  const USE_MOCK_DATA = true;
 
   useEffect(() => {
     console.log("=".repeat(60));
     console.log("[WORKSPACE] 🏗️ Workspace component mounted/updated");
     console.log("[WORKSPACE] Video ID:", videoId);
+    
+    // Use mock data for testing
+    if (USE_MOCK_DATA) {
+      console.log("[WORKSPACE] 🎭 Using mock data for testing");
+      const mockJobData = {
+        job_id: videoId || "job-test-123",
+        title: "Test Video Workspace",
+        status: "completed",
+        video_url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+        prompt: "A professional pharmaceutical ad showcasing a new medication",
+        duration: 30,
+        aspect_ratio: "16:9",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        progress_percentage: 100,
+      };
+      setJobData(mockJobData);
+      setLoading(false);
+      setErrorState(null);
+      return;
+    }
     
     if (videoId) {
       console.log("[WORKSPACE] 📥 Fetching job data for video:", videoId);
@@ -504,6 +437,22 @@ function Workspace() {
     }
     clearPolling();
   }, [beginPolling, jobData?.status]);
+
+  useEffect(() => {
+    if (!jobData?.job_id) {
+      return;
+    }
+
+    if (scriptJobIdRef.current !== jobData.job_id) {
+      scriptJobIdRef.current = jobData.job_id;
+      setScript(jobData.prompt || "");
+      return;
+    }
+
+    if (!script && jobData.prompt) {
+      setScript(jobData.prompt);
+    }
+  }, [jobData?.job_id, jobData?.prompt, script]);
 
   useEffect(() => {
     let countdownInterval;
@@ -814,6 +763,19 @@ function Workspace() {
     ? `${jobData.job_id}-${jobData.video_url}`
     : jobData.job_id;
 
+  const sidebarTabs = [
+    {
+      id: "metadata",
+      label: "Metadata",
+      icon: <Info size={20} />,
+    },
+    {
+      id: "script",
+      label: "Script",
+      icon: <FileText size={20} />,
+    },
+  ];
+
   return (
     <div className="workspace-page">
       <div className="workspace-content loaded">
@@ -841,27 +803,77 @@ function Workspace() {
           />
         </div>
 
-        <main className="workspace-main">
-          <VideoPlayer
-            key={videoPlayerKey}
-            videoUrl={jobData.video_url}
-            status={jobData.status}
-            aspectRatio={jobData.aspect_ratio || "16:9"}
-            onRefresh={handleVideoRefresh}
-          />
+        <div className="workspace-body">
+          <section className="workspace-main-column">
+            <div className="workspace-player-card">
+              <VideoPlayer
+                key={videoPlayerKey}
+                videoUrl={jobData.video_url}
+                status={jobData.status}
+                aspectRatio={jobData.aspect_ratio || "16:9"}
+                onRefresh={handleVideoRefresh}
+              />
+            </div>
+          </section>
 
-          <div className="workspace-grid">
-            <VideoMetadata key={jobData.job_id} jobData={jobData} />
-            <ChatInterface jobData={jobData} onRefine={handleRefine} />
+          <aside className="workspace-inspector" aria-label="Video details">
+            <div
+              className="workspace-inspector-tabs"
+              role="tablist"
+              aria-orientation="vertical"
+            >
+              {sidebarTabs.map((tab) => {
+                const isActive = activeSidebarTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={`workspace-inspector-tab ${
+                      isActive ? "active" : ""
+                    }`}
+                    onClick={() => setActiveSidebarTab(tab.id)}
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-controls={`workspace-inspector-panel-${tab.id}`}
+                    tabIndex={isActive ? 0 : -1}
+                  >
+                    {tab.icon}
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div
+              className="workspace-inspector-panel"
+              role="tabpanel"
+              id={`workspace-inspector-panel-${activeSidebarTab}`}
+            >
+              {activeSidebarTab === "metadata" && (
+                <VideoMetadata key={jobData.job_id} jobData={jobData} />
+              )}
+              {activeSidebarTab === "script" && (
+                <ScriptEditor
+                  script={script}
+                  onChange={handleScriptChange}
+                />
+              )}
+            </div>
+          </aside>
+        </div>
+
+        {/* Timeline Editor - Full Width at Bottom */}
+        <div className="workspace-timeline-section">
+          <div className="workspace-timeline-card">
+            <Timeline 
+              videoDuration={jobData.duration || 30}
+              scenes={jobData.scenes || []}
+              audioSpec={jobData.audio_spec || null}
+              audioUrl={jobData.audio_url || null}
+            />
           </div>
-        </main>
+        </div>
       </div>
-
-      <RefinementModal
-        isOpen={refinementModalOpen}
-        jobId={refinementJobId}
-        onClose={handleCloseRefinementModal}
-      />
     </div>
   );
 }
