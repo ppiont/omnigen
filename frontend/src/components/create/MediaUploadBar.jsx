@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
-import { Upload, Image as ImageIcon, X } from "lucide-react";
+import { Image as ImageIcon, X } from "lucide-react";
+import PropTypes from "prop-types";
 import "../../styles/create.css";
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -14,7 +15,7 @@ function MediaUploadBar({
   onProductImageSelect,
   durations,
   selectedDuration,
-  onDurationChange
+  onDurationChange,
 }) {
   const [productError, setProductError] = useState("");
   const productInputRef = useRef(null);
@@ -30,7 +31,9 @@ function MediaUploadBar({
       return "Invalid file type. Please upload JPG, PNG, or WebP images.";
     }
     if (file.size > MAX_FILE_SIZE) {
-      return `File too large. Maximum size is ${formatFileSize(MAX_FILE_SIZE)}.`;
+      return `File too large. Maximum size is ${formatFileSize(
+        MAX_FILE_SIZE
+      )}.`;
     }
     return null;
   };
@@ -162,5 +165,18 @@ function MediaUploadBar({
     </div>
   );
 }
+
+MediaUploadBar.propTypes = {
+  productImage: PropTypes.shape({
+    file: PropTypes.object,
+    preview: PropTypes.string,
+    name: PropTypes.string,
+    size: PropTypes.number,
+  }),
+  onProductImageSelect: PropTypes.func.isRequired,
+  durations: PropTypes.arrayOf(PropTypes.string).isRequired,
+  selectedDuration: PropTypes.string.isRequired,
+  onDurationChange: PropTypes.func.isRequired,
+};
 
 export default MediaUploadBar;

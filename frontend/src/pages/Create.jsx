@@ -8,6 +8,7 @@ import BatchGenerationToggle from "../components/create/BatchGenerationToggle.js
 import GenerationState from "../components/create/GenerationState.jsx";
 import ScenePreviewGrid from "../components/create/ScenePreviewGrid.jsx";
 import { generate, jobs } from "../utils/api.js";
+import { Wand2 } from "lucide-react";
 import "../styles/dashboard.css";
 import "../styles/create.css";
 
@@ -61,6 +62,11 @@ function Create() {
   const [selectedBrandPreset, setSelectedBrandPreset] = useState("default");
   const [productImage, setProductImage] = useState(null);
   const [validationError, setValidationError] = useState("");
+  
+  // Title generation state
+  const [videoTitle, setVideoTitle] = useState("");
+  const [suggestedTitle, setSuggestedTitle] = useState("");
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
 
   // Phase 2 additions - State Machine
   const [generationState, setGenerationState] = useState("idle");
@@ -154,6 +160,11 @@ function Create() {
         duration: durationNum,
         aspect_ratio: selectedAspect,
       };
+      
+      // Add title if provided
+      if (videoTitle.trim()) {
+        generateParams.title = videoTitle.trim();
+      }
 
       // Add enhanced prompt options (Phase 1 - all optional)
       if (visualStyle) generateParams.style = visualStyle;
@@ -393,6 +404,39 @@ function Create() {
 
   const toggleAdvanced = () => setIsAdvancedOpen(!isAdvancedOpen);
 
+  // Handle title generation
+  const handleGenerateTitle = async () => {
+    if (!prompt.trim() || prompt.trim().length < 10) {
+      setValidationError("Please enter a prompt (at least 10 characters) to generate a title");
+      return;
+    }
+
+    setIsGeneratingTitle(true);
+    setSuggestedTitle("");
+    
+    try {
+      const response = await generate.title({ prompt: prompt.trim() });
+      setSuggestedTitle(response.title);
+      // Don't auto-set videoTitle - let user accept it
+    } catch (error) {
+      console.error("Failed to generate title:", error);
+      setValidationError("Failed to generate title. Please try again.");
+    } finally {
+      setIsGeneratingTitle(false);
+    }
+  };
+
+  // Handle accepting suggested title
+  const handleAcceptTitle = () => {
+    setVideoTitle(suggestedTitle);
+    setSuggestedTitle("");
+  };
+
+  // Handle editing title
+  const handleEditTitle = () => {
+    setSuggestedTitle("");
+  };
+
   // Handle viewing in workspace
   const handleViewWorkspace = () => {
     if (!generatedJobId) {
@@ -454,17 +498,76 @@ function Create() {
                 {characterCount} / {characterLimit}
               </span>
             </label>
-            <textarea
-              className="prompt-textarea"
-              placeholder="Describe your video ad... (e.g., 'Product showcase video for wireless headphones with modern aesthetic')"
-              value={prompt}
-              onChange={(e) => {
-                setPrompt(e.target.value);
-                if (validationError) setValidationError("");
-              }}
-              maxLength={characterLimit}
-              rows={6}
-            />
+            <div className="prompt-textarea-wrapper">
+              <textarea
+                className="prompt-textarea"
+                placeholder="Describe your video ad... (e.g., 'Product showcase video for wireless headphones with modern aesthetic')"
+                value={prompt}
+                onChange={(e) => {
+                  setPrompt(e.target.value);
+                  if (validationError) setValidationError("");
+                }}
+                maxLength={characterLimit}
+                rows={6}
+              />
+              <button
+                type="button"
+                className="generate-title-btn"
+                onClick={handleGenerateTitle}
+                disabled={isGeneratingTitle || !prompt.trim() || prompt.trim().length < 10}
+                title="Generate AI title"
+              >
+                {isGeneratingTitle ? (
+                  <span className="spinner-small" />
+                ) : (
+                  <Wand2 size={18} />
+                )}
+                <span>{isGeneratingTitle ? "Generating..." : "Generate Title"}</span>
+              </button>
+            </div>
+            
+            {/* Title Input */}
+            {(videoTitle || suggestedTitle) && (
+              <div className="title-section">
+                <label className="title-label">Video Title</label>
+                {suggestedTitle && !videoTitle ? (
+                  <div className="suggested-title">
+                    <input
+                      type="text"
+                      className="title-input"
+                      value={suggestedTitle}
+                      readOnly
+                      maxLength={60}
+                    />
+                    <div className="title-actions">
+                      <button
+                        type="button"
+                        className="title-btn accept"
+                        onClick={handleAcceptTitle}
+                      >
+                        Use
+                      </button>
+                      <button
+                        type="button"
+                        className="title-btn edit"
+                        onClick={handleEditTitle}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    className="title-input"
+                    placeholder="Enter video title (optional)"
+                    value={videoTitle}
+                    onChange={(e) => setVideoTitle(e.target.value)}
+                    maxLength={60}
+                  />
+                )}
+              </div>
+            )}
 
             {/* Media Upload Bar - Below prompt */}
             <MediaUploadBar

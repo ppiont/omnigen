@@ -35,10 +35,8 @@ function Workspace() {
   /**
    * Flag used to disable UUID validation during early development. Set to
    * false when enforcing strict routing requirements.
-   * 
-   * TEMPORARILY DISABLED FOR TESTING - Allows any videoId to work
    */
-  const SKIP_UUID_VALIDATION = true;
+  const SKIP_UUID_VALIDATION = false;
 
   /**
    * Validates whether the provided ID string is a UUID or job-{UUID} format.

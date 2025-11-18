@@ -26,6 +26,18 @@ export function AuthProvider({ children }) {
   const checkAuth = async () => {
     try {
       setLoading(true);
+
+      // Development mode: Skip authentication and use mock user
+      if (import.meta.env.MODE === 'development' || import.meta.env.DEV) {
+        setUser({
+          id: 'dev-user-123',
+          email: 'dev@localhost',
+          subscription_tier: 'pro',
+        });
+        setLoading(false);
+        return;
+      }
+
       // Try to get user info from backend (checks httpOnly cookie)
       const userData = await authAPI.me();
       setUser(userData);

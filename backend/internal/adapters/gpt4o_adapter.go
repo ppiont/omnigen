@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -172,14 +173,36 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
+	// Check initial output
+	var initialOutput string
+	for _, part := range gpt4oResp.Output {
+		initialOutput += part
+	}
+
 	g.logger.Info("Initial GPT-4o response",
 		zap.String("prediction_id", gpt4oResp.ID),
 		zap.String("status", gpt4oResp.Status),
 		zap.Int("initial_output_chunks", len(gpt4oResp.Output)),
+		zap.Int("initial_output_chars", len(initialOutput)),
+		zap.Bool("will_poll", gpt4oResp.Status != "succeeded"),
 	)
 
-	// If output not ready, poll for completion
-	if gpt4oResp.Status != "succeeded" {
+	// Check if we need to poll
+	// Poll if: status is not succeeded, OR output is empty or incomplete
+	needsPolling := gpt4oResp.Status != "succeeded" || len(initialOutput) == 0
+
+	// Also poll if output looks truncated (doesn't end with valid JSON)
+	if !needsPolling && len(initialOutput) > 0 {
+		trimmed := strings.TrimSpace(initialOutput)
+		if !strings.HasSuffix(trimmed, "}") {
+			g.logger.Warn("Initial output appears truncated, will poll",
+				zap.String("output_end", trimmed[max(0, len(trimmed)-100):]),
+			)
+			needsPolling = true
+		}
+	}
+
+	if needsPolling {
 		g.logger.Info("Waiting for GPT-4o completion",
 			zap.String("prediction_id", gpt4oResp.ID),
 			zap.String("status", gpt4oResp.Status),
@@ -209,13 +232,25 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 				continue
 			}
 
+			// Concatenate output to check actual content length
+			var currentOutput string
+			for _, part := range pollResp.Output {
+				currentOutput += part
+			}
+
 			g.logger.Info("Poll status check",
 				zap.String("status", pollResp.Status),
-				zap.Int("output_length", len(pollResp.Output)),
+				zap.Int("output_chunks", len(pollResp.Output)),
+				zap.Int("output_chars", len(currentOutput)),
 				zap.Int("attempt", attempt+1),
+				zap.String("output_preview", currentOutput[:min(200, len(currentOutput))]),
 			)
 
 			if pollResp.Status == "succeeded" && len(pollResp.Output) > 0 {
+				g.logger.Info("Generation succeeded, using final output",
+					zap.Int("final_output_chunks", len(pollResp.Output)),
+					zap.Int("final_output_chars", len(currentOutput)),
+				)
 				gpt4oResp = *pollResp
 				break
 			}
@@ -241,16 +276,41 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 
 	// Combine output array into single string
 	var scriptJSON string
-	for _, part := range gpt4oResp.Output {
+	for i, part := range gpt4oResp.Output {
 		scriptJSON += part
+		// Log suspicious chunks
+		if i < 5 || i >= len(gpt4oResp.Output)-5 {
+			g.logger.Debug("Output chunk",
+				zap.Int("chunk_index", i),
+				zap.Int("chunk_length", len(part)),
+				zap.String("chunk_preview", part[:min(50, len(part))]),
+			)
+		}
 	}
 
 	g.logger.Info("Received GPT-4o output",
 		zap.Int("output_length", len(scriptJSON)),
 		zap.Int("output_chunks", len(gpt4oResp.Output)),
+		zap.String("final_status", gpt4oResp.Status),
 		zap.String("output_preview", scriptJSON[:min(500, len(scriptJSON))]),
 		zap.String("output_end", scriptJSON[max(0, len(scriptJSON)-200):]),
 	)
+
+	// Try to find where valid JSON ends
+	lastBrace := strings.LastIndex(scriptJSON, "}")
+	if lastBrace > 0 && lastBrace < len(scriptJSON)-1 {
+		g.logger.Warn("Found content after last closing brace",
+			zap.Int("json_end_pos", lastBrace),
+			zap.Int("total_length", len(scriptJSON)),
+			zap.String("garbage_after_json", scriptJSON[lastBrace+1:min(lastBrace+100, len(scriptJSON))]),
+		)
+		// Truncate to last valid JSON closing brace
+		scriptJSON = scriptJSON[:lastBrace+1]
+		g.logger.Info("Truncated to last valid JSON brace", zap.Int("new_length", len(scriptJSON)))
+	}
+
+	// Log full output for debugging truncation issues
+	g.logger.Debug("Full GPT-4o output", zap.String("full_output", scriptJSON))
 
 	// Parse JSON into Script struct
 	script, err := g.parseScriptJSON(scriptJSON, styleDescription)
@@ -299,12 +359,21 @@ func (g *GPT4oAdapter) pollStatus(ctx context.Context, predictionID string) (*GP
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	g.logger.Debug("Poll response received",
+		zap.Int("body_length", len(body)),
+		zap.String("body_preview", string(body)[:min(500, len(body))]),
+	)
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	var gpt4oResp GPT4oResponse
 	if err := json.Unmarshal(body, &gpt4oResp); err != nil {
+		g.logger.Error("Failed to unmarshal poll response",
+			zap.Error(err),
+			zap.String("body", string(body)[:min(1000, len(body))]),
+		)
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
@@ -475,7 +544,7 @@ func buildUserPrompt(req *ScriptGenerationRequest) string {
 	)
 
 	if req.StartImage != "" {
-		prompt += fmt.Sprintf("\n**Starting Image:** %s (use as reference for first scene)", req.StartImage)
+		prompt += "\n**Starting Image:** A starting image will be provided for the first scene (leave start_image_url empty in JSON)"
 	}
 
 	prompt += `
@@ -485,6 +554,7 @@ func buildUserPrompt(req *ScriptGenerationRequest) string {
 - Generate varied scenes with different shot types, angles, and lighting (NO repetitive clips!)
 - Each scene must have a unique, detailed generation_prompt optimized for Kling AI
 - Derive appropriate music_mood and music_style based on the content
+- Leave start_image_url empty (will be populated server-side)
 - Return ONLY valid JSON matching the Script schema, no markdown or explanations`
 
 	return prompt

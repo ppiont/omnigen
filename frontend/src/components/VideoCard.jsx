@@ -48,10 +48,13 @@ function VideoCard({ video, onDownload, onDelete }) {
         </div>
       </div>
 
-      <div className="video-card-actions">
+      <div className="video-card-actions" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
-          onClick={() => onDownload?.(video)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDownload?.(video);
+          }}
           disabled={!isCompleted}
           aria-label={
             isCompleted ? "Download video" : "Video must be completed to download"
@@ -59,11 +62,13 @@ function VideoCard({ video, onDownload, onDelete }) {
           title={isCompleted ? "Download" : "Video must be completed"}
         >
           <Download size={16} />
-          <span>Download</span>
         </button>
         <button
           type="button"
-          onClick={() => onDelete?.(video)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete?.(video);
+          }}
           disabled={!isCompleted}
           aria-label={isCompleted ? "Delete video" : "Video must be completed to delete"}
           title={isCompleted ? "Delete" : "Video must be completed"}
