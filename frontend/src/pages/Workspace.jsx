@@ -377,34 +377,10 @@ function Workspace() {
     // TODO: Save script to backend or local storage
   }, []);
 
-  // MOCK DATA FOR TESTING - Set this to true to use mock data instead of API calls
-  const USE_MOCK_DATA = true;
-
   useEffect(() => {
     console.log("=".repeat(60));
     console.log("[WORKSPACE] 🏗️ Workspace component mounted/updated");
     console.log("[WORKSPACE] Video ID:", videoId);
-    
-    // Use mock data for testing
-    if (USE_MOCK_DATA) {
-      console.log("[WORKSPACE] 🎭 Using mock data for testing");
-      const mockJobData = {
-        job_id: videoId || "job-test-123",
-        title: "Test Video Workspace",
-        status: "completed",
-        video_url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        prompt: "A professional pharmaceutical ad showcasing a new medication",
-        duration: 30,
-        aspect_ratio: "16:9",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        progress_percentage: 100,
-      };
-      setJobData(mockJobData);
-      setLoading(false);
-      setErrorState(null);
-      return;
-    }
     
     if (videoId) {
       console.log("[WORKSPACE] 📥 Fetching job data for video:", videoId);

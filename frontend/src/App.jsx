@@ -35,29 +35,35 @@ function App() {
           <Route path="/verify" element={<Verify />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
 
-          {/* Routes with AppLayout (Sidebar) */}
+          {/* Protected Routes with AppLayout (Sidebar) */}
           <Route
             path="/dashboard"
             element={
-              <AppLayout>
-                <Dashboard />
-              </AppLayout>
+              <ProtectedRoute>
+                <AppLayout>
+                  <Dashboard />
+                </AppLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/create"
             element={
-              <AppLayout>
-                <Create />
-              </AppLayout>
+              <ProtectedRoute>
+                <AppLayout>
+                  <Create />
+                </AppLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/library"
             element={
-              <AppLayout>
-                <VideoLibrary />
-              </AppLayout>
+              <ProtectedRoute>
+                <AppLayout>
+                  <VideoLibrary />
+                </AppLayout>
+              </ProtectedRoute>
             }
           />
           <Route
@@ -73,17 +79,21 @@ function App() {
           <Route
             path="/settings"
             element={
-              <AppLayout>
-                <Settings />
-              </AppLayout>
+              <ProtectedRoute>
+                <AppLayout>
+                  <Settings />
+                </AppLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/onboarding"
             element={
-              <AppLayout>
-                <Onboarding />
-              </AppLayout>
+              <ProtectedRoute>
+                <AppLayout>
+                  <Onboarding />
+                </AppLayout>
+              </ProtectedRoute>
             }
           />
 
