@@ -2,12 +2,11 @@ package domain
 
 // Job represents a video generation job
 type Job struct {
-	JobID        string                 `dynamodbav:"job_id" json:"job_id"`
-	UserID       string                 `dynamodbav:"user_id" json:"user_id"`
-	ScriptID     string                 `dynamodbav:"script_id,omitempty" json:"script_id,omitempty"`
-	Status       string                 `dynamodbav:"status" json:"status"`                         // pending, processing, completed, failed
-	Stage        string                 `dynamodbav:"stage,omitempty" json:"stage,omitempty"`       // Granular progress: script_generating, scene_1_complete, etc.
-	Metadata     map[string]interface{} `dynamodbav:"metadata,omitempty" json:"metadata,omitempty"` // Stores script, thumbnails, progress data
+	JobID    string `dynamodbav:"job_id" json:"job_id"`
+	UserID   string `dynamodbav:"user_id" json:"user_id"`
+	ScriptID string `dynamodbav:"script_id,omitempty" json:"script_id,omitempty"`
+	Status   string `dynamodbav:"status" json:"status"`                   // pending, processing, completed, failed
+	Stage    string `dynamodbav:"stage,omitempty" json:"stage,omitempty"` // Granular progress: script_generating, scene_1_complete, etc.
 
 	// Progress fields (structured for better API responses)
 	ThumbnailURL    string   `dynamodbav:"thumbnail_url,omitempty" json:"thumbnail_url,omitempty"`
@@ -15,10 +14,10 @@ type Job struct {
 	ScenesCompleted int      `dynamodbav:"scenes_completed,omitempty" json:"scenes_completed,omitempty"`
 	SceneVideoURLs  []string `dynamodbav:"scene_video_urls,omitempty" json:"scene_video_urls,omitempty"`
 
-	Prompt       string `dynamodbav:"prompt,omitempty" json:"prompt,omitempty"`
-	Title        string `dynamodbav:"title,omitempty" json:"title,omitempty"` // Video title
-	Duration     int    `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
-	AspectRatio  string `dynamodbav:"aspect_ratio,omitempty" json:"aspect_ratio,omitempty"`
+	Prompt      string `dynamodbav:"prompt,omitempty" json:"prompt,omitempty"`
+	Title       string `dynamodbav:"title,omitempty" json:"title,omitempty"` // Video title
+	Duration    int    `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
+	AspectRatio string `dynamodbav:"aspect_ratio,omitempty" json:"aspect_ratio,omitempty"`
 
 	// Enhanced prompt options (Phase 1 - all optional)
 	Style             string `dynamodbav:"style,omitempty" json:"style,omitempty"`
@@ -32,9 +31,9 @@ type Job struct {
 	CreativeBoost     bool   `dynamodbav:"creative_boost,omitempty" json:"creative_boost,omitempty"`
 
 	// Embedded script data
-	Scenes         []Scene    `dynamodbav:"scenes,omitempty" json:"scenes,omitempty"`
-	AudioSpec      AudioSpec  `dynamodbav:"audio_spec,omitempty" json:"audio_spec,omitempty"`
-	ScriptMetadata Metadata   `dynamodbav:"script_metadata,omitempty" json:"script_metadata,omitempty"`
+	Scenes         []Scene   `dynamodbav:"scenes,omitempty" json:"scenes,omitempty"`
+	AudioSpec      AudioSpec `dynamodbav:"audio_spec,omitempty" json:"audio_spec,omitempty"`
+	ScriptMetadata Metadata  `dynamodbav:"script_metadata,omitempty" json:"script_metadata,omitempty"`
 
 	VideoKey     string  `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"` // S3 key
 	CreatedAt    int64   `dynamodbav:"created_at" json:"created_at"`

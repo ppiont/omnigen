@@ -24,6 +24,29 @@ type ClipVideo struct {
 	Duration     float64
 }
 
+// S3 key generation helpers for new folder structure
+// Pattern: users/{userID}/jobs/{jobID}/{type}/filename
+
+func buildSceneClipKey(userID, jobID string, sceneNumber int) string {
+	return fmt.Sprintf("users/%s/jobs/%s/clips/scene-%03d.mp4", userID, jobID, sceneNumber)
+}
+
+func buildSceneThumbnailKey(userID, jobID string, sceneNumber int) string {
+	return fmt.Sprintf("users/%s/jobs/%s/thumbnails/scene-%03d.jpg", userID, jobID, sceneNumber)
+}
+
+func buildAudioKey(userID, jobID string) string {
+	return fmt.Sprintf("users/%s/jobs/%s/audio/background-music.mp3", userID, jobID)
+}
+
+func buildFinalVideoKey(userID, jobID string) string {
+	return fmt.Sprintf("users/%s/jobs/%s/final/video.mp4", userID, jobID)
+}
+
+func buildJobThumbnailKey(userID, jobID string) string {
+	return fmt.Sprintf("users/%s/jobs/%s/thumbnails/job-thumbnail.jpg", userID, jobID)
+}
+
 // generateVideoAsync runs the entire video generation pipeline in a goroutine
 func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Job, req GenerateRequest) {
 	// Create job-specific context with timeout
@@ -34,24 +57,16 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		zap.String("job_id", job.JobID),
 	)
 
-	// Helper to update job stage and metadata
-	updateStage := func(stage string, metadata map[string]interface{}) {
-		if metadata == nil {
-			metadata = make(map[string]interface{})
-		}
-		err := h.jobRepo.UpdateJobStageWithMetadata(jobCtx, job.JobID, stage, metadata)
-		if err != nil {
-			h.logger.Error("Failed to update job stage",
-				zap.String("job_id", job.JobID),
-				zap.String("stage", stage),
-				zap.Error(err),
-			)
-		}
-	}
-
 	// STEP 1: Generate script with GPT-4o (happens in background now!)
 	h.logger.Info("Generating script with GPT-4o", zap.String("job_id", job.JobID))
-	updateStage("script_generating", nil)
+	job.Stage = "script_generating"
+	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+		h.logger.Error("Failed to update job stage",
+			zap.String("job_id", job.JobID),
+			zap.String("stage", "script_generating"),
+			zap.Error(err),
+		)
+	}
 
 	script, err := h.parserService.GenerateScript(jobCtx, service.ParseRequest{
 		UserID:      job.UserID,
@@ -87,10 +102,14 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	job.ScriptMetadata = script.Metadata
 
 	// Update job with embedded script
-	updateStage("script_complete", map[string]interface{}{
-		"num_scenes": len(script.Scenes),
-		"audio_mood": script.AudioSpec.MusicMood,
-	})
+	job.Stage = "script_complete"
+	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+		h.logger.Error("Failed to update job stage",
+			zap.String("job_id", job.JobID),
+			zap.String("stage", "script_complete"),
+			zap.Error(err),
+		)
+	}
 
 	h.logger.Info("Script generated and embedded in job",
 		zap.String("job_id", job.JobID),
@@ -121,11 +140,20 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	// Initialize lastFrameURL with user's start_image (for first scene)
 	var lastFrameURL string = req.StartImage
 
+	// Initialize arrays for accumulating scene data
+	sceneVideoURLs := make([]string, 0, len(script.Scenes))
+	var lastThumbnailURL string
+
 	for i, scene := range script.Scenes {
-		updateStage(fmt.Sprintf("scene_%d_generating", i+1), map[string]interface{}{
-			"current_scene": i + 1,
-			"total_scenes":  len(script.Scenes),
-		})
+		job.Stage = fmt.Sprintf("scene_%d_generating", i+1)
+		job.ScenesCompleted = i // Number completed so far (i is 0-indexed)
+		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+			h.logger.Error("Failed to update job stage",
+				zap.String("job_id", job.JobID),
+				zap.String("stage", job.Stage),
+				zap.Error(err),
+			)
+		}
 
 		h.logger.Info("Generating scene",
 			zap.String("job_id", job.JobID),
@@ -150,7 +178,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		}
 
 		// Call Kling API (synchronous polling in this goroutine)
-		clipResult, err := h.generateClip(jobCtx, job.JobID, scene, req.AspectRatio, i+1)
+		clipResult, err := h.generateClip(jobCtx, job.UserID, job.JobID, scene, req.AspectRatio, i+1)
 		if err != nil {
 			h.logger.Error("Scene generation failed",
 				zap.String("job_id", job.JobID),
@@ -164,13 +192,49 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		clipVideos = append(clipVideos, clipResult)
 		lastFrameURL = clipResult.LastFrameURL
 
-		// Update with scene completion + thumbnail
-		updateStage(fmt.Sprintf("scene_%d_complete", i+1), map[string]interface{}{
-			"thumbnail_url":   clipResult.LastFrameURL,
-			"scenes_complete": i + 1,
-			"scenes_total":    len(script.Scenes),
-			"scene_video_url": clipResult.VideoURL,
-		})
+		// Accumulate scene data
+		sceneVideoURLs = append(sceneVideoURLs, clipResult.VideoURL)
+		lastThumbnailURL = clipResult.LastFrameURL
+
+		// Extract and upload job thumbnail from first scene
+		if i == 0 {
+			jobThumbnail, err := h.extractJobThumbnail(jobCtx, job.UserID, job.JobID, clipResult.VideoURL)
+			if err != nil {
+				h.logger.Warn("Failed to extract job thumbnail, continuing without it",
+					zap.String("job_id", job.JobID),
+					zap.Error(err),
+				)
+				// Continue - this is not critical
+			} else {
+				// Use the job thumbnail (from first I-frame) instead of last frame URL
+				lastThumbnailURL = jobThumbnail
+				h.logger.Info("Job thumbnail set from first scene",
+					zap.String("job_id", job.JobID),
+					zap.String("thumbnail_url", jobThumbnail),
+				)
+			}
+		}
+
+		// Update job with accumulated data
+		job.Stage = fmt.Sprintf("scene_%d_complete", i+1)
+		job.ScenesCompleted = i + 1
+		job.SceneVideoURLs = sceneVideoURLs
+		job.ThumbnailURL = lastThumbnailURL
+
+		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+			h.logger.Error("Failed to update job progress",
+				zap.String("job_id", job.JobID),
+				zap.Int("scenes_completed", job.ScenesCompleted),
+				zap.Error(err),
+			)
+		}
+
+		h.logger.Info("Scene completed and job updated",
+			zap.String("job_id", job.JobID),
+			zap.Int("scene_number", i+1),
+			zap.Int("total_scenes", len(script.Scenes)),
+			zap.Int("scenes_completed", job.ScenesCompleted),
+		)
 
 		h.logger.Info("Scene completed",
 			zap.String("job_id", job.JobID),
@@ -180,27 +244,50 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	}
 
 	// STEP 3: Generate audio
-	updateStage("audio_generating", nil)
+	job.Stage = "audio_generating"
+	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+		h.logger.Error("Failed to update job stage",
+			zap.String("job_id", job.JobID),
+			zap.String("stage", "audio_generating"),
+			zap.Error(err),
+		)
+	}
 	h.logger.Info("Generating audio", zap.String("job_id", job.JobID))
 
-	audioURL, err := h.generateAudio(jobCtx, job.JobID, script)
+	audioURL, err := h.generateAudio(jobCtx, job.UserID, job.JobID, script)
 	if err != nil {
 		h.logger.Error("Audio generation failed", zap.String("job_id", job.JobID), zap.Error(err))
 		h.jobRepo.MarkJobFailed(jobCtx, job.JobID, fmt.Sprintf("Audio generation failed: %v", err))
 		return
 	}
 
-	updateStage("audio_complete", map[string]interface{}{
-		"audio_url": audioURL,
-	})
+	job.Stage = "audio_complete"
+	job.AudioURL = audioURL
 
-	h.logger.Info("Audio generated", zap.String("job_id", job.JobID), zap.String("audio_url", audioURL))
+	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+		h.logger.Error("Failed to update job with audio URL",
+			zap.String("job_id", job.JobID),
+			zap.Error(err),
+		)
+	}
+
+	h.logger.Info("Audio generation complete",
+		zap.String("job_id", job.JobID),
+		zap.String("audio_url", audioURL),
+	)
 
 	// STEP 4: Compose final video
-	updateStage("composing", nil)
+	job.Stage = "composing"
+	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+		h.logger.Error("Failed to update job stage",
+			zap.String("job_id", job.JobID),
+			zap.String("stage", "composing"),
+			zap.Error(err),
+		)
+	}
 	h.logger.Info("Composing final video", zap.String("job_id", job.JobID))
 
-	finalVideoKey, err := h.composeVideo(jobCtx, job.JobID, clipVideos, audioURL)
+	finalVideoKey, err := h.composeVideo(jobCtx, job.UserID, job.JobID, clipVideos, audioURL)
 	if err != nil {
 		h.logger.Error("Video composition failed", zap.String("job_id", job.JobID), zap.Error(err))
 		h.jobRepo.MarkJobFailed(jobCtx, job.JobID, fmt.Sprintf("Video composition failed: %v", err))
@@ -223,6 +310,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 // generateClip generates a single video clip using Kling AI
 func (h *GenerateHandler) generateClip(
 	ctx context.Context,
+	userID string,
 	jobID string,
 	scene domain.Scene,
 	aspectRatio string,
@@ -269,7 +357,7 @@ func (h *GenerateHandler) generateClip(
 
 		if result.Status == "succeeded" || result.Status == "completed" {
 			// Download video, extract last frame, upload to S3
-			clipURL, lastFrameURL, err := h.processVideo(ctx, jobID, clipNumber, result.VideoURL)
+			clipURL, lastFrameURL, err := h.processVideo(ctx, userID, jobID, clipNumber, result.VideoURL)
 			if err != nil {
 				return ClipVideo{}, fmt.Errorf("video processing failed: %w", err)
 			}
@@ -301,6 +389,7 @@ func (h *GenerateHandler) generateClip(
 // processVideo downloads video from Replicate, extracts last frame, uploads both to S3
 func (h *GenerateHandler) processVideo(
 	ctx context.Context,
+	userID string,
 	jobID string,
 	clipNumber int,
 	videoURL string,
@@ -355,7 +444,7 @@ func (h *GenerateHandler) processVideo(
 		zap.String("job_id", jobID),
 		zap.Int("clip", clipNumber),
 	)
-	videoS3Key := fmt.Sprintf("videos/%s/clip-%d.mp4", jobID, clipNumber)
+	videoS3Key := buildSceneClipKey(userID, jobID, clipNumber)
 	videoS3URL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, videoS3Key, videoPath, "video/mp4")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to upload video to S3: %w", err)
@@ -364,7 +453,7 @@ func (h *GenerateHandler) processVideo(
 	// Upload last frame to S3 (if extracted)
 	var lastFrameS3URL string
 	if lastFramePath != "" {
-		lastFrameS3Key := fmt.Sprintf("videos/%s/clip-%d-last-frame.jpg", jobID, clipNumber)
+		lastFrameS3Key := buildSceneThumbnailKey(userID, jobID, clipNumber)
 		_, err = h.s3Service.UploadFile(ctx, h.assetsBucket, lastFrameS3Key, lastFramePath, "image/jpeg")
 		if err != nil {
 			h.logger.Warn("Failed to upload last frame, continuing",
@@ -394,9 +483,78 @@ func (h *GenerateHandler) processVideo(
 	return videoS3URL, lastFrameS3URL, nil
 }
 
+// extractJobThumbnail extracts a middle frame from the first scene video and uploads as job thumbnail
+func (h *GenerateHandler) extractJobThumbnail(
+	ctx context.Context,
+	userID string,
+	jobID string,
+	videoURL string,
+) (string, error) {
+	h.logger.Info("Extracting job thumbnail from first scene",
+		zap.String("job_id", jobID),
+		zap.String("video_url", videoURL),
+	)
+
+	// Create temp directory
+	tmpDir := filepath.Join("/tmp", jobID, "thumbnail")
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Download video
+	videoPath := filepath.Join(tmpDir, "video.mp4")
+	if err := h.downloadFile(ctx, videoURL, videoPath); err != nil {
+		return "", fmt.Errorf("failed to download video: %w", err)
+	}
+
+	// Extract middle frame (at 50% of video duration for best representation)
+	thumbnailPath := filepath.Join(tmpDir, "thumbnail.jpg")
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-i", videoPath,
+		"-vf", "select='eq(pict_type\\,I)',scale=1280:-1", // Extract I-frame, scale to 1280px width
+		"-frames:v", "1",
+		"-q:v", "2", // High quality
+		"-y", thumbnailPath,
+	)
+
+	if err := cmd.Run(); err != nil {
+		h.logger.Warn("Failed to extract thumbnail, trying simpler method",
+			zap.String("job_id", jobID),
+			zap.Error(err),
+		)
+		// Fallback: extract frame at 1 second
+		cmd = exec.CommandContext(ctx, "ffmpeg",
+			"-ss", "1",
+			"-i", videoPath,
+			"-frames:v", "1",
+			"-q:v", "2",
+			"-y", thumbnailPath,
+		)
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("failed to extract thumbnail: %w", err)
+		}
+	}
+
+	// Upload to S3
+	thumbnailS3Key := buildJobThumbnailKey(userID, jobID)
+	thumbnailURL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, thumbnailS3Key, thumbnailPath, "image/jpeg")
+	if err != nil {
+		return "", fmt.Errorf("failed to upload thumbnail to S3: %w", err)
+	}
+
+	h.logger.Info("Job thumbnail extracted and uploaded successfully",
+		zap.String("job_id", jobID),
+		zap.String("thumbnail_url", thumbnailURL),
+	)
+
+	return thumbnailURL, nil
+}
+
 // generateAudio generates background music using Minimax
 func (h *GenerateHandler) generateAudio(
 	ctx context.Context,
+	userID string,
 	jobID string,
 	script *domain.Script,
 ) (string, error) {
@@ -436,7 +594,7 @@ func (h *GenerateHandler) generateAudio(
 
 		if result.Status == "succeeded" || result.Status == "completed" {
 			// Download and upload to S3
-			audioS3URL, err := h.processAudio(ctx, jobID, result.AudioURL)
+			audioS3URL, err := h.processAudio(ctx, userID, jobID, result.AudioURL)
 			if err != nil {
 				return "", fmt.Errorf("audio processing failed: %w", err)
 			}
@@ -460,7 +618,7 @@ func (h *GenerateHandler) generateAudio(
 }
 
 // processAudio downloads audio from Replicate, uploads to S3
-func (h *GenerateHandler) processAudio(ctx context.Context, jobID string, audioURL string) (string, error) {
+func (h *GenerateHandler) processAudio(ctx context.Context, userID string, jobID string, audioURL string) (string, error) {
 	tmpDir := filepath.Join("/tmp", jobID, "audio")
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create temp dir: %w", err)
@@ -481,7 +639,7 @@ func (h *GenerateHandler) processAudio(ctx context.Context, jobID string, audioU
 	h.logger.Info("Uploading audio to S3",
 		zap.String("job_id", jobID),
 	)
-	audioS3Key := fmt.Sprintf("videos/%s/music.mp3", jobID)
+	audioS3Key := buildAudioKey(userID, jobID)
 	audioS3URL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, audioS3Key, audioPath, "audio/mpeg")
 	if err != nil {
 		return "", fmt.Errorf("failed to upload audio to S3: %w", err)
@@ -494,6 +652,7 @@ func (h *GenerateHandler) processAudio(ctx context.Context, jobID string, audioU
 // composeVideo stitches clips together with audio using ffmpeg
 func (h *GenerateHandler) composeVideo(
 	ctx context.Context,
+	userID string,
 	jobID string,
 	clips []ClipVideo,
 	audioURL string,
@@ -591,7 +750,7 @@ func (h *GenerateHandler) composeVideo(
 	h.logger.Info("Uploading final video to S3",
 		zap.String("job_id", jobID),
 	)
-	finalS3Key := fmt.Sprintf("videos/%s/final.mp4", jobID)
+	finalS3Key := buildFinalVideoKey(userID, jobID)
 	finalURL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, finalS3Key, finalVideo, "video/mp4")
 	if err != nil {
 		return "", fmt.Errorf("failed to upload final video: %w", err)

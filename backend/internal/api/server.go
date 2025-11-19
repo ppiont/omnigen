@@ -25,6 +25,7 @@ type ServerConfig struct {
 	S3Service        *repository.S3AssetRepository // For presigned URLs and video uploads/downloads
 	UsageRepo        *repository.DynamoDBUsageRepository
 	ParserService    *service.ParserService   // Script generation service
+	AssetService     *service.AssetService    // Asset URL generation service
 	KlingAdapter     *adapters.KlingAdapter   // Kling video generation
 	MinimaxAdapter   *adapters.MinimaxAdapter // Minimax audio generation
 	AssetsBucket     string                   // S3 bucket for video assets
@@ -167,10 +168,13 @@ func (s *Server) setupRoutes() {
 		jobsHandler := handlers.NewJobsHandler(
 			s.config.JobRepo,
 			s.config.S3Service,
+			s.config.AssetService,
 			s.config.Logger,
 		)
 
 		progressHandler := handlers.NewProgressHandler(
+			s.config.JobRepo,
+			s.config.AssetService,
 			s.config.Logger,
 		)
 
@@ -185,8 +189,7 @@ func (s *Server) setupRoutes() {
 
 		// Job routes
 		v1.GET("/jobs/:id", jobsHandler.GetJob)
-		v1.GET("/jobs/:id/stream", jobsHandler.StreamJobUpdates) // SSE endpoint
 		v1.GET("/jobs", jobsHandler.ListJobs)
-		v1.GET("/jobs/:id/progress", progressHandler.GetProgress)
+		v1.GET("/jobs/:id/progress", progressHandler.GetProgress) // SSE streaming endpoint
 	}
 }

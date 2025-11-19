@@ -27,6 +27,9 @@ type JobRepository interface {
 	// MarkJobFailed marks a job as failed with error message
 	MarkJobFailed(ctx context.Context, jobID string, errorMsg string) error
 
+	// UpdateJob updates an entire job record atomically
+	UpdateJob(ctx context.Context, job *domain.Job) error
+
 	// HealthCheck verifies the repository is operational
 	HealthCheck(ctx context.Context) error
 }

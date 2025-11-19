@@ -77,6 +77,10 @@ definitions:
         - medium
         - fast
         type: string
+      title:
+        description: Video title (Phase 1 - UI enhancement)
+        maxLength: 100
+        type: string
       tone:
         enum:
         - premium
@@ -101,6 +105,20 @@ definitions:
       num_clips:
         type: integer
       status:
+        type: string
+    type: object
+  handlers.GenerateTitleRequest:
+    properties:
+      prompt:
+        maxLength: 2000
+        minLength: 10
+        type: string
+    required:
+    - prompt
+    type: object
+  handlers.GenerateTitleResponse:
+    properties:
+      title:
         type: string
     type: object
   handlers.HealthResponse:
@@ -128,9 +146,6 @@ definitions:
         type: string
       job_id:
         type: string
-      metadata:
-        additionalProperties: true
-        type: object
       progress_percent:
         type: integer
       prompt:
@@ -178,28 +193,6 @@ definitions:
     - access_token
     - id_token
     - refresh_token
-    type: object
-  handlers.ProgressResponse:
-    properties:
-      current_stage:
-        type: string
-      estimated_time_remaining:
-        description: seconds
-        type: integer
-      job_id:
-        type: string
-      progress:
-        type: integer
-      stages_completed:
-        items:
-          type: string
-        type: array
-      stages_pending:
-        items:
-          type: string
-        type: array
-      status:
-        type: string
     type: object
   handlers.RefreshRequest:
     properties:
@@ -365,6 +358,43 @@ paths:
       summary: Generate video from prompt with intelligent parsing
       tags:
       - jobs
+  /api/v1/generate-title:
+    post:
+      consumes:
+      - application/json
+      description: Uses OpenAI GPT-4 to generate a short, engaging video title (max
+        60 characters)
+      parameters:
+      - description: Title generation parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.GenerateTitleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.GenerateTitleResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate a catchy video title from prompt
+      tags:
+      - generate
   /api/v1/jobs:
     get:
       description: Get a list of video generation jobs
@@ -430,36 +460,9 @@ paths:
       - jobs
   /api/v1/jobs/{id}/progress:
     get:
-      description: Get real-time progress updates for a video generation job
-      parameters:
-      - description: Job ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.ProgressResponse'
-        "404":
-          description: Job not found
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get detailed job progress
-      tags:
-      - jobs
-  /api/v1/jobs/{id}/stream:
-    get:
-      description: Streams job progress updates using Server-Sent Events (SSE)
+      description: Streams comprehensive job progress updates using Server-Sent Events
+        (SSE). Sends ProgressResponse objects as SSE events whenever the job stage
+        changes. Automatically closes stream when job completes or fails.
       parameters:
       - description: Job ID
         in: path
@@ -470,16 +473,12 @@ paths:
       - text/event-stream
       responses:
         "200":
-          description: Event stream
+          description: 'Event stream (event types: update, done, error)'
           schema:
             type: string
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Stream job status updates in real-time
+      summary: Stream job progress in real-time
       tags:
       - jobs
   /health:
