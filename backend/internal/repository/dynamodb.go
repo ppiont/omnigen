@@ -293,6 +293,26 @@ func (r *DynamoDBRepository) GetJobsByUser(ctx context.Context, userID string, l
 	return jobs, nil
 }
 
+// DeleteJob deletes a job from DynamoDB
+func (r *DynamoDBRepository) DeleteJob(ctx context.Context, jobID string) error {
+	_, err := r.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(r.tableName),
+		Key: map[string]types.AttributeValue{
+			"job_id": &types.AttributeValueMemberS{Value: jobID},
+		},
+	})
+	if err != nil {
+		r.logger.Error("Failed to delete job",
+			zap.String("job_id", jobID),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to delete job: %w", err)
+	}
+
+	r.logger.Info("Job deleted successfully", zap.String("job_id", jobID))
+	return nil
+}
+
 // HealthCheck performs a lightweight health check on DynamoDB
 func (r *DynamoDBRepository) HealthCheck(ctx context.Context) error {
 	_, err := r.client.DescribeTable(ctx, &dynamodb.DescribeTableInput{

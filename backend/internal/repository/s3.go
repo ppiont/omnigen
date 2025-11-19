@@ -107,6 +107,28 @@ func (s *S3AssetRepository) DownloadFile(ctx context.Context, bucket, key, destP
 	return nil
 }
 
+// DeleteFile deletes a file from S3
+func (s *S3AssetRepository) DeleteFile(ctx context.Context, bucket, key string) error {
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		s.logger.Error("Failed to delete file from S3",
+			zap.String("bucket", bucket),
+			zap.String("key", key),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to delete file from S3: %w", err)
+	}
+
+	s.logger.Info("File deleted from S3",
+		zap.String("bucket", bucket),
+		zap.String("key", key),
+	)
+	return nil
+}
+
 // HealthCheck performs a lightweight health check on S3
 func (s *S3AssetRepository) HealthCheck(ctx context.Context) error {
 	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{

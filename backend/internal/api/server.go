@@ -169,6 +169,7 @@ func (s *Server) setupRoutes() {
 			s.config.JobRepo,
 			s.config.S3Service,
 			s.config.AssetService,
+			s.config.AssetsBucket,
 			s.config.Logger,
 		)
 
@@ -190,6 +191,7 @@ func (s *Server) setupRoutes() {
 		// Job routes
 		v1.GET("/jobs/:id", jobsHandler.GetJob)
 		v1.GET("/jobs", jobsHandler.ListJobs)
+		v1.DELETE("/jobs/:id", jobsHandler.DeleteJob)
 		v1.GET("/jobs/:id/progress", progressHandler.GetProgress) // SSE streaming endpoint
 	}
 }
