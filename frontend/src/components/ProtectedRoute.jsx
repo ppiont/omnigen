@@ -6,7 +6,7 @@ import { useAuth } from "../contexts/useAuth.js";
  * 
  * TEMPORARY: Set DISABLE_AUTH to true to bypass authentication for local testing
  */
-const DISABLE_AUTH = true; // Set to false to re-enable authentication
+const DISABLE_AUTH = false; // Set to false to re-enable authentication
 
 export default function ProtectedRoute({ children }) {
   // Bypass authentication check if disabled
