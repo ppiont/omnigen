@@ -15,6 +15,15 @@ definitions:
       error:
         $ref: '#/definitions/errors.APIError'
     type: object
+  handlers.AssetInfo:
+    properties:
+      created_at:
+        type: integer
+      scene_number:
+        type: integer
+      url:
+        type: string
+    type: object
   handlers.GenerateRequest:
     properties:
       aspect_ratio:
@@ -77,6 +86,10 @@ definitions:
         - medium
         - fast
         type: string
+      title:
+        description: Video title (Phase 1 - UI enhancement)
+        maxLength: 100
+        type: string
       tone:
         enum:
         - premium
@@ -101,6 +114,20 @@ definitions:
       num_clips:
         type: integer
       status:
+        type: string
+    type: object
+  handlers.GenerateTitleRequest:
+    properties:
+      prompt:
+        maxLength: 2000
+        minLength: 10
+        type: string
+    required:
+    - prompt
+    type: object
+  handlers.GenerateTitleResponse:
+    properties:
+      title:
         type: string
     type: object
   handlers.HealthResponse:
@@ -128,9 +155,6 @@ definitions:
         type: string
       job_id:
         type: string
-      metadata:
-        additionalProperties: true
-        type: object
       progress_percent:
         type: integer
       prompt:
@@ -179,12 +203,30 @@ definitions:
     - id_token
     - refresh_token
     type: object
+  handlers.ProgressAssets:
+    properties:
+      audio:
+        $ref: '#/definitions/handlers.AssetInfo'
+      final_video:
+        $ref: '#/definitions/handlers.AssetInfo'
+      scene_clips:
+        items:
+          $ref: '#/definitions/handlers.AssetInfo'
+        type: array
+      thumbnails:
+        items:
+          $ref: '#/definitions/handlers.AssetInfo'
+        type: array
+    type: object
   handlers.ProgressResponse:
     properties:
+      assets:
+        $ref: '#/definitions/handlers.ProgressAssets'
       current_stage:
         type: string
+      current_stage_display:
+        type: string
       estimated_time_remaining:
-        description: seconds
         type: integer
       job_id:
         type: string
@@ -192,11 +234,11 @@ definitions:
         type: integer
       stages_completed:
         items:
-          type: string
+          $ref: '#/definitions/handlers.StageInfo'
         type: array
       stages_pending:
         items:
-          type: string
+          $ref: '#/definitions/handlers.StageInfo'
         type: array
       status:
         type: string
@@ -213,6 +255,17 @@ definitions:
     - access_token
     - id_token
     - refresh_token
+    type: object
+  handlers.StageInfo:
+    properties:
+      completed_at:
+        type: integer
+      display_name:
+        type: string
+      name:
+        type: string
+      progress:
+        type: integer
     type: object
   handlers.UserResponse:
     properties:
@@ -365,6 +418,43 @@ paths:
       summary: Generate video from prompt with intelligent parsing
       tags:
       - jobs
+  /api/v1/generate-title:
+    post:
+      consumes:
+      - application/json
+      description: Uses OpenAI GPT-4 to generate a short, engaging video title (max
+        60 characters)
+      parameters:
+      - description: Title generation parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.GenerateTitleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.GenerateTitleResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate a catchy video title from prompt
+      tags:
+      - generate
   /api/v1/jobs:
     get:
       description: Get a list of video generation jobs

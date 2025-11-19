@@ -120,6 +120,13 @@ func main() {
 	)
 	zapLogger.Info("Parser service initialized with GPT-4o")
 
+	// Initialize Asset Service
+	assetService := service.NewAssetService(
+		s3Service,
+		zapLogger,
+	)
+	zapLogger.Info("Asset service initialized")
+
 	// Initialize video and audio generation adapters
 	klingAdapter := adapters.NewKlingAdapter(replicateAPIKey, zapLogger)
 	minimaxAdapter := adapters.NewMinimaxAdapter(replicateAPIKey, zapLogger)
@@ -158,6 +165,7 @@ func main() {
 		S3Service:        s3Service,
 		UsageRepo:        usageRepo,
 		ParserService:    parserService,
+		AssetService:     assetService,
 		KlingAdapter:     klingAdapter,   // Video generation
 		MinimaxAdapter:   minimaxAdapter, // Audio generation
 		AssetsBucket:     cfg.AssetsBucket,

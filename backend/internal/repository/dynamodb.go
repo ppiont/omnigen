@@ -204,6 +204,42 @@ func (r *DynamoDBRepository) MarkJobFailed(ctx context.Context, jobID string, er
 	return nil
 }
 
+// UpdateJob updates an entire job record in DynamoDB
+func (r *DynamoDBRepository) UpdateJob(ctx context.Context, job *domain.Job) error {
+	// Set updated timestamp
+	job.UpdatedAt = time.Now().Unix()
+
+	// Marshal job to DynamoDB attributes
+	item, err := attributevalue.MarshalMap(job)
+	if err != nil {
+		r.logger.Error("Failed to marshal job for update",
+			zap.String("job_id", job.JobID),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to marshal job: %w", err)
+	}
+
+	// Use PutItem to replace entire record
+	_, err = r.client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(r.tableName),
+		Item:      item,
+	})
+	if err != nil {
+		r.logger.Error("Failed to update job",
+			zap.String("job_id", job.JobID),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to update job: %w", err)
+	}
+
+	r.logger.Info("Job updated successfully",
+		zap.String("job_id", job.JobID),
+		zap.String("status", job.Status),
+		zap.String("stage", job.Stage),
+	)
+	return nil
+}
+
 // getCurrentTimestamp returns the current Unix timestamp
 func getCurrentTimestamp() int64 {
 	return time.Now().Unix()

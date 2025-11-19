@@ -219,6 +219,63 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/generate-title": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Uses OpenAI GPT-4 to generate a short, engaging video title (max 60 characters)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "generate"
+                ],
+                "summary": "Generate a catchy video title from prompt",
+                "parameters": [
+                    {
+                        "description": "Title generation parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.GenerateTitleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.GenerateTitleResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/jobs": {
             "get": {
                 "security": [
@@ -455,6 +512,20 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.AssetInfo": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "integer"
+                },
+                "scene_number": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.GenerateRequest": {
             "type": "object",
             "required": [
@@ -541,6 +612,11 @@ const docTemplate = `{
                         "fast"
                     ]
                 },
+                "title": {
+                    "description": "Video title (Phase 1 - UI enhancement)",
+                    "type": "string",
+                    "maxLength": 100
+                },
                 "tone": {
                     "type": "string",
                     "enum": [
@@ -569,6 +645,27 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GenerateTitleRequest": {
+            "type": "object",
+            "required": [
+                "prompt"
+            ],
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "minLength": 10
+                }
+            }
+        },
+        "handlers.GenerateTitleResponse": {
+            "type": "object",
+            "properties": {
+                "title": {
                     "type": "string"
                 }
             }
@@ -610,10 +707,6 @@ const docTemplate = `{
                 },
                 "job_id": {
                     "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
                 },
                 "progress_percent": {
                     "type": "integer"
@@ -687,14 +780,42 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.ProgressAssets": {
+            "type": "object",
+            "properties": {
+                "audio": {
+                    "$ref": "#/definitions/handlers.AssetInfo"
+                },
+                "final_video": {
+                    "$ref": "#/definitions/handlers.AssetInfo"
+                },
+                "scene_clips": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.AssetInfo"
+                    }
+                },
+                "thumbnails": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.AssetInfo"
+                    }
+                }
+            }
+        },
         "handlers.ProgressResponse": {
             "type": "object",
             "properties": {
+                "assets": {
+                    "$ref": "#/definitions/handlers.ProgressAssets"
+                },
                 "current_stage": {
                     "type": "string"
                 },
+                "current_stage_display": {
+                    "type": "string"
+                },
                 "estimated_time_remaining": {
-                    "description": "seconds",
                     "type": "integer"
                 },
                 "job_id": {
@@ -706,13 +827,13 @@ const docTemplate = `{
                 "stages_completed": {
                     "type": "array",
                     "items": {
-                        "type": "string"
+                        "$ref": "#/definitions/handlers.StageInfo"
                     }
                 },
                 "stages_pending": {
                     "type": "array",
                     "items": {
-                        "type": "string"
+                        "$ref": "#/definitions/handlers.StageInfo"
                     }
                 },
                 "status": {
@@ -736,6 +857,23 @@ const docTemplate = `{
                 },
                 "refresh_token": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.StageInfo": {
+            "type": "object",
+            "properties": {
+                "completed_at": {
+                    "type": "integer"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "integer"
                 }
             }
         },

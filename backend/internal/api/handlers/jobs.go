@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -8,44 +9,47 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/omnigen/backend/internal/auth"
 	"github.com/omnigen/backend/internal/repository"
+	"github.com/omnigen/backend/internal/service"
 	"github.com/omnigen/backend/pkg/errors"
 	"go.uber.org/zap"
 )
 
 // JobsHandler handles job-related requests
 type JobsHandler struct {
-	jobRepo   *repository.DynamoDBRepository
-	s3Service *repository.S3AssetRepository
-	logger    *zap.Logger
+	jobRepo      *repository.DynamoDBRepository
+	s3Service    *repository.S3AssetRepository
+	assetService *service.AssetService
+	logger       *zap.Logger
 }
 
 // NewJobsHandler creates a new jobs handler
 func NewJobsHandler(
 	jobRepo *repository.DynamoDBRepository,
 	s3Service *repository.S3AssetRepository,
+	assetService *service.AssetService,
 	logger *zap.Logger,
 ) *JobsHandler {
 	return &JobsHandler{
-		jobRepo:   jobRepo,
-		s3Service: s3Service,
-		logger:    logger,
+		jobRepo:      jobRepo,
+		s3Service:    s3Service,
+		assetService: assetService,
+		logger:       logger,
 	}
 }
 
 // JobResponse represents a job status response
 type JobResponse struct {
-	JobID           string                 `json:"job_id"`
-	Status          string                 `json:"status"`
-	Stage           string                 `json:"stage,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	ProgressPercent int                    `json:"progress_percent"`
-	Prompt          string                 `json:"prompt"`
-	Duration        int                    `json:"duration"`
-	VideoURL        *string                `json:"video_url,omitempty"`
-	CreatedAt       int64                  `json:"created_at"`
-	UpdatedAt       int64                  `json:"updated_at"`
-	CompletedAt     *int64                 `json:"completed_at,omitempty"`
-	ErrorMessage    *string                `json:"error_message,omitempty"`
+	JobID           string  `json:"job_id"`
+	Status          string  `json:"status"`
+	Stage           string  `json:"stage,omitempty"`
+	ProgressPercent int     `json:"progress_percent"`
+	Prompt          string  `json:"prompt"`
+	Duration        int     `json:"duration"`
+	VideoURL        *string `json:"video_url,omitempty"`
+	CreatedAt       int64   `json:"created_at"`
+	UpdatedAt       int64   `json:"updated_at"`
+	CompletedAt     *int64  `json:"completed_at,omitempty"`
+	ErrorMessage    *string `json:"error_message,omitempty"`
 
 	// Progress fields
 	ThumbnailURL    string   `json:"thumbnail_url,omitempty"`
@@ -111,8 +115,7 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		JobID:           job.JobID,
 		Status:          job.Status,
 		Stage:           job.Stage,
-		Metadata:        job.Metadata,
-		ProgressPercent: calculateProgress(job.Stage),
+		ProgressPercent: calculateDynamicProgress(job.Stage, len(job.Scenes)),
 		Prompt:          job.Prompt,
 		Duration:        job.Duration,
 		VideoURL:        videoURL,
@@ -196,8 +199,7 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 			JobID:           job.JobID,
 			Status:          job.Status,
 			Stage:           job.Stage,
-			Metadata:        job.Metadata,
-			ProgressPercent: calculateProgress(job.Stage),
+			ProgressPercent: calculateDynamicProgress(job.Stage, len(job.Scenes)),
 			VideoURL:        videoURL,
 			ErrorMessage:    job.ErrorMessage,
 			Prompt:          job.Prompt,
@@ -220,4 +222,60 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// calculateDynamicProgress calculates progress percentage based on stage and total scenes
+// Progress allocation: Script (15%), Scenes (70%), Audio (10%), Composition (5%)
+// NOTE: This is duplicated from jobs_stream.go - could be refactored to shared package
+func calculateDynamicProgress(stage string, totalScenes int) int {
+	// Handle edge case
+	if totalScenes == 0 {
+		totalScenes = 3 // Default to 3 scenes if not set
+	}
+
+	// Script generation stages
+	if stage == "script_generating" {
+		return 5
+	}
+	if stage == "script_complete" {
+		return 15
+	}
+
+	// Scene generation stages (70% allocated, split evenly)
+	if len(stage) > 6 && stage[:6] == "scene_" {
+		var sceneNum int
+		var suffix string
+		_, err := fmt.Sscanf(stage, "scene_%d_%s", &sceneNum, &suffix)
+		if err == nil && sceneNum > 0 && sceneNum <= totalScenes {
+			percentPerScene := 70.0 / float64(totalScenes)
+
+			if suffix == "generating" {
+				progress := 15.0 + float64(sceneNum-1)*percentPerScene
+				return int(progress)
+			} else if suffix == "complete" {
+				progress := 15.0 + float64(sceneNum)*percentPerScene
+				return int(progress)
+			}
+		}
+	}
+
+	// Audio generation stages
+	if stage == "audio_generating" {
+		return 85
+	}
+	if stage == "audio_complete" {
+		return 95
+	}
+
+	// Composition stage
+	if stage == "composing" {
+		return 95
+	}
+
+	// Completion
+	if stage == "complete" {
+		return 100
+	}
+
+	return 0
 }

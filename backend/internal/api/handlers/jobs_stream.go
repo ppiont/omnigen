@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,11 +13,10 @@ import (
 
 // JobUpdateEvent represents a real-time job update for SSE
 type JobUpdateEvent struct {
-	Stage    string                 `json:"stage"`
-	Status   string                 `json:"status"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
-	VideoKey string                 `json:"video_key,omitempty"`
-	Progress int                    `json:"progress"`
+	Stage    string `json:"stage"`
+	Status   string `json:"status"`
+	VideoKey string `json:"video_key,omitempty"`
+	Progress int    `json:"progress"`
 }
 
 // StreamJobUpdates handles GET /api/v1/jobs/:id/stream - Server-Sent Events endpoint
@@ -77,9 +75,8 @@ func (h *JobsHandler) StreamJobUpdates(c *gin.Context) {
 				event := JobUpdateEvent{
 					Stage:    job.Stage,
 					Status:   job.Status,
-					Metadata: job.Metadata,
 					VideoKey: job.VideoKey,
-					Progress: calculateProgress(job.Stage),
+					Progress: calculateDynamicProgress(job.Stage, len(job.Scenes)),
 				}
 
 				data, err := json.Marshal(event)
@@ -117,48 +114,30 @@ func (h *JobsHandler) StreamJobUpdates(c *gin.Context) {
 	}
 }
 
-// calculateProgress returns progress percentage based on stage name
-func calculateProgress(stage string) int {
-	switch {
-	case stage == "script_generating":
-		return 5
-	case stage == "script_complete":
-		return 15
-	case strings.HasPrefix(stage, "scene_1_generating"):
-		return 20
-	case strings.HasPrefix(stage, "scene_1_complete"):
-		return 30
-	case strings.HasPrefix(stage, "scene_2_generating"):
-		return 40
-	case strings.HasPrefix(stage, "scene_2_complete"):
-		return 50
-	case strings.HasPrefix(stage, "scene_3_generating"):
-		return 60
-	case strings.HasPrefix(stage, "scene_3_complete"):
-		return 70
-	case strings.HasPrefix(stage, "scene_4_generating"):
-		return 75
-	case strings.HasPrefix(stage, "scene_4_complete"):
-		return 78
-	case strings.HasPrefix(stage, "scene_5_generating"):
-		return 80
-	case strings.HasPrefix(stage, "scene_5_complete"):
-		return 82
-	case strings.HasPrefix(stage, "scene_6_generating"):
-		return 84
-	case strings.HasPrefix(stage, "scene_6_complete"):
-		return 86
-	case stage == "audio_generating":
-		return 88
-	case stage == "audio_complete":
-		return 92
-	case stage == "composing":
-		return 95
-	case stage == "complete":
-		return 100
-	case stage == "failed":
-		return 0
-	default:
+// calculateETA estimates time remaining based on elapsed time and current progress
+// Returns estimated seconds remaining
+func calculateETA(stage string, startTime time.Time, totalScenes int) int {
+	progress := calculateDynamicProgress(stage, totalScenes)
+
+	// If no progress yet or completed, return 0
+	if progress == 0 || progress >= 100 {
 		return 0
 	}
+
+	// Calculate elapsed time in seconds
+	elapsed := time.Since(startTime).Seconds()
+
+	// Estimate total time based on current progress
+	// totalEstimated = elapsed * (100 / progress)
+	totalEstimated := elapsed * 100.0 / float64(progress)
+
+	// Remaining time = total - elapsed
+	remaining := totalEstimated - elapsed
+
+	// Return 0 if negative (shouldn't happen, but safety check)
+	if remaining < 0 {
+		return 0
+	}
+
+	return int(remaining)
 }
