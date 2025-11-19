@@ -30,6 +30,9 @@ type JobRepository interface {
 	// UpdateJob updates an entire job record atomically
 	UpdateJob(ctx context.Context, job *domain.Job) error
 
+	// DeleteJob deletes a job by ID
+	DeleteJob(ctx context.Context, jobID string) error
+
 	// HealthCheck verifies the repository is operational
 	HealthCheck(ctx context.Context) error
 }
