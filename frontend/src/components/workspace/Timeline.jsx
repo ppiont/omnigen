@@ -89,29 +89,55 @@ function Timeline({
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Calculate minimum width for timeline content (e.g., 50px per second)
-  const timelineContentWidth = videoDuration * 50;
+  // For videos <= 30 seconds: fill the timeline (100% width)
+  // For videos > 30 seconds: use calculated width (50px per second) and allow horizontal scroll
+  const isShortVideo = videoDuration <= 30;
+  const timelineContentWidth = isShortVideo ? null : videoDuration * 50; // null means use 100%
 
   const renderSegment = (segment, trackWidth, totalDuration) => {
-    const width = ((segment.end - segment.start) / totalDuration) * timelineContentWidth;
-    const left = (segment.start / totalDuration) * timelineContentWidth;
-    return (
-      <div
-        key={segment.id}
-        className="timeline-segment"
-        style={{
-          width: `${width}px`,
-          left: `${left}px`,
-        }}
-      >
-        {segment.text && (
-          <span className="timeline-segment-text">{segment.text}</span>
-        )}
-        {segment.label && (
-          <span className="timeline-segment-label">{segment.label}</span>
-        )}
-      </div>
-    );
+    if (isShortVideo) {
+      // Use percentage-based positioning for short videos
+      const widthPercent = ((segment.end - segment.start) / totalDuration) * 100;
+      const leftPercent = (segment.start / totalDuration) * 100;
+      return (
+        <div
+          key={segment.id}
+          className="timeline-segment"
+          style={{
+            width: `${widthPercent}%`,
+            left: `${leftPercent}%`,
+          }}
+        >
+          {segment.text && (
+            <span className="timeline-segment-text">{segment.text}</span>
+          )}
+          {segment.label && (
+            <span className="timeline-segment-label">{segment.label}</span>
+          )}
+        </div>
+      );
+    } else {
+      // Use pixel-based positioning for longer videos
+      const width = ((segment.end - segment.start) / totalDuration) * timelineContentWidth;
+      const left = (segment.start / totalDuration) * timelineContentWidth;
+      return (
+        <div
+          key={segment.id}
+          className="timeline-segment"
+          style={{
+            width: `${width}px`,
+            left: `${left}px`,
+          }}
+        >
+          {segment.text && (
+            <span className="timeline-segment-text">{segment.text}</span>
+          )}
+          {segment.label && (
+            <span className="timeline-segment-label">{segment.label}</span>
+          )}
+        </div>
+      );
+    }
   };
 
   // Generate multi-level time markers with dynamic intervals
@@ -168,14 +194,20 @@ function Timeline({
           <div className="timeline-ruler-spacer"></div>
           <div 
             className="timeline-ruler-content"
-            style={{ minWidth: `${timelineContentWidth}px` }}
+            style={isShortVideo 
+              ? { width: '100%' } 
+              : { width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }
+            }
           >
             {/* Sub-minor markers (thin lines, no labels) */}
             {subMinorMarkers.map((time) => (
               <div
                 key={`sub-${time}`}
                 className="timeline-ruler-marker timeline-ruler-marker-subminor"
-                style={{ left: `${(time / videoDuration) * timelineContentWidth}px` }}
+                style={isShortVideo 
+                  ? { left: `${(time / videoDuration) * 100}%` }
+                  : { left: `${(time / videoDuration) * timelineContentWidth}px` }
+                }
               />
             ))}
             {/* Minor markers (medium lines, no labels) */}
@@ -183,7 +215,10 @@ function Timeline({
               <div
                 key={`minor-${time}`}
                 className="timeline-ruler-marker timeline-ruler-marker-minor"
-                style={{ left: `${(time / videoDuration) * timelineContentWidth}px` }}
+                style={isShortVideo 
+                  ? { left: `${(time / videoDuration) * 100}%` }
+                  : { left: `${(time / videoDuration) * timelineContentWidth}px` }
+                }
               />
             ))}
             {/* Major markers (thick lines with labels) */}
@@ -191,7 +226,10 @@ function Timeline({
               <div
                 key={`major-${time}`}
                 className="timeline-ruler-marker timeline-ruler-marker-major"
-                style={{ left: `${(time / videoDuration) * timelineContentWidth}px` }}
+                style={isShortVideo 
+                  ? { left: `${(time / videoDuration) * 100}%` }
+                  : { left: `${(time / videoDuration) * timelineContentWidth}px` }
+                }
               >
                 <span className="timeline-ruler-label">{time}s</span>
               </div>
@@ -208,7 +246,10 @@ function Timeline({
           </div>
           <div 
             className="timeline-track-content timeline-track-content-video"
-            style={{ minWidth: `${timelineContentWidth}px` }}
+            style={isShortVideo 
+              ? { width: '100%' } 
+              : { width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }
+            }
           >
             {videoTrack.segments.map((segment) =>
               renderSegment(segment, 100, videoDuration)
@@ -224,7 +265,10 @@ function Timeline({
           </div>
           <div 
             className="timeline-track-content timeline-track-content-music"
-            style={{ minWidth: `${timelineContentWidth}px` }}
+            style={isShortVideo 
+              ? { width: '100%' } 
+              : { width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }
+            }
           >
             {musicTrack.segments.map((segment) =>
               renderSegment(segment, 100, videoDuration)
@@ -240,7 +284,10 @@ function Timeline({
           </div>
           <div 
             className="timeline-track-content timeline-track-content-text"
-            style={{ minWidth: `${timelineContentWidth}px` }}
+            style={isShortVideo 
+              ? { width: '100%' } 
+              : { width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }
+            }
           >
             {textTrack.segments.map((segment) =>
               renderSegment(segment, 100, videoDuration)
