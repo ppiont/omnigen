@@ -2026,7 +2026,9 @@
 /* Make timeline content fill full width */
 .timeline-ruler-content,
 .timeline-track-content {
-  width: 100%;
+  /* For short videos (<=30s): width: 100% (set inline)
+     For longer videos (>30s): width set to calculated px value (set inline)
+     This allows short videos to fill the container and longer videos to scroll */
   min-width: max-content; /* Allow horizontal scroll if content is wider */
 }
 
@@ -2183,7 +2185,7 @@
   background: var(--bg);
   display: flex;
   gap: 0;
-  width: 100%;
+  /* Remove width: 100% to allow expansion beyond viewport */
   min-width: max-content; /* Allow horizontal scroll if content is wider */
 }
 
@@ -2253,7 +2255,7 @@
   flex-direction: column;
   gap: 0;
   overflow: hidden;
-  width: 100%;
+  /* Remove width: 100% to allow expansion beyond viewport */
   min-width: max-content; /* Allow horizontal scroll if content is wider */
 }
 
@@ -2264,7 +2266,7 @@
   height: 60px;
   position: relative;
   align-items: stretch;
-  width: 100%;
+  /* Remove width: 100% to allow expansion beyond viewport */
   min-width: max-content; /* Allow horizontal scroll if content is wider */
   border-bottom: 1px solid var(--bg-highlight);
 }
