@@ -837,6 +837,20 @@
   box-shadow: 0 0 8px var(--glow-blue-medium);
 }
 
+/* Textarea styling for dropdown-field class */
+textarea.dropdown-field {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+  line-height: 1.5;
+  padding: 0.75rem 1rem;
+  cursor: text;
+  background-image: none; /* Remove dropdown arrow for textarea */
+  appearance: auto;
+  -webkit-appearance: auto;
+  -moz-appearance: auto;
+}
+
 .button-group {
   display: flex;
   gap: var(--space-8);
@@ -844,7 +858,8 @@
 }
 
 .duration-btn,
-.aspect-btn {
+.aspect-btn,
+.voice-btn {
   padding: 0.6rem 1.2rem;
   border-radius: var(--radius-base);
   background: var(--bg-surface);
@@ -857,25 +872,29 @@
 }
 
 [data-theme="dark"] .duration-btn,
-[data-theme="dark"] .aspect-btn {
+[data-theme="dark"] .aspect-btn,
+[data-theme="dark"] .voice-btn {
   background: rgba(20, 27, 43, 0.85);
   border: 1px solid rgba(0, 255, 209, 0.2);
 }
 
 .duration-btn:hover,
-.aspect-btn:hover {
+.aspect-btn:hover,
+.voice-btn:hover {
   border-color: var(--blue-medium);
   color: var(--text-primary);
   background: var(--bg-highlight);
 }
 
 [data-theme="dark"] .duration-btn:hover,
-[data-theme="dark"] .aspect-btn:hover {
+[data-theme="dark"] .aspect-btn:hover,
+[data-theme="dark"] .voice-btn:hover {
   background: rgba(20, 27, 43, 0.95);
 }
 
 .duration-btn.is-active,
-.aspect-btn.is-active {
+.aspect-btn.is-active,
+.voice-btn.is-active {
   background: linear-gradient(135deg, var(--mint-accent), var(--blue-medium));
   border-color: var(--mint-accent);
   color: var(--text-primary);
@@ -883,7 +902,8 @@
 }
 
 [data-theme="dark"] .duration-btn.is-active,
-[data-theme="dark"] .aspect-btn.is-active {
+[data-theme="dark"] .aspect-btn.is-active,
+[data-theme="dark"] .voice-btn.is-active {
   color: #000000;
 }
 

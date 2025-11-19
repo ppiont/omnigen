@@ -23,7 +23,6 @@ function BatchGenerationToggle() {
 
       <div className="batch-toggle-wrapper" onClick={handleClick}>
         <div className="toggle-item batch-toggle-disabled">
-          <div className="batch-lock-icon">🔒</div>
           <ToggleSwitch
             checked={false}
             onChange={() => {}}
