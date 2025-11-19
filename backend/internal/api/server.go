@@ -189,8 +189,7 @@ func (s *Server) setupRoutes() {
 
 		// Job routes
 		v1.GET("/jobs/:id", jobsHandler.GetJob)
-		v1.GET("/jobs/:id/stream", jobsHandler.StreamJobUpdates) // SSE endpoint
 		v1.GET("/jobs", jobsHandler.ListJobs)
-		v1.GET("/jobs/:id/progress", progressHandler.GetProgress)
+		v1.GET("/jobs/:id/progress", progressHandler.GetProgress) // SSE streaming endpoint
 	}
 }

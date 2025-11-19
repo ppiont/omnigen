@@ -1,8 +1,9 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -69,51 +70,119 @@ type AssetInfo struct {
 }
 
 // GetProgress handles GET /api/v1/jobs/:id/progress
-// @Summary Get detailed job progress
-// @Description Get real-time progress updates for a video generation job
+// @Summary Stream job progress in real-time
+// @Description Streams comprehensive job progress updates using Server-Sent Events (SSE). Sends ProgressResponse objects as SSE events whenever the job stage changes. Automatically closes stream when job completes or fails.
 // @Tags jobs
-// @Produce json
+// @Produce text/event-stream
 // @Param id path string true "Job ID"
-// @Success 200 {object} ProgressResponse
-// @Failure 404 {object} errors.ErrorResponse "Job not found"
-// @Failure 500 {object} errors.ErrorResponse
+// @Success 200 {string} string "Event stream (event types: update, done, error)"
 // @Router /api/v1/jobs/{id}/progress [get]
 // @Security BearerAuth
 func (h *ProgressHandler) GetProgress(c *gin.Context) {
 	jobID := c.Param("id")
 
-	h.logger.Info("Getting progress for job",
+	h.logger.Info("Starting SSE progress stream for job",
 		zap.String("job_id", jobID),
 	)
 
-	// Fetch job from DynamoDB
-	job, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
-	if err != nil {
-		if err.Error() == "job not found" {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "Job not found",
-			})
-			return
-		}
-		h.logger.Error("Failed to fetch job",
-			zap.String("job_id", jobID),
-			zap.Error(err),
-		)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to fetch job",
-		})
-		return
-	}
+	// Set SSE headers
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no") // Disable nginx buffering
 
+	// Create ticker for polling DynamoDB
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	lastStage := ""
+	ctx := c.Request.Context()
+
+	for {
+		select {
+		case <-ctx.Done():
+			// Client disconnected
+			h.logger.Info("SSE client disconnected",
+				zap.String("job_id", jobID),
+			)
+			return
+
+		case <-ticker.C:
+			// Fetch job from DynamoDB
+			job, err := h.jobRepo.GetJob(context.Background(), jobID)
+			if err != nil {
+				h.logger.Error("Failed to get job in SSE stream",
+					zap.String("job_id", jobID),
+					zap.Error(err),
+				)
+				// Send error event
+				c.SSEvent("error", gin.H{"error": "Failed to fetch job status"})
+				c.Writer.Flush()
+				continue
+			}
+
+			// Only send update if stage changed (avoid spam)
+			if job.Stage != lastStage {
+				lastStage = job.Stage
+
+				// Build full progress response
+				response, err := h.buildProgressResponse(job)
+				if err != nil {
+					h.logger.Error("Failed to build progress response",
+						zap.String("job_id", jobID),
+						zap.Error(err),
+					)
+					continue
+				}
+
+				// Marshal to JSON
+				data, err := json.Marshal(response)
+				if err != nil {
+					h.logger.Error("Failed to marshal progress response",
+						zap.String("job_id", jobID),
+						zap.Error(err),
+					)
+					continue
+				}
+
+				h.logger.Debug("Sending SSE progress update",
+					zap.String("job_id", jobID),
+					zap.String("stage", job.Stage),
+					zap.Int("progress", response.Progress),
+				)
+
+				// Send update event
+				c.SSEvent("update", string(data))
+				c.Writer.Flush()
+			}
+
+			// Close stream when job reaches terminal state
+			if job.Status == domain.StatusCompleted || job.Status == domain.StatusFailed {
+				h.logger.Info("Job terminal state reached, closing SSE stream",
+					zap.String("job_id", jobID),
+					zap.String("status", job.Status),
+				)
+
+				// Send final done event
+				c.SSEvent("done", gin.H{"status": job.Status})
+				c.Writer.Flush()
+				return
+			}
+		}
+	}
+}
+
+// buildProgressResponse constructs a complete ProgressResponse from a job
+func (h *ProgressHandler) buildProgressResponse(job *domain.Job) (*ProgressResponse, error) {
 	// Calculate progress percentage and ETA
 	progress := calculateDynamicProgress(job.Stage, len(job.Scenes))
 	eta := calculateETA(job.Stage, time.Unix(job.CreatedAt, 0), len(job.Scenes))
 
 	// Generate presigned URLs for all assets
-	assets, err := h.assetService.GetJobAssets(c.Request.Context(), job, 1*time.Hour)
+	assets, err := h.assetService.GetJobAssets(context.Background(), job, 1*time.Hour)
 	if err != nil {
 		h.logger.Warn("Failed to generate asset URLs",
-			zap.String("job_id", jobID),
+			zap.String("job_id", job.JobID),
 			zap.Error(err),
 		)
 		// Continue without assets rather than failing entire request
@@ -161,7 +230,7 @@ func (h *ProgressHandler) GetProgress(c *gin.Context) {
 	}
 
 	// Build response
-	response := ProgressResponse{
+	response := &ProgressResponse{
 		JobID:                  job.JobID,
 		Status:                 job.Status,
 		Progress:               progress,
@@ -173,14 +242,7 @@ func (h *ProgressHandler) GetProgress(c *gin.Context) {
 		Assets:                 progressAssets,
 	}
 
-	h.logger.Info("Progress retrieved successfully",
-		zap.String("job_id", jobID),
-		zap.Int("progress", progress),
-		zap.Int("eta_seconds", eta),
-		zap.String("status", job.Status),
-	)
-
-	c.JSON(http.StatusOK, response)
+	return response, nil
 }
 
 // formatStageName converts internal stage names to user-friendly display names
@@ -304,4 +366,23 @@ func buildStagesPending(job *domain.Job) []StageInfo {
 	}
 
 	return stages
+}
+
+// calculateETA estimates time remaining based on elapsed time and current progress
+func calculateETA(stage string, startTime time.Time, totalScenes int) int {
+	progress := calculateDynamicProgress(stage, totalScenes)
+
+	if progress == 0 || progress >= 100 {
+		return 0
+	}
+
+	elapsed := time.Since(startTime).Seconds()
+	totalEstimated := elapsed * 100.0 / float64(progress)
+	remaining := totalEstimated - elapsed
+
+	if remaining < 0 {
+		return 0
+	}
+
+	return int(remaining)
 }

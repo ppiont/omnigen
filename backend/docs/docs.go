@@ -382,60 +382,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get real-time progress updates for a video generation job",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "jobs"
-                ],
-                "summary": "Get detailed job progress",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Job ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ProgressResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Job not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/jobs/{id}/stream": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Streams job progress updates using Server-Sent Events (SSE)",
+                "description": "Streams comprehensive job progress updates using Server-Sent Events (SSE). Sends ProgressResponse objects as SSE events whenever the job stage changes. Automatically closes stream when job completes or fails.",
                 "produces": [
                     "text/event-stream"
                 ],
                 "tags": [
                     "jobs"
                 ],
-                "summary": "Stream job status updates in real-time",
+                "summary": "Stream job progress in real-time",
                 "parameters": [
                     {
                         "type": "string",
@@ -447,15 +401,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Event stream",
+                        "description": "Event stream (event types: update, done, error)",
                         "schema": {
                             "type": "string"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -509,20 +457,6 @@ const docTemplate = `{
             "properties": {
                 "error": {
                     "$ref": "#/definitions/errors.APIError"
-                }
-            }
-        },
-        "handlers.AssetInfo": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "integer"
-                },
-                "scene_number": {
-                    "type": "integer"
-                },
-                "url": {
-                    "type": "string"
                 }
             }
         },
@@ -780,67 +714,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.ProgressAssets": {
-            "type": "object",
-            "properties": {
-                "audio": {
-                    "$ref": "#/definitions/handlers.AssetInfo"
-                },
-                "final_video": {
-                    "$ref": "#/definitions/handlers.AssetInfo"
-                },
-                "scene_clips": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.AssetInfo"
-                    }
-                },
-                "thumbnails": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.AssetInfo"
-                    }
-                }
-            }
-        },
-        "handlers.ProgressResponse": {
-            "type": "object",
-            "properties": {
-                "assets": {
-                    "$ref": "#/definitions/handlers.ProgressAssets"
-                },
-                "current_stage": {
-                    "type": "string"
-                },
-                "current_stage_display": {
-                    "type": "string"
-                },
-                "estimated_time_remaining": {
-                    "type": "integer"
-                },
-                "job_id": {
-                    "type": "string"
-                },
-                "progress": {
-                    "type": "integer"
-                },
-                "stages_completed": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.StageInfo"
-                    }
-                },
-                "stages_pending": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.StageInfo"
-                    }
-                },
-                "status": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.RefreshRequest": {
             "type": "object",
             "required": [
@@ -857,23 +730,6 @@ const docTemplate = `{
                 },
                 "refresh_token": {
                     "type": "string"
-                }
-            }
-        },
-        "handlers.StageInfo": {
-            "type": "object",
-            "properties": {
-                "completed_at": {
-                    "type": "integer"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "progress": {
-                    "type": "integer"
                 }
             }
         },
