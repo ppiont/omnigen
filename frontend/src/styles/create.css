@@ -752,7 +752,12 @@
    =================================== */
 
 .batch-toggle-container {
-  margin-bottom: 1.5rem;
+  width: 100%;
+}
+
+.batch-generation-group {
+  grid-column: 1 / -1; /* Span full width across all columns */
+  margin-top: var(--space-8);
 }
 
 .batch-toggle-wrapper {

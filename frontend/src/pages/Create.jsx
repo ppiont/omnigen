@@ -8,7 +8,6 @@ import BatchGenerationToggle from "../components/create/BatchGenerationToggle.js
 import GenerationState from "../components/create/GenerationState.jsx";
 import ScenePreviewGrid from "../components/create/ScenePreviewGrid.jsx";
 import { generate, jobs } from "../utils/api.js";
-import { Wand2 } from "lucide-react";
 import "../styles/dashboard.css";
 import "../styles/create.css";
 
@@ -19,16 +18,11 @@ const categories = [
   "Social Media",
   "Tutorial",
 ];
-const styles = ["Cinematic", "Modern", "Minimalist", "Bold", "Playful"];
+const styles = ["Clinical", "Professional", "Documentary", "Informative", "Trustworthy"];
 const durations = ["10s", "20s", "30s", "40s", "50s", "60s"]; // Must be multiple of 10
 const aspects = ["16:9", "9:16", "1:1"]; // Backend only supports these
 
-// Phase 1: Enhanced prompt options
-const visualStyles = ["cinematic", "documentary", "energetic", "minimal", "dramatic", "playful"];
-const tones = ["premium", "friendly", "edgy", "inspiring", "humorous"];
-const tempos = ["slow", "medium", "fast"];
-const platforms = ["instagram", "tiktok", "youtube", "facebook"];
-const goals = ["awareness", "sales", "engagement", "signups"];
+// Removed unused options: visualStyles, tones, tempos, platforms, goals
 
 function IconChevronDown() {
   return (
@@ -50,7 +44,7 @@ function Create() {
   const [prompt, setPrompt] = useState("");
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("Ad Creative");
-  const [selectedStyle, setSelectedStyle] = useState("Cinematic");
+  const [selectedStyle, setSelectedStyle] = useState("Clinical");
   const [selectedDuration, setSelectedDuration] = useState("30s");
   const [selectedAspect, setSelectedAspect] = useState("16:9");
   const [autoEnhance, setAutoEnhance] = useState(true);
@@ -63,10 +57,6 @@ function Create() {
   const [productImage, setProductImage] = useState(null);
   const [validationError, setValidationError] = useState("");
   
-  // Title generation state
-  const [videoTitle, setVideoTitle] = useState("");
-  const [suggestedTitle, setSuggestedTitle] = useState("");
-  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
 
   // Phase 2 additions - State Machine
   const [generationState, setGenerationState] = useState("idle");
@@ -78,16 +68,10 @@ function Create() {
   const [generationError, setGenerationError] = useState(null);
   const [generatedJobId, setGeneratedJobId] = useState(null);
 
-  // Phase 1: Enhanced prompt options (all optional)
-  const [visualStyle, setVisualStyle] = useState("");
-  const [tone, setTone] = useState("");
-  const [tempo, setTempo] = useState("");
-  const [platform, setPlatform] = useState("");
-  const [audience, setAudience] = useState("");
-  const [goal, setGoal] = useState("");
-  const [callToAction, setCallToAction] = useState("");
-  const [proCinematography, setProCinematography] = useState(false);
-  const [creativeBoost, setCreativeBoost] = useState(false);
+  // Voice selection
+  const [voice, setVoice] = useState("Ash"); // Default to Ash (male)
+  // Side Effects - Required field for pharmaceutical ads
+  const [sideEffects, setSideEffects] = useState("");
 
   const characterLimit = 2000;
   const characterCount = prompt.length;
@@ -126,6 +110,13 @@ function Create() {
       return;
     }
 
+    // Validate side effects (required for pharmaceutical ads)
+    if (!sideEffects.trim()) {
+      console.warn("[CREATE] ⚠️ Validation failed: Empty side effects");
+      setValidationError("Side Effects is required. Please enter the side effects information.");
+      return;
+    }
+
     if (isGenerating) {
       console.warn("[CREATE] ⚠️ Already generating, ignoring request");
       return;
@@ -161,21 +152,21 @@ function Create() {
         aspect_ratio: selectedAspect,
       };
       
-      // Add title if provided
-      if (videoTitle.trim()) {
-        generateParams.title = videoTitle.trim();
+
+      // Add style (pharmaceutical ad styles)
+      if (selectedStyle) {
+        generateParams.style = selectedStyle.toLowerCase();
       }
 
-      // Add enhanced prompt options (Phase 1 - all optional)
-      if (visualStyle) generateParams.style = visualStyle;
-      if (tone) generateParams.tone = tone;
-      if (tempo) generateParams.tempo = tempo;
-      if (platform) generateParams.platform = platform;
-      if (audience) generateParams.audience = audience;
-      if (goal) generateParams.goal = goal;
-      if (callToAction) generateParams.call_to_action = callToAction;
-      if (proCinematography) generateParams.pro_cinematography = true;
-      if (creativeBoost) generateParams.creative_boost = true;
+      // Add voice selection
+      if (voice) {
+        generateParams.voice = voice;
+      }
+
+      // Add side effects (required for pharmaceutical ads)
+      if (sideEffects.trim()) {
+        generateParams.side_effects = sideEffects.trim();
+      }
 
       // Add start_image (Product Image - used ONLY for first scene)
       if (productImage) {
@@ -404,39 +395,6 @@ function Create() {
 
   const toggleAdvanced = () => setIsAdvancedOpen(!isAdvancedOpen);
 
-  // Handle title generation
-  const handleGenerateTitle = async () => {
-    if (!prompt.trim() || prompt.trim().length < 10) {
-      setValidationError("Please enter a prompt (at least 10 characters) to generate a title");
-      return;
-    }
-
-    setIsGeneratingTitle(true);
-    setSuggestedTitle("");
-    
-    try {
-      const response = await generate.title({ prompt: prompt.trim() });
-      setSuggestedTitle(response.title);
-      // Don't auto-set videoTitle - let user accept it
-    } catch (error) {
-      console.error("Failed to generate title:", error);
-      setValidationError("Failed to generate title. Please try again.");
-    } finally {
-      setIsGeneratingTitle(false);
-    }
-  };
-
-  // Handle accepting suggested title
-  const handleAcceptTitle = () => {
-    setVideoTitle(suggestedTitle);
-    setSuggestedTitle("");
-  };
-
-  // Handle editing title
-  const handleEditTitle = () => {
-    setSuggestedTitle("");
-  };
-
   // Handle viewing in workspace
   const handleViewWorkspace = () => {
     if (!generatedJobId) {
@@ -498,76 +456,17 @@ function Create() {
                 {characterCount} / {characterLimit}
               </span>
             </label>
-            <div className="prompt-textarea-wrapper">
-              <textarea
-                className="prompt-textarea"
-                placeholder="Describe your video ad... (e.g., 'Product showcase video for wireless headphones with modern aesthetic')"
-                value={prompt}
-                onChange={(e) => {
-                  setPrompt(e.target.value);
-                  if (validationError) setValidationError("");
-                }}
-                maxLength={characterLimit}
-                rows={6}
-              />
-              <button
-                type="button"
-                className="generate-title-btn"
-                onClick={handleGenerateTitle}
-                disabled={isGeneratingTitle || !prompt.trim() || prompt.trim().length < 10}
-                title="Generate AI title"
-              >
-                {isGeneratingTitle ? (
-                  <span className="spinner-small" />
-                ) : (
-                  <Wand2 size={18} />
-                )}
-                <span>{isGeneratingTitle ? "Generating..." : "Generate Title"}</span>
-              </button>
-            </div>
-            
-            {/* Title Input */}
-            {(videoTitle || suggestedTitle) && (
-              <div className="title-section">
-                <label className="title-label">Video Title</label>
-                {suggestedTitle && !videoTitle ? (
-                  <div className="suggested-title">
-                    <input
-                      type="text"
-                      className="title-input"
-                      value={suggestedTitle}
-                      readOnly
-                      maxLength={60}
-                    />
-                    <div className="title-actions">
-                      <button
-                        type="button"
-                        className="title-btn accept"
-                        onClick={handleAcceptTitle}
-                      >
-                        Use
-                      </button>
-                      <button
-                        type="button"
-                        className="title-btn edit"
-                        onClick={handleEditTitle}
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    className="title-input"
-                    placeholder="Enter video title (optional)"
-                    value={videoTitle}
-                    onChange={(e) => setVideoTitle(e.target.value)}
-                    maxLength={60}
-                  />
-                )}
-              </div>
-            )}
+            <textarea
+              className="prompt-textarea"
+              placeholder="Describe your video ad... (e.g., 'Product showcase video for wireless headphones with modern aesthetic')"
+              value={prompt}
+              onChange={(e) => {
+                setPrompt(e.target.value);
+                if (validationError) setValidationError("");
+              }}
+              maxLength={characterLimit}
+              rows={6}
+            />
 
             {/* Media Upload Bar - Below prompt */}
             <MediaUploadBar
@@ -644,30 +543,21 @@ function Create() {
         {isAdvancedOpen && (
           <div className="advanced-content">
             <div className="options-grid">
-              {/* Brand Preset Selector - Commented out for now */}
-              {/* <BrandPresetSelector
-                selectedPreset={selectedBrandPreset}
-                onChange={setSelectedBrandPreset}
-              /> */}
-
-              {/* Category Selector - Commented out for now */}
-              {/* <div className="option-group">
-                <label className="option-label">Category</label>
-                <select
+              {/* Side Effects - Required field for pharmaceutical ads */}
+              <div className="option-group">
+                <label className="option-label">Side Effects <span style={{ color: 'var(--error)' }}>*</span></label>
+                <textarea
                   className="dropdown-field"
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                >
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Enter side effects information (e.g., Common side effects include headache, nausea, dizziness...)"
+                  value={sideEffects}
+                  onChange={(e) => setSideEffects(e.target.value)}
+                  rows={4}
+                  required
+                />
                 <p className="option-helper">
-                  Choose the type of content you're creating
+                  Required: Enter the side effects information that will be included in your pharmaceutical ad video
                 </p>
-              </div> */}
+              </div>
 
               <div className="option-group">
                 <label className="option-label">Style</label>
@@ -712,166 +602,37 @@ function Create() {
                 </p>
               </div>
 
-              {/* Phase 1: Enhanced Prompt Options */}
               <div className="option-group">
-                <label className="option-label">Visual Style (Optional)</label>
-                <select
-                  className="dropdown-field"
-                  value={visualStyle}
-                  onChange={(e) => setVisualStyle(e.target.value)}
-                >
-                  <option value="">Default</option>
-                  {visualStyles.map((style) => (
-                    <option key={style} value={style}>
-                      {style.charAt(0).toUpperCase() + style.slice(1)}
-                    </option>
-                  ))}
-                </select>
-                <p className="option-helper">
-                  Choose the overall visual aesthetic (cinematic, documentary, etc.)
-                </p>
-              </div>
-
-              <div className="option-group">
-                <label className="option-label">Tone (Optional)</label>
-                <select
-                  className="dropdown-field"
-                  value={tone}
-                  onChange={(e) => setTone(e.target.value)}
-                >
-                  <option value="">Default</option>
-                  {tones.map((t) => (
-                    <option key={t} value={t}>
-                      {t.charAt(0).toUpperCase() + t.slice(1)}
-                    </option>
-                  ))}
-                </select>
-                <p className="option-helper">
-                  Set the emotional tone (premium, friendly, inspiring, etc.)
-                </p>
-              </div>
-
-              <div className="option-group">
-                <label className="option-label">Platform (Optional)</label>
-                <select
-                  className="dropdown-field"
-                  value={platform}
-                  onChange={(e) => setPlatform(e.target.value)}
-                >
-                  <option value="">Default</option>
-                  {platforms.map((p) => (
-                    <option key={p} value={p}>
-                      {p.charAt(0).toUpperCase() + p.slice(1)}
-                    </option>
-                  ))}
-                </select>
-                <p className="option-helper">
-                  Optimize for specific platform (Instagram, TikTok, YouTube, Facebook)
-                </p>
-              </div>
-
-              <div className="option-group">
-                <label className="option-label">Marketing Goal (Optional)</label>
-                <select
-                  className="dropdown-field"
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
-                >
-                  <option value="">Default</option>
-                  {goals.map((g) => (
-                    <option key={g} value={g}>
-                      {g.charAt(0).toUpperCase() + g.slice(1)}
-                    </option>
-                  ))}
-                </select>
-                <p className="option-helper">
-                  Campaign objective (awareness, sales, engagement, signups)
-                </p>
-              </div>
-
-              <div className="option-group">
-                <label className="option-label">Target Audience (Optional)</label>
-                <input
-                  type="text"
-                  className="dropdown-field"
-                  placeholder="e.g., Tech-savvy millennials, 25-35"
-                  value={audience}
-                  onChange={(e) => setAudience(e.target.value)}
-                  maxLength={200}
-                />
-                <p className="option-helper">
-                  Describe your target demographic
-                </p>
-              </div>
-
-              <div className="option-group">
-                <label className="option-label">Call to Action (Optional)</label>
-                <input
-                  type="text"
-                  className="dropdown-field"
-                  placeholder="e.g., Shop Now, Learn More, Sign Up Today"
-                  value={callToAction}
-                  onChange={(e) => setCallToAction(e.target.value)}
-                  maxLength={100}
-                />
-                <p className="option-helper">
-                  Custom call-to-action text
-                </p>
-              </div>
-
-              <div className="option-group">
-                <label className="option-label">Advanced Features</label>
-                <div className="toggle-group">
-                  <div className="toggle-item">
-                    <ToggleSwitch
-                      checked={proCinematography}
-                      onChange={() => setProCinematography(!proCinematography)}
-                      label="Pro Cinematography"
-                    />
-                    <span className="toggle-label">Professional Film Techniques</span>
-                  </div>
-                  <div className="toggle-item">
-                    <ToggleSwitch
-                      checked={creativeBoost}
-                      onChange={() => setCreativeBoost(!creativeBoost)}
-                      label="Creative Boost"
-                    />
-                    <span className="toggle-label">Boost Creativity (Higher Temperature)</span>
-                  </div>
+                <label className="option-label">Voice</label>
+                <div className="button-group">
+                  <button
+                    type="button"
+                    className={`voice-btn ${
+                      voice === "Ash" ? "is-active" : ""
+                    }`}
+                    onClick={() => setVoice("Ash")}
+                  >
+                    Ash
+                  </button>
+                  <button
+                    type="button"
+                    className={`voice-btn ${
+                      voice === "Rebecca" ? "is-active" : ""
+                    }`}
+                    onClick={() => setVoice("Rebecca")}
+                  >
+                    Rebecca
+                  </button>
                 </div>
                 <p className="option-helper">
-                  Use advanced cinematography terms and boost creative output
+                  Choose the voice for your video narration
                 </p>
               </div>
 
-              {/* Options - Commented out (not currently implemented in backend) */}
-              {/* <div className="option-group">
-                <label className="option-label">Options</label>
-                <div className="toggle-group">
-                  <div className="toggle-item">
-                    <ToggleSwitch
-                      checked={autoEnhance}
-                      onChange={() => setAutoEnhance(!autoEnhance)}
-                      label="Auto-enhance"
-                    />
-                    <span className="toggle-label">Auto-enhance</span>
-                  </div>
-                  <div className="toggle-item">
-                    <ToggleSwitch
-                      checked={loopVideo}
-                      onChange={() => setLoopVideo(!loopVideo)}
-                      label="Loop video"
-                    />
-                    <span className="toggle-label">Loop video</span>
-                  </div>
-                </div>
-                <p className="option-helper">
-                  Additional video enhancements and playback options
-                </p>
-              </div> */}
-
-              {/* Batch Generation Toggle */}
-              <BatchGenerationToggle />
+              {/* Batch Generation - Full width at bottom */}
+              <div className="option-group batch-generation-group">
+                <BatchGenerationToggle />
+              </div>
             </div>
           </div>
         )}
@@ -880,7 +641,7 @@ function Create() {
       <button
         type="button"
         className="generate-button"
-        disabled={!prompt.trim() || isGenerating || generationState !== "idle"}
+        disabled={!prompt.trim() || !sideEffects.trim() || isGenerating || generationState !== "idle"}
         onClick={handleGenerate}
       >
         {isGenerating ? "Generating..." : "Generate Video"}
