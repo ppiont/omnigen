@@ -7,6 +7,7 @@ import ValidationMessage from "../components/create/ValidationMessage.jsx";
 import BatchGenerationToggle from "../components/create/BatchGenerationToggle.jsx";
 import GenerationState from "../components/create/GenerationState.jsx";
 import ScenePreviewGrid from "../components/create/ScenePreviewGrid.jsx";
+import ProgressModal from "../components/create/ProgressModal.jsx";
 import { generate, jobs } from "../utils/api.js";
 import "../styles/dashboard.css";
 import "../styles/create.css";
@@ -67,6 +68,9 @@ function Create() {
   const [videoPreview, setVideoPreview] = useState(null);
   const [generationError, setGenerationError] = useState(null);
   const [generatedJobId, setGeneratedJobId] = useState(null);
+
+  // Progress modal state
+  const [generatingJobId, setGeneratingJobId] = useState(null);
 
   // Voice selection
   const [voice, setVoice] = useState("Ash"); // Default to Ash (male)
@@ -216,173 +220,11 @@ function Create() {
         "seconds"
       );
 
+      // Store job ID for legacy compatibility
       setGeneratedJobId(jobId);
-      setGenerationProgress(5); // Initial progress
 
-      // ============================================
-      // Poll for job status
-      // ============================================
-      console.log("\n" + "=".repeat(80));
-      console.log("📊 [POLLING] Starting job status polling");
-      console.log("=".repeat(80));
-      console.log("[POLLING] Polling GET /api/v1/jobs/:id every 7 seconds");
-
-      let pollCount = 0;
-      const progressPollInterval = 7000; // 7 seconds between polls (stays under 10/min limit)
-      const maxPollAttempts = 300; // ~35 minutes max (300 * 7s = 2100s = 35min)
-      const startTime = Date.now();
-      let progressPollTimeoutRef = null;
-
-      const pollProgress = async () => {
-        pollCount++;
-        const elapsedTime = Date.now() - startTime;
-
-        // Check max polling attempts
-        if (pollCount > maxPollAttempts) {
-          console.error(
-            `[CREATE] ⚠️ Max polling attempts (${maxPollAttempts}) reached. Job may be stuck.`
-          );
-          if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
-          setGenerationState("error");
-          setGenerationError(
-            "Video generation is taking longer than expected. Please check back later or try again."
-          );
-          setIsGenerating(false);
-          return;
-        }
-
-        try {
-          console.log(
-            `[CREATE] 🔄 Polling job status (poll #${pollCount}, elapsed: ${Math.round(
-              elapsedTime / 1000
-            )}s)...`
-          );
-
-          // Get job status directly (progress endpoint returns 501)
-          const job = await jobs.get(jobId);
-
-          console.log(`[CREATE] 📊 Job status update:`, {
-            status: job.status,
-            stage: job.stage,
-            progress_percent: job.progress_percent,
-            metadata: job.metadata,
-          });
-
-          // Update progress from backend's calculated progress_percent
-          setGenerationProgress(job.progress_percent || 0);
-
-          // Update scene information from metadata if available
-          if (job.metadata) {
-            if (job.metadata.num_scenes) {
-              setSceneCount(job.metadata.num_scenes);
-            }
-            if (job.metadata.current_scene) {
-              setCurrentScene(job.metadata.current_scene);
-            }
-            if (job.metadata.scenes_complete !== undefined) {
-              setCurrentScene(job.metadata.scenes_complete);
-            }
-          }
-
-          // Update generation state based on stage
-          if (job.stage) {
-            if (job.stage === "script_generating") {
-              setGenerationState("planning");
-            } else if (
-              job.stage.startsWith("scene_") ||
-              job.stage === "audio_generating" ||
-              job.stage === "composing"
-            ) {
-              setGenerationState("rendering");
-            }
-          }
-
-          if (job.status === "completed") {
-            console.log("[CREATE] ✅ Video generation completed!");
-            if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
-            setGenerationState("ready");
-            setGenerationProgress(100);
-
-            if (job.video_url) {
-              console.log("[CREATE] 🎬 Video URL:", job.video_url);
-              setVideoPreview(job.video_url);
-            } else if (job.video_key) {
-              // Fallback: construct URL from key (though backend should provide video_url)
-              const videoUrl = `https://your-s3-bucket.s3.amazonaws.com/${job.video_key}`;
-              console.log("[CREATE] 🎬 Video URL (constructed):", videoUrl);
-              setVideoPreview(videoUrl);
-            }
-            setIsGenerating(false);
-          } else if (job.status === "failed") {
-            console.error("[CREATE] ❌ Video generation failed");
-            if (progressPollTimeoutRef) clearTimeout(progressPollTimeoutRef);
-            setGenerationState("error");
-            setGenerationError(job.error_message || "Video generation failed");
-            setIsGenerating(false);
-          } else {
-            // Continue polling
-            progressPollTimeoutRef = setTimeout(
-              pollProgress,
-              progressPollInterval
-            );
-          }
-        } catch (error) {
-          // Handle authentication errors - refresh token and retry
-          if (error.status === 401) {
-            console.warn(
-              `[CREATE] 🔄 Authentication expired during polling (poll #${pollCount}). Refreshing token...`
-            );
-            try {
-              // Refresh the session via backend
-              await auth.refresh();
-              console.log(
-                `[CREATE] ✅ Token refreshed successfully. Retrying poll...`
-              );
-              // Retry immediately after refresh
-              progressPollTimeoutRef = setTimeout(pollProgress, 1000);
-              return;
-            } catch (refreshError) {
-              console.error(
-                `[CREATE] ❌ Failed to refresh token:`,
-                refreshError
-              );
-              setError(
-                "Your session has expired. Please log in again and retry."
-              );
-              setIsGenerating(false);
-              return;
-            }
-          }
-
-          // Handle rate limit errors
-          if (error.status === 429) {
-            const retryAfter = error.details?.reset_in || 60;
-            console.warn(
-              `[CREATE] ⚠️ Rate limit hit during progress polling. Waiting ${retryAfter} seconds...`
-            );
-            // Wait and retry
-            progressPollTimeoutRef = setTimeout(
-              pollProgress,
-              retryAfter * 1000
-            );
-            return;
-          }
-
-          console.error(
-            `[CREATE] ⚠️ Error polling progress (poll #${pollCount}):`,
-            error
-          );
-          // Continue polling on other errors after delay
-          progressPollTimeoutRef = setTimeout(
-            pollProgress,
-            progressPollInterval
-          );
-        }
-      };
-
-      // Start polling
-      progressPollTimeoutRef = setTimeout(pollProgress, progressPollInterval);
-      window._createPollTimeout = progressPollTimeoutRef;
+      // Open progress modal with SSE tracking
+      setGeneratingJobId(jobId);
     } catch (error) {
       console.error("\n" + "=".repeat(80));
       console.error("❌ [ERROR] VIDEO GENERATION PIPELINE ERROR");
@@ -433,6 +275,73 @@ function Create() {
     });
   };
 
+  // Handle progress modal completion
+  const handleProgressComplete = async (jobData) => {
+    console.log("[CREATE] ✅ Progress modal completion:", jobData);
+
+    try {
+      // Fetch final job details to get video URL
+      const finalJob = await jobs.get(jobData.job_id);
+      console.log("[CREATE] 📊 Final job data:", finalJob);
+
+      // Update state for completion
+      setGenerationState("ready");
+      setGenerationProgress(100);
+      setIsGenerating(false);
+      setGeneratingJobId(null);
+
+      // Navigate to workspace with complete data
+      navigate(`/workspace/${jobData.job_id}`, {
+        state: {
+          prompt,
+          scenes,
+          videoPreview: finalJob.video_url,
+          config: {
+            category: selectedCategory,
+            style: selectedStyle,
+            duration: selectedDuration,
+            aspectRatio: selectedAspect,
+            brandPreset: selectedBrandPreset,
+            autoEnhance,
+            loopVideo,
+            productImage: productImage?.name || null,
+          },
+          generatedAt: Date.now(),
+        },
+      });
+    } catch (error) {
+      console.error("[CREATE] ❌ Error fetching final job data:", error);
+      // Fallback: navigate anyway with basic info
+      setGenerationState("ready");
+      setGenerationProgress(100);
+      setIsGenerating(false);
+      setGeneratingJobId(null);
+
+      navigate(`/workspace/${jobData.job_id}`, {
+        state: {
+          prompt,
+          config: {
+            category: selectedCategory,
+            style: selectedStyle,
+            duration: selectedDuration,
+            aspectRatio: selectedAspect,
+            brandPreset: selectedBrandPreset,
+          },
+          generatedAt: Date.now(),
+        },
+      });
+    }
+  };
+
+  // Handle progress modal cancellation
+  const handleProgressCancel = () => {
+    console.log("[CREATE] ❌ Progress modal cancelled");
+    setGeneratingJobId(null);
+    setIsGenerating(false);
+    setGenerationState("idle");
+    setGenerationProgress(0);
+  };
+
   // Handle retry/generate another
   const handleRetry = () => {
     console.log("[CREATE] 🔄 Resetting generation state");
@@ -452,10 +361,18 @@ function Create() {
     setVideoPreview(null);
     setGeneratedJobId(null);
     setIsGenerating(false);
+    setGeneratingJobId(null); // Also clear progress modal
   };
 
   return (
     <>
+      <ProgressModal
+        jobId={generatingJobId}
+        onComplete={handleProgressComplete}
+        onCancel={handleProgressCancel}
+        isOpen={!!generatingJobId}
+      />
+
       <div className="generation-grid">
         <section className="prompt-card">
           <h2 className="card-title">Generate a video</h2>
@@ -651,7 +568,7 @@ function Create() {
       <button
         type="button"
         className="generate-button"
-        disabled={!prompt.trim() || !sideEffects.trim() || isGenerating || generationState !== "idle"}
+        disabled={!prompt.trim() || !sideEffects.trim() || isGenerating || generationState !== "idle" || !!generatingJobId}
         onClick={handleGenerate}
       >
         {isGenerating ? "Generating..." : "Generate Video"}
