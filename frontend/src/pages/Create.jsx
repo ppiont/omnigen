@@ -73,6 +73,15 @@ function Create() {
   // Side Effects - Required field for pharmaceutical ads
   const [sideEffects, setSideEffects] = useState("");
 
+  // Map pharmaceutical styles to backend-compatible styles
+  const styleMap = {
+    'Clinical': 'documentary',      // Clinical → documentary (medical/realistic)
+    'Professional': 'cinematic',    // Professional → cinematic (polished)
+    'Documentary': 'documentary',   // Documentary → documentary (matches)
+    'Informative': 'documentary',   // Informative → documentary (educational)
+    'Trustworthy': 'cinematic',     // Trustworthy → cinematic (polished, credible)
+  };
+
   const characterLimit = 2000;
   const characterCount = prompt.length;
 
@@ -153,20 +162,21 @@ function Create() {
       };
       
 
-      // Add style (pharmaceutical ad styles)
+      // Add style (pharmaceutical ad styles) - MAP to backend-compatible style
       if (selectedStyle) {
-        generateParams.style = selectedStyle.toLowerCase();
+        const backendStyle = styleMap[selectedStyle] || 'documentary'; // Default to documentary
+        generateParams.style = backendStyle;
+        console.log(`[CREATE] Mapped style "${selectedStyle}" to backend style "${backendStyle}"`);
       }
 
-      // Add voice selection
-      if (voice) {
-        generateParams.voice = voice;
-      }
-
-      // Add side effects (required for pharmaceutical ads)
-      if (sideEffects.trim()) {
-        generateParams.side_effects = sideEffects.trim();
-      }
+      // Voice and side_effects are kept in UI for future use but not sent to API yet
+      // TODO: Add voice and side_effects support when backend is ready
+      // if (voice) {
+      //   generateParams.voice = voice;
+      // }
+      // if (sideEffects.trim()) {
+      //   generateParams.side_effects = sideEffects.trim();
+      // }
 
       // Add start_image (Product Image - used ONLY for first scene)
       if (productImage) {
