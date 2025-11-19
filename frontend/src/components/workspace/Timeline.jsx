@@ -114,22 +114,51 @@ function Timeline({
     );
   };
 
-  // Generate multi-level time markers
-  // Major markers every 5 seconds, minor every 1 second, sub-minor every 0.5 seconds
-  const majorMarkers = Array.from(
-    { length: Math.ceil(videoDuration / 5) + 1 },
-    (_, i) => i * 5
-  ).filter((time) => time <= videoDuration);
+  // Generate multi-level time markers with dynamic intervals
+  // Calculate appropriate interval based on video duration
+  const getMajorInterval = (duration) => {
+    if (duration <= 10) return 2;      // Every 2 seconds for very short videos
+    if (duration <= 30) return 5;      // Every 5 seconds for short videos
+    if (duration <= 120) return 10;    // Every 10 seconds for medium videos
+    if (duration <= 300) return 30;    // Every 30 seconds for long videos
+    return 60;                          // Every 60 seconds for very long videos
+  };
 
-  const minorMarkers = Array.from(
-    { length: Math.ceil(videoDuration) + 1 },
-    (_, i) => i
-  ).filter((time) => time <= videoDuration && !majorMarkers.includes(time));
+  const getMinorInterval = (duration) => {
+    if (duration <= 10) return 1;       // Every 1 second for very short videos
+    if (duration <= 30) return 1;       // Every 1 second for short videos
+    if (duration <= 120) return 5;     // Every 5 seconds for medium videos
+    return 10;                          // Every 10 seconds for longer videos
+  };
 
-  const subMinorMarkers = Array.from(
-    { length: Math.ceil(videoDuration * 2) + 1 },
-    (_, i) => i * 0.5
-  ).filter((time) => time <= videoDuration && !majorMarkers.includes(time) && !minorMarkers.includes(time));
+  const majorInterval = getMajorInterval(videoDuration);
+  const minorInterval = getMinorInterval(videoDuration);
+
+  // Generate major markers - always include 0 and videoDuration
+  const majorMarkers = [];
+  for (let time = 0; time <= videoDuration; time += majorInterval) {
+    majorMarkers.push(time);
+  }
+  // Ensure the final marker is exactly at videoDuration
+  if (majorMarkers[majorMarkers.length - 1] !== videoDuration) {
+    majorMarkers.push(videoDuration);
+  }
+
+  // Generate minor markers (exclude major markers)
+  const minorMarkers = [];
+  for (let time = 0; time <= videoDuration; time += minorInterval) {
+    if (!majorMarkers.includes(time)) {
+      minorMarkers.push(time);
+    }
+  }
+
+  // Generate sub-minor markers (every 0.5 seconds, exclude major and minor)
+  const subMinorMarkers = [];
+  for (let time = 0; time <= videoDuration; time += 0.5) {
+    if (!majorMarkers.includes(time) && !minorMarkers.includes(time)) {
+      subMinorMarkers.push(time);
+    }
+  }
 
   return (
     <div className="timeline-container">
