@@ -163,17 +163,22 @@ function Timeline({
   // Generate major markers - always include 0 and videoDuration
   const majorMarkers = [];
   for (let time = 0; time <= videoDuration; time += majorInterval) {
-    majorMarkers.push(time);
+    if (time <= videoDuration) {
+      majorMarkers.push(time);
+    }
   }
-  // Ensure the final marker is exactly at videoDuration
-  if (majorMarkers[majorMarkers.length - 1] !== videoDuration) {
-    majorMarkers.push(videoDuration);
+  // Ensure the final marker is exactly at videoDuration (remove duplicates and sort)
+  const uniqueMajorMarkers = [...new Set(majorMarkers)];
+  if (!uniqueMajorMarkers.includes(videoDuration)) {
+    uniqueMajorMarkers.push(videoDuration);
   }
+  uniqueMajorMarkers.sort((a, b) => a - b);
+  const finalMajorMarkers = uniqueMajorMarkers;
 
   // Generate minor markers (exclude major markers)
   const minorMarkers = [];
   for (let time = 0; time <= videoDuration; time += minorInterval) {
-    if (!majorMarkers.includes(time)) {
+    if (time <= videoDuration && !finalMajorMarkers.includes(time)) {
       minorMarkers.push(time);
     }
   }
@@ -181,7 +186,7 @@ function Timeline({
   // Generate sub-minor markers (every 0.5 seconds, exclude major and minor)
   const subMinorMarkers = [];
   for (let time = 0; time <= videoDuration; time += 0.5) {
-    if (!majorMarkers.includes(time) && !minorMarkers.includes(time)) {
+    if (time <= videoDuration && !finalMajorMarkers.includes(time) && !minorMarkers.includes(time)) {
       subMinorMarkers.push(time);
     }
   }
@@ -222,7 +227,7 @@ function Timeline({
               />
             ))}
             {/* Major markers (thick lines with labels) */}
-            {majorMarkers.map((time) => (
+            {finalMajorMarkers.map((time) => (
               <div
                 key={`major-${time}`}
                 className="timeline-ruler-marker timeline-ruler-marker-major"

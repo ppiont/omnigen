@@ -841,18 +841,45 @@ function Workspace() {
           <div className="workspace-timeline-card">
             {(() => {
               // Extract scenes from various possible locations in the data structure
-              const scenes = 
+              let scenes = 
                 jobData.scenes || 
                 jobData.metadata?.scenes || 
                 jobData.metadata?.script?.scenes || 
                 [];
               
+              // If no scenes but we have scene_video_urls, create scenes from URLs
+              if (scenes.length === 0 && jobData.scene_video_urls && jobData.scene_video_urls.length > 0) {
+                const numScenes = jobData.scene_video_urls.length;
+                const totalDuration = jobData.duration || 30;
+                const sceneDuration = totalDuration / numScenes;
+                
+                scenes = jobData.scene_video_urls.map((url, index) => ({
+                  scene_number: index + 1,
+                  start_time: index * sceneDuration,
+                  duration: sceneDuration,
+                  location: `Scene ${index + 1}`,
+                  action: `Scene ${index + 1} video clip`,
+                }));
+                
+                console.log("[WORKSPACE] Created scenes from scene_video_urls:", scenes);
+              }
+              
               // Extract audio spec from various possible locations
-              const audioSpec = 
+              let audioSpec = 
                 jobData.audio_spec || 
                 jobData.metadata?.audio_spec || 
                 jobData.metadata?.script?.audio_spec || 
                 null;
+              
+              // If no audio_spec but we have audio_url, create basic audio spec
+              if (!audioSpec && jobData.audio_url) {
+                audioSpec = {
+                  enable_audio: true,
+                  music_mood: 'background',
+                  music_style: 'background',
+                };
+                console.log("[WORKSPACE] Created audio spec from audio_url");
+              }
               
               // Debug logging
               console.log("[WORKSPACE] Timeline data:", {
@@ -861,6 +888,7 @@ function Workspace() {
                 scenes: scenes,
                 audioSpec: audioSpec,
                 audioUrl: jobData.audio_url,
+                sceneVideoURLs: jobData.scene_video_urls,
                 fullJobData: jobData,
               });
               
