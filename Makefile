@@ -142,6 +142,7 @@ frontend-build: ## Build frontend for production
 		exit 1; \
 	fi
 	@cd frontend && \
+		bun install && \
 		VITE_API_URL=https://$(CF_DOMAIN) \
 		VITE_COGNITO_USER_POOL_ID=$(USER_POOL) \
 		VITE_COGNITO_CLIENT_ID=$(CLIENT_ID) \

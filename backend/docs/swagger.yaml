@@ -430,6 +430,31 @@ paths:
       tags:
       - jobs
   /api/v1/jobs/{id}:
+    delete:
+      description: Delete a video generation job and its associated assets from DynamoDB
+        and S3
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a job
+      tags:
+      - jobs
     get:
       description: Get the status and details of a video generation job
       parameters:

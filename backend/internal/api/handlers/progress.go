@@ -13,6 +13,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// SSEPollingInterval defines how often to poll DynamoDB for job updates
+	SSEPollingInterval = 1 * time.Second
+)
+
 // ProgressHandler handles job progress requests
 type ProgressHandler struct {
 	jobRepo      repository.JobRepository
@@ -92,7 +97,7 @@ func (h *ProgressHandler) GetProgress(c *gin.Context) {
 	c.Header("X-Accel-Buffering", "no") // Disable nginx buffering
 
 	// Create ticker for polling DynamoDB
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(SSEPollingInterval)
 	defer ticker.Stop()
 
 	lastStage := ""
@@ -163,8 +168,21 @@ func (h *ProgressHandler) GetProgress(c *gin.Context) {
 					zap.String("status", job.Status),
 				)
 
-				// Send final done event
-				c.SSEvent("done", gin.H{"status": job.Status})
+				// Build final progress response with all job data
+				finalResponse, err := h.buildProgressResponse(job)
+				if err != nil {
+					h.logger.Error("Failed to build final progress response", zap.Error(err))
+					c.SSEvent("done", gin.H{"status": job.Status})
+				} else {
+					finalData, err := json.Marshal(finalResponse)
+					if err != nil {
+						h.logger.Error("Failed to marshal final progress response", zap.Error(err))
+						c.SSEvent("done", gin.H{"status": job.Status})
+					} else {
+						// Send final done event with full ProgressResponse
+						c.SSEvent("done", string(finalData))
+					}
+				}
 				c.Writer.Flush()
 				return
 			}

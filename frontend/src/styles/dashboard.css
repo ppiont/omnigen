@@ -172,24 +172,20 @@
 }
 
 .sidebar-tab-create.is-active {
-  background: linear-gradient(
-    130deg,
-    rgba(124, 255, 0, 0.25),
-    rgba(0, 255, 209, 0.2),
-    rgba(180, 76, 255, 0.25)
-  );
+  background: linear-gradient(130deg,
+      rgba(124, 255, 0, 0.25),
+      rgba(0, 255, 209, 0.2),
+      rgba(180, 76, 255, 0.25));
   border: 1px solid rgba(124, 255, 0, 0.5);
   box-shadow: 0 0 25px var(--glow-mint);
   color: var(--text-primary);
 }
 
 [data-theme="light"] .sidebar-tab-create.is-active {
-  background: linear-gradient(
-    130deg,
-    rgba(124, 255, 0, 0.15),
-    rgba(0, 255, 209, 0.12),
-    rgba(180, 76, 255, 0.15)
-  );
+  background: linear-gradient(130deg,
+      rgba(124, 255, 0, 0.15),
+      rgba(0, 255, 209, 0.12),
+      rgba(180, 76, 255, 0.15));
   border: 1px solid rgba(124, 255, 0, 0.3);
   color: var(--text-primary);
 }
@@ -216,11 +212,9 @@
   bottom: 12px;
   width: 3px;
   border-radius: 999px;
-  background: linear-gradient(
-    180deg,
-    var(--mint-accent),
-    var(--blue-accent)
-  );
+  background: linear-gradient(180deg,
+      var(--mint-accent),
+      var(--blue-accent));
 }
 
 .sidebar-tab.is-disabled {
@@ -257,7 +251,7 @@
   transition: margin-left 0.25s ease;
 }
 
-.dashboard-sidebar.is-collapsed ~ .dashboard-main {
+.dashboard-sidebar.is-collapsed~.dashboard-main {
   margin-left: 80px;
 }
 
@@ -483,11 +477,9 @@
 }
 
 [data-theme="dark"] .dashboard-panel.secondary {
-  background: linear-gradient(
-    160deg,
-    rgba(17, 22, 36, 0.95),
-    rgba(26, 33, 51, 0.92)
-  );
+  background: linear-gradient(160deg,
+      rgba(17, 22, 36, 0.95),
+      rgba(26, 33, 51, 0.92));
   border-color: rgba(180, 76, 255, 0.3);
 }
 
@@ -845,7 +837,8 @@ textarea.dropdown-field {
   line-height: 1.5;
   padding: 0.75rem 1rem;
   cursor: text;
-  background-image: none; /* Remove dropdown arrow for textarea */
+  background-image: none;
+  /* Remove dropdown arrow for textarea */
   appearance: auto;
   -webkit-appearance: auto;
   -moz-appearance: auto;
@@ -1362,7 +1355,6 @@ textarea.dropdown-field {
   letter-spacing: 0.35em;
 }
 
-<<<<<<< HEAD
 .dropdown-field {
   width: 100%;
   padding: 0.75rem 1rem;
@@ -2111,6 +2103,7 @@ textarea.dropdown-field {
 }
 
 @media (max-width: 768px) {
+
   .prompt-card,
   .preview-card {
     padding: var(--space-24);
@@ -2337,6 +2330,7 @@ textarea.dropdown-field {
 }
 
 @media (max-width: 768px) {
+
   .dashboard-content-wrapper,
   .video-library-page,
   .settings-page {
@@ -2429,6 +2423,7 @@ textarea.dropdown-field {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }

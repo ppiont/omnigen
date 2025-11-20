@@ -1031,6 +1031,28 @@
   }
 }
 
+/* Dancing icon animation for active generation stages */
+@keyframes dance {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-8px) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(3deg);
+  }
+  75% {
+    transform: translateY(-8px) rotate(-3deg);
+  }
+}
+
+.dancing-icon {
+  animation: dance 0.8s ease-in-out infinite;
+  display: inline-block;
+}
+
 /* State Progress Bar */
 .state-progress-bar {
   width: 100%;
