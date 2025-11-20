@@ -1,19 +1,18 @@
 import "../../styles/create.css";
+import { getStageIcon, shouldDance } from "../../utils/stageIcons";
 
 /**
  * GenerationState - State machine UI component
  * Displays different UI based on generation state:
- * IDLE, PENDING, PLANNING, RENDERING, STITCHING, READY, ERROR
+ * IDLE, RENDERING (with real-time progress), COMPLETED, ERROR
  */
 function GenerationState({
   state,
-  progress,
+  jobProgress,
   error,
-  sceneCount,
-  currentScene,
   videoPreview,
   onRetry,
-  onViewWorkspace,
+  onViewVideo,
   aspectRatio,
 }) {
   // IDLE State - Before generation starts
@@ -28,92 +27,39 @@ function GenerationState({
     );
   }
 
-  // PENDING State - Job submitted, waiting
-  if (state === "pending") {
-    return (
-      <div className="preview-state pending">
-        <div className="state-icon">⏳</div>
-        <h4 className="state-title">Job Submitted</h4>
-        <p className="state-description">Waiting for processing slot...</p>
-        <div className="state-spinner"></div>
-      </div>
-    );
-  }
+  // RENDERING State - Real-time progress with dancing icon
+  if (state === "rendering" && jobProgress) {
+    const { percentage, currentStage, currentStageRaw } = jobProgress;
+    const stageInfo = getStageIcon(currentStageRaw);
+    const IconComponent = stageInfo.icon;
+    const isDancing = shouldDance(currentStageRaw);
 
-  // PLANNING State - AI analyzing prompt
-  if (state === "planning") {
-    return (
-      <div className="preview-state planning">
-        <div className="state-icon">🧠</div>
-        <h4 className="state-title">Planning Scenes</h4>
-        <p className="state-description">
-          AI is analyzing your prompt and creating a narrative structure...
-        </p>
-        <div className="state-progress-bar">
-          <div
-            className="state-progress-fill"
-            style={{ width: `${progress}%` }}
-          ></div>
-        </div>
-        {sceneCount > 0 && (
-          <p className="state-detail">
-            Scene breakdown: {sceneCount} clips planned
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  // RENDERING State - Generating video clips
-  if (state === "rendering") {
     return (
       <div className="preview-state rendering">
-        <div className="state-icon">🎬</div>
-        <h4 className="state-title">Rendering Video</h4>
-        <p className="state-description">
-          Generating clips with AI video models...
-        </p>
+        <div className={`generation-progress ${isDancing ? 'dancing-icon' : ''}`}>
+          <IconComponent
+            size={48}
+            color={stageInfo.color}
+            strokeWidth={2}
+          />
+        </div>
+
+        <h4 className="state-title">{currentStage}</h4>
+
         <div className="state-progress-bar">
           <div
             className="state-progress-fill"
-            style={{ width: `${progress}%` }}
+            style={{ width: `${percentage}%` }}
           ></div>
         </div>
-        {currentScene && sceneCount && (
-          <p className="state-detail">
-            Clip {currentScene} of {sceneCount} complete
-          </p>
-        )}
+
+        <p className="state-detail">{percentage}%</p>
       </div>
     );
   }
 
-  // STITCHING State - Post-generation processing
-  if (state === "stitching") {
-    return (
-      <div className="preview-state stitching">
-        <div className="state-icon">✂️</div>
-        <h4 className="state-title">Finalizing Video</h4>
-        <p className="state-description">
-          Stitching clips together and adding final touches...
-        </p>
-        <div className="state-progress-bar">
-          <div
-            className="state-progress-fill"
-            style={{ width: `${progress}%` }}
-          ></div>
-        </div>
-        {sceneCount > 1 && (
-          <p className="state-detail">
-            Combining {sceneCount} clips into final video
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  // READY State - Video complete
-  if (state === "ready") {
+  // COMPLETED State - Video ready with manual navigation
+  if (state === "completed") {
     return (
       <div className="preview-state ready">
         <div className="state-icon">✅</div>
@@ -132,11 +78,8 @@ function GenerationState({
         )}
 
         <div className="ready-actions">
-          <button className="btn-view-workspace" onClick={onViewWorkspace}>
-            View in Workspace
-          </button>
-          <button className="btn-generate-another" onClick={onRetry}>
-            Generate Another
+          <button className="btn-view-workspace" onClick={onViewVideo}>
+            View Video
           </button>
         </div>
       </div>

@@ -1,26 +1,28 @@
 import "../../styles/create.css";
+import { Film, CheckCircle, XCircle, Clock } from "lucide-react";
 
 /**
  * ScenePreviewGrid - Displays planned/rendered scene thumbnails
- * Shows during PLANNING, RENDERING, and READY states
+ * Shows during RENDERING and COMPLETED states with real-time updates
  */
-function ScenePreviewGrid({ scenes, isVisible }) {
+function ScenePreviewGrid({ scenes, isVisible, jobProgress }) {
   if (!isVisible || !scenes || scenes.length === 0) {
     return null;
   }
 
+  // Enhanced status icon with lucide icons
   const getStatusIcon = (status) => {
     switch (status) {
       case "complete":
-        return "✅";
+        return <CheckCircle size={16} color="#10b981" />;
       case "rendering":
-        return "⏳";
+        return <Film size={16} color="#8b5cf6" className="dancing-icon" />;
       case "pending":
-        return "⏸️";
+        return <Clock size={16} color="#6b7280" />;
       case "error":
-        return "❌";
+        return <XCircle size={16} color="#ef4444" />;
       default:
-        return "⏸️";
+        return <Clock size={16} color="#6b7280" />;
     }
   };
 
@@ -72,7 +74,7 @@ function ScenePreviewGrid({ scenes, isVisible }) {
             </div>
 
             <div className={`scene-status scene-status-${scene.status}`}>
-              <span className="status-icon">{getStatusIcon(scene.status)}</span>
+              <div className="status-icon">{getStatusIcon(scene.status)}</div>
               <span className="status-text">{getStatusText(scene.status)}</span>
             </div>
           </div>

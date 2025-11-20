@@ -70,6 +70,7 @@ jobs:
         continue-on-error: true
         env:
           TF_VAR_replicate_api_key_secret_arn: ${{ secrets.REPLICATE_API_KEY_SECRET_ARN }}
+          TF_VAR_environment: production
 
       - name: Comment PR with Plan
         if: github.event_name == 'pull_request'
@@ -146,6 +147,7 @@ jobs:
         run: terraform apply -auto-approve -input=false
         env:
           TF_VAR_replicate_api_key_secret_arn: ${{ secrets.REPLICATE_API_KEY_SECRET_ARN }}
+          TF_VAR_environment: production
 
       - name: Get Terraform Outputs
         id: outputs

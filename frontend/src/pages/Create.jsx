@@ -7,7 +7,7 @@ import ValidationMessage from "../components/create/ValidationMessage.jsx";
 import BatchGenerationToggle from "../components/create/BatchGenerationToggle.jsx";
 import GenerationState from "../components/create/GenerationState.jsx";
 import ScenePreviewGrid from "../components/create/ScenePreviewGrid.jsx";
-import ProgressModal from "../components/create/ProgressModal.jsx";
+import { useJobProgress } from "../hooks/useJobProgress.js";
 import { generate, jobs } from "../utils/api.js";
 import "../styles/dashboard.css";
 import "../styles/create.css";
@@ -57,20 +57,42 @@ function Create() {
   const [selectedBrandPreset, setSelectedBrandPreset] = useState("default");
   const [productImage, setProductImage] = useState(null);
   const [validationError, setValidationError] = useState("");
-  
+
 
   // Phase 2 additions - State Machine
-  const [generationState, setGenerationState] = useState("idle");
-  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationState, setGenerationState] = useState("idle"); // idle, rendering, completed, error
   const [scenes, setScenes] = useState([]);
-  const [sceneCount, setSceneCount] = useState(0);
-  const [currentScene, setCurrentScene] = useState(0);
   const [videoPreview, setVideoPreview] = useState(null);
   const [generationError, setGenerationError] = useState(null);
   const [generatedJobId, setGeneratedJobId] = useState(null);
 
-  // Progress modal state
-  const [generatingJobId, setGeneratingJobId] = useState(null);
+  // Job progress tracking with SSE
+  const [activeJobId, setActiveJobId] = useState(null);
+
+  const jobProgress = useJobProgress(activeJobId, {
+    onComplete: (finalProgress) => {
+      console.log("[CREATE] ✅ Job completed:", finalProgress);
+
+      // Validate that video URL is available
+      if (!finalProgress?.assets?.final_video?.url) {
+        console.error("[CREATE] ❌ Video completed but URL not available");
+        setGenerationState("error");
+        setGenerationError("Video generation completed but video URL is not available. Please try again.");
+        setIsGenerating(false);
+        return;
+      }
+
+      setGenerationState("completed");
+      setIsGenerating(false);
+      setVideoPreview(finalProgress.assets.final_video.url);
+    },
+    onFailed: (finalProgress) => {
+      console.error("[CREATE] ❌ Job failed:", finalProgress);
+      setGenerationState("error");
+      setGenerationError("Video generation failed. Please try again.");
+      setIsGenerating(false);
+    }
+  });
 
   // Voice selection
   const [voice, setVoice] = useState("Ash"); // Default to Ash (male)
@@ -156,7 +178,6 @@ function Create() {
       console.log("=".repeat(80));
 
       setGenerationState("rendering");
-      setGenerationProgress(0);
 
       // Prepare generate request with required fields
       const generateParams = {
@@ -164,7 +185,7 @@ function Create() {
         duration: durationNum,
         aspect_ratio: selectedAspect,
       };
-      
+
 
       // Add style (pharmaceutical ad styles) - MAP to backend-compatible style
       if (selectedStyle) {
@@ -220,11 +241,9 @@ function Create() {
         "seconds"
       );
 
-      // Store job ID for legacy compatibility
+      // Store job ID and start SSE tracking
       setGeneratedJobId(jobId);
-
-      // Open progress modal with SSE tracking
-      setGeneratingJobId(jobId);
+      setActiveJobId(jobId); // Start progress tracking
     } catch (error) {
       console.error("\n" + "=".repeat(80));
       console.error("❌ [ERROR] VIDEO GENERATION PIPELINE ERROR");
@@ -247,8 +266,8 @@ function Create() {
 
   const toggleAdvanced = () => setIsAdvancedOpen(!isAdvancedOpen);
 
-  // Handle viewing in workspace
-  const handleViewWorkspace = () => {
+  // Handle viewing completed video
+  const handleViewVideo = () => {
     if (!generatedJobId) {
       console.warn("[CREATE] ⚠️ Cannot navigate to workspace: No job ID");
       return;
@@ -275,104 +294,21 @@ function Create() {
     });
   };
 
-  // Handle progress modal completion
-  const handleProgressComplete = async (jobData) => {
-    console.log("[CREATE] ✅ Progress modal completion:", jobData);
-
-    try {
-      // Fetch final job details to get video URL
-      const finalJob = await jobs.get(jobData.job_id);
-      console.log("[CREATE] 📊 Final job data:", finalJob);
-
-      // Update state for completion
-      setGenerationState("ready");
-      setGenerationProgress(100);
-      setIsGenerating(false);
-      setGeneratingJobId(null);
-
-      // Navigate to workspace with complete data
-      navigate(`/workspace/${jobData.job_id}`, {
-        state: {
-          prompt,
-          scenes,
-          videoPreview: finalJob.video_url,
-          config: {
-            category: selectedCategory,
-            style: selectedStyle,
-            duration: selectedDuration,
-            aspectRatio: selectedAspect,
-            brandPreset: selectedBrandPreset,
-            autoEnhance,
-            loopVideo,
-            productImage: productImage?.name || null,
-          },
-          generatedAt: Date.now(),
-        },
-      });
-    } catch (error) {
-      console.error("[CREATE] ❌ Error fetching final job data:", error);
-      // Fallback: navigate anyway with basic info
-      setGenerationState("ready");
-      setGenerationProgress(100);
-      setIsGenerating(false);
-      setGeneratingJobId(null);
-
-      navigate(`/workspace/${jobData.job_id}`, {
-        state: {
-          prompt,
-          config: {
-            category: selectedCategory,
-            style: selectedStyle,
-            duration: selectedDuration,
-            aspectRatio: selectedAspect,
-            brandPreset: selectedBrandPreset,
-          },
-          generatedAt: Date.now(),
-        },
-      });
-    }
-  };
-
-  // Handle progress modal cancellation
-  const handleProgressCancel = () => {
-    console.log("[CREATE] ❌ Progress modal cancelled");
-    setGeneratingJobId(null);
-    setIsGenerating(false);
-    setGenerationState("idle");
-    setGenerationProgress(0);
-  };
-
   // Handle retry/generate another
   const handleRetry = () => {
     console.log("[CREATE] 🔄 Resetting generation state");
 
-    // Clear any polling timeouts
-    if (window._createPollTimeout) {
-      clearTimeout(window._createPollTimeout);
-      window._createPollTimeout = null;
-    }
-
     setGenerationState("idle");
-    setGenerationProgress(0);
     setScenes([]);
-    setSceneCount(0);
-    setCurrentScene(0);
     setGenerationError(null);
     setVideoPreview(null);
     setGeneratedJobId(null);
     setIsGenerating(false);
-    setGeneratingJobId(null); // Also clear progress modal
+    setActiveJobId(null); // Stop SSE connection
   };
 
   return (
     <>
-      <ProgressModal
-        jobId={generatingJobId}
-        onComplete={handleProgressComplete}
-        onCancel={handleProgressCancel}
-        isOpen={!!generatingJobId}
-      />
-
       <div className="generation-grid">
         <section className="prompt-card">
           <h2 className="card-title">Generate a video</h2>
@@ -415,25 +351,19 @@ function Create() {
           <div className="preview-container">
             <GenerationState
               state={generationState}
-              progress={generationProgress}
+              jobProgress={jobProgress}
               error={generationError}
-              sceneCount={sceneCount}
-              currentScene={currentScene}
               videoPreview={videoPreview}
               onRetry={handleRetry}
-              onViewWorkspace={handleViewWorkspace}
+              onViewVideo={handleViewVideo}
               aspectRatio={selectedAspect}
             />
 
-            {/* Scene Preview Grid - show during PLANNING, RENDERING, STITCHING, READY */}
+            {/* Scene Preview Grid - show during RENDERING and COMPLETED */}
             <ScenePreviewGrid
               scenes={scenes}
-              isVisible={[
-                "planning",
-                "rendering",
-                "stitching",
-                "ready",
-              ].includes(generationState)}
+              isVisible={["rendering", "completed"].includes(generationState)}
+              jobProgress={jobProgress}
             />
           </div>
 
@@ -568,7 +498,7 @@ function Create() {
       <button
         type="button"
         className="generate-button"
-        disabled={!prompt.trim() || !sideEffects.trim() || isGenerating || generationState !== "idle" || !!generatingJobId}
+        disabled={!prompt.trim() || !sideEffects.trim() || isGenerating || generationState !== "idle" || !!activeJobId}
         onClick={handleGenerate}
       >
         {isGenerating ? "Generating..." : "Generate Video"}

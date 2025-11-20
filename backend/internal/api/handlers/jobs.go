@@ -396,10 +396,11 @@ func calculateDynamicProgress(stage string, totalScenes int) int {
 		if err == nil && sceneNum > 0 && sceneNum <= totalScenes {
 			percentPerScene := 70.0 / float64(totalScenes)
 
-			if suffix == "generating" {
+			switch suffix {
+			case "generating":
 				progress := 15.0 + float64(sceneNum-1)*percentPerScene
 				return int(progress)
-			} else if suffix == "complete" {
+			case "complete":
 				progress := 15.0 + float64(sceneNum)*percentPerScene
 				return int(progress)
 			}
