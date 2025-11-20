@@ -16,6 +16,7 @@ function MediaUploadBar({
   durations,
   selectedDuration,
   onDurationChange,
+  disabled = false,
 }) {
   const [productError, setProductError] = useState("");
   const productInputRef = useRef(null);
@@ -77,8 +78,9 @@ function MediaUploadBar({
         <button
           type="button"
           className={`media-upload-btn ${productImage ? "has-media" : ""}`}
-          onClick={() => !productImage && productInputRef.current?.click()}
+          onClick={() => !productImage && !disabled && productInputRef.current?.click()}
           title="Upload product image (optional)"
+          disabled={disabled}
         >
           <ImageIcon size={18} className="media-icon" />
           <span className="media-label">
@@ -151,7 +153,8 @@ function MediaUploadBar({
                 className={`duration-btn ${
                   selectedDuration === dur ? "is-active" : ""
                 }`}
-                onClick={() => onDurationChange(dur)}
+                onClick={() => !disabled && onDurationChange(dur)}
+                disabled={disabled}
               >
                 {dur}
               </button>
@@ -177,6 +180,7 @@ MediaUploadBar.propTypes = {
   durations: PropTypes.arrayOf(PropTypes.string).isRequired,
   selectedDuration: PropTypes.string.isRequired,
   onDurationChange: PropTypes.func.isRequired,
+  disabled: PropTypes.bool,
 };
 
 export default MediaUploadBar;

@@ -393,6 +393,7 @@ function Create() {
               }}
               maxLength={characterLimit}
               rows={6}
+              disabled={isGenerating || generationState !== "idle"}
             />
 
             {/* Media Upload Bar - Below prompt */}
@@ -402,6 +403,7 @@ function Create() {
               durations={durations}
               selectedDuration={selectedDuration}
               onDurationChange={setSelectedDuration}
+              disabled={isGenerating || generationState !== "idle"}
             />
 
             {validationError && (
@@ -480,6 +482,7 @@ function Create() {
                   onChange={(e) => setSideEffects(e.target.value)}
                   rows={4}
                   required
+                  disabled={isGenerating || generationState !== "idle"}
                 />
                 <p className="option-helper">
                   Required: Enter the side effects information that will be included in your pharmaceutical ad video
@@ -497,6 +500,7 @@ function Create() {
                         selectedStyle === style ? "is-active" : ""
                       }`}
                       onClick={() => setSelectedStyle(style)}
+                      disabled={isGenerating || generationState !== "idle"}
                     >
                       {style}
                     </button>
@@ -518,6 +522,7 @@ function Create() {
                         selectedAspect === aspect ? "is-active" : ""
                       }`}
                       onClick={() => setSelectedAspect(aspect)}
+                      disabled={isGenerating || generationState !== "idle"}
                     >
                       {aspect}
                     </button>
@@ -538,6 +543,7 @@ function Create() {
                       voice === "Ash" ? "is-active" : ""
                     }`}
                     onClick={() => setVoice("Ash")}
+                    disabled={isGenerating || generationState !== "idle"}
                   >
                     Ash
                   </button>
@@ -547,6 +553,7 @@ function Create() {
                       voice === "Rebecca" ? "is-active" : ""
                     }`}
                     onClick={() => setVoice("Rebecca")}
+                    disabled={isGenerating || generationState !== "idle"}
                   >
                     Rebecca
                   </button>
