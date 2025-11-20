@@ -106,6 +106,7 @@ func (m *MinimaxAdapter) GenerateMusic(ctx context.Context, req *MusicGeneration
 		zap.Int("duration_seconds", req.Duration),
 		zap.Int("sample_rate", 44100),
 		zap.Int("bitrate", 256000),
+		zap.String("payload", string(payload)),
 	)
 
 	// Submit prediction to Replicate
@@ -198,6 +199,14 @@ func (m *MinimaxAdapter) GetStatus(ctx context.Context, predictionID string) (*M
 		Status:       minimaxResp.Status,
 		Error:        minimaxResp.Error,
 	}
+
+	// Log the full response for debugging
+	m.logger.Debug("Minimax GetStatus response",
+		zap.String("prediction_id", minimaxResp.ID),
+		zap.String("status", minimaxResp.Status),
+		zap.String("error", minimaxResp.Error),
+		zap.String("logs", minimaxResp.Logs),
+	)
 
 	// Extract audio URL if completed
 	if minimaxResp.Status == "succeeded" && minimaxResp.Output != nil {
