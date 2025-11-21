@@ -212,13 +212,14 @@ TTS_PROVIDER=openai
 
 ### Task 3.1: Update Video Composition Function Signature
 
-**Description**: Modify composeVideo() to accept side effects parameters (narrator stays separate).
+**Description**: Modify composeVideo() to accept side effects parameters. All audio tracks remain separate.
 
 **Acceptance Criteria**:
 
-- [ ] Function signature updated with `sideEffectsText` parameter
-- [ ] Function signature updated with `sideEffectsStartTime` parameter
-- [ ] Narrator audio NOT passed to composeVideo (kept separate)
+- [ ] Function signature updated with `sideEffectsText` parameter (from user input)
+- [ ] Function signature updated with `sideEffectsStartTime` parameter (from GPT-4o)
+- [ ] Remove `backgroundMusicURL` parameter (music is separate track, not mixed)
+- [ ] Remove `narratorAudioURL` parameter (narrator is separate track, not mixed)
 - [ ] All callers updated with new parameters
 - [ ] Validation: Fail if side effects text is missing
 
@@ -230,10 +231,9 @@ func (h *GenerateHandler) composeVideo(
     userID string,
     jobID string,
     clips []ClipVideo,
-    backgroundMusicURL string,
     sideEffectsText string,
     sideEffectsStartTime float64,
-) (videoURL string, error)
+) (videoURL string, error) // Returns video only (no audio), all audio tracks are separate
 ```
 
 **Files to Modify**:
@@ -246,26 +246,18 @@ func (h *GenerateHandler) composeVideo(
 
 ---
 
-### Task 3.2: Implement Video + Background Music Mixing
+### Task 3.2: Remove Audio Mixing from Video Composition
 
-**Description**: Mix background music with video at 30% volume (narrator stays separate).
+**Description**: Remove background music mixing from video composition. All tracks remain separate.
 
 **Acceptance Criteria**:
 
-- [ ] Download background music from S3
-- [ ] ffmpeg command mixes video with music at 30% volume
-- [ ] `-shortest` flag handles music/video length mismatch
-- [ ] Audio quality testing (no clipping, no distortion)
-- [ ] Edge cases handled (music longer/shorter than video)
-
-**ffmpeg Command**:
-
-```bash
-ffmpeg -i video_only.mp4 -i background-music.mp3 \
-  -filter_complex "[1:a]volume=0.3[music]" \
-  -map 0:v -map "[music]" \
-  -c:v copy -c:a aac -shortest video_with_music.mp4
-```
+- [ ] Remove background music mixing from `composeVideo()` function
+- [ ] Video composition now only concatenates clips and adds text overlay
+- [ ] Background music remains separate file (from Minimax, already generated)
+- [ ] Narrator audio remains separate file (from OpenAI TTS, already generated)
+- [ ] Update comments to reflect 4-track architecture
+- [ ] Video output has no audio (`-an` flag in ffmpeg)
 
 **Files to Modify**:
 
@@ -273,7 +265,7 @@ ffmpeg -i video_only.mp4 -i background-music.mp3 \
 
 **Dependencies**: Task 3.1
 
-**Estimated Time**: 4 hours
+**Estimated Time**: 2 hours
 
 ---
 
@@ -297,6 +289,8 @@ ffmpeg -i video_only.mp4 -i background-music.mp3 \
 - `backend/internal/api/handlers/generate_async.go`
 
 **Dependencies**: Task 3.2
+
+**Note**: All audio tracks (music and narrator) are separate files. Frontend handles mixing and playback synchronization.
 
 **Estimated Time**: 6 hours
 
@@ -383,20 +377,24 @@ users/{userID}/jobs/{jobID}/
 
 ---
 
-### Task 4.2: Update Timeline Component for Separate Audio Track
+### Task 4.2: Update Timeline Component for Four Tracks
 
-**Description**: Display narrator audio as separate track, distinct from background music.
+**Description**: Display four separate tracks: Video, Music, Audio (narrator), and Text.
 
 **Acceptance Criteria**:
 
+- [ ] `backgroundMusicUrl` prop added to Timeline
 - [ ] `narratorAudioUrl` prop added to Timeline
 - [ ] `sideEffectsText` prop added to Timeline
 - [ ] `sideEffectsStartTime` prop added to Timeline
-- [ ] Audio track displays narrator (0-duration, continuous segment)
-- [ ] Text track displays side effects (last 20% only)
-- [ ] Visual distinction: music icon vs. microphone icon
+- [ ] Timeline displays four separate tracks:
+  - **Video Track**: Scene segments (no audio)
+  - **Music Track**: Background music (continuous, 0-duration)
+  - **Audio Track**: Narrator voiceover (continuous, 0-duration)
+  - **Text Track**: Side effects text (last 20% only)
+- [ ] Visual distinction between tracks (icons: video, music, microphone, text)
 - [ ] PropTypes updated
-- [ ] Timeline tested with all data types
+- [ ] Timeline tested with all four tracks
 
 **Files to Modify**:
 
@@ -410,19 +408,21 @@ users/{userID}/jobs/{jobID}/
 
 ### Task 4.3: Update Workspace Page with Generation State Handling
 
-**Description**: Handle workspace behavior during generation, completion, and failure states.
+**Description**: Handle workspace behavior during generation, completion, and failure states with four-track support.
 
 **Acceptance Criteria**:
 
-- [ ] Extract `narrator_audio_url` from job data
-- [ ] Extract `side_effects_text` from job data
+- [ ] Extract `video_url` from job data (video track)
+- [ ] Extract `audio_url` from job data (background music track)
+- [ ] Extract `narrator_audio_url` from job data (narrator track)
+- [ ] Extract `side_effects_text` from job data (text track)
 - [ ] Extract `side_effects_start_time` from job data
 - [ ] Show progress indicator when `status === "processing"`
 - [ ] Hide video player/timeline during generation
 - [ ] Poll job status every 2 seconds
 - [ ] Display error message with retry button on failure
 - [ ] Show video player + timeline when `status === "complete"`
-- [ ] Pass all data to Timeline component
+- [ ] Pass all four track data to Timeline component
 
 **Files to Modify**:
 
@@ -434,22 +434,26 @@ users/{userID}/jobs/{jobID}/
 
 ---
 
-### Task 4.4: Implement Synchronized Dual Playback
+### Task 4.4: Implement Synchronized Four-Track Playback
 
-**Description**: Synchronize video track (with music) and narrator audio track playback.
+**Description**: Synchronize video, music, and narrator tracks playback with frontend volume control.
 
 **Acceptance Criteria**:
 
-- [ ] `<audio>` element added for narrator track
-- [ ] `<video>` element displays video with background music
-- [ ] Play/pause/seek events synchronized
-- [ ] Drift detection: Check every 500ms
+- [ ] `<video>` element for video track (no audio)
+- [ ] `<audio>` element for background music track (30% volume)
+- [ ] `<audio>` element for narrator track (100% volume)
+- [ ] Play/pause/seek events synchronized across all three media elements
+- [ ] Volume control implemented:
+  - Background music: 30% volume (0.3)
+  - Narrator: 100% volume (1.0)
+- [ ] Drift detection: Check every 500ms for all tracks
 - [ ] Auto-resync if drift > 200ms
 - [ ] Warning toast if drift > 500ms
 - [ ] Edge cases handled:
-  - Narrator audio loading delay
-  - Duration mismatch
-  - Network buffering
+  - Audio loading delays (music or narrator)
+  - Duration mismatches between tracks
+  - Network buffering on any track
 - [ ] Synchronization accuracy within ±100ms
 
 **Files to Modify**:
@@ -507,7 +511,7 @@ users/{userID}/jobs/{jobID}/
 - [ ] Verify side effects text appears on last frame
 - [ ] Verify side effects audio plays at end (1.4x speed)
 - [ ] Verify narrator audio plays during main content (1.0x speed)
-- [ ] Verify background music audible at 30% volume
+- [ ] Verify background music audible at 30% volume (separate track, controlled by frontend)
 - [ ] Verify product image appears in last scene only
 - [ ] Test various side effects text lengths (10-500 chars)
 - [ ] All test cases documented
@@ -532,8 +536,8 @@ users/{userID}/jobs/{jobID}/
 
 **Acceptance Criteria**:
 
-- [ ] Background music level verified (30%, not overpowering)
-- [ ] Narrator audio level verified (100%, clear and audible)
+- [ ] Background music level verified (30%, separate track, controlled by frontend)
+- [ ] Narrator audio level verified (100%, separate track, controlled by frontend)
 - [ ] Side effects speed verified (1.4x, fast but clear)
 - [ ] No audio clipping or distortion
 - [ ] Synchronization tested (video + narrator within ±100ms)
@@ -640,7 +644,7 @@ users/{userID}/jobs/{jobID}/
 **Acceptance Criteria**:
 
 - [ ] TTS adapter documented (voice mapping, API calls)
-- [ ] Video composition documented (audio mixing, text overlay)
+- [ ] Video composition documented (text overlay, no audio mixing - all tracks separate)
 - [ ] Text overlay documented (ffmpeg filters, escaping)
 - [ ] Narrator script generation documented
 - [ ] Font fallback strategy documented
@@ -743,7 +747,8 @@ users/{userID}/jobs/{jobID}/
 - [ ] All asset URLs use presigned URLs:
   - video_url
   - narrator_audio_url
-  - audio_url (background music)
+  - audio_url (background music track, separate)
+  - narrator_audio_url (narrator track, separate)
   - thumbnail URLs
 - [ ] No public bucket policy needed
 - [ ] Performance tested (~5ms overhead per URL)
@@ -776,7 +781,7 @@ users/{userID}/jobs/{jobID}/
 
 ### Critical Path:
 
-1. Task 1.1 → Task 1.5 → Task 2.1 → Task 2.2 → Task 3.1 → Task 3.2 → Task 3.3 → Task 5.1
+1. Task 1.1 → Task 1.5 → Task 2.1 → Task 2.2 → Task 3.1 → Task 3.2 → Task 3.3 → Task 4.4 → Task 5.1
 
 ### Parallel Opportunities:
 
