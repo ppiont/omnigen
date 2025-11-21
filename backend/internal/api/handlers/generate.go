@@ -64,17 +64,6 @@ type GenerateRequest struct {
 
 	// Video title (Phase 1 - UI enhancement)
 	Title string `json:"title,omitempty" binding:"omitempty,max=100"` // Optional video title
-
-	// Enhanced prompt options (Phase 1 - all optional)
-	Style             string `json:"style,omitempty" binding:"omitempty,oneof=cinematic documentary energetic minimal dramatic playful"`
-	Tone              string `json:"tone,omitempty" binding:"omitempty,oneof=premium friendly edgy inspiring humorous"`
-	Tempo             string `json:"tempo,omitempty" binding:"omitempty,oneof=slow medium fast"`
-	Platform          string `json:"platform,omitempty" binding:"omitempty,oneof=instagram tiktok youtube facebook"`
-	Audience          string `json:"audience,omitempty" binding:"omitempty,max=200"`
-	Goal              string `json:"goal,omitempty" binding:"omitempty,oneof=awareness sales engagement signups"`
-	CallToAction      string `json:"call_to_action,omitempty" binding:"omitempty,max=100"`
-	ProCinematography bool   `json:"pro_cinematography,omitempty"`
-	CreativeBoost     bool   `json:"creative_boost,omitempty"`
 }
 
 // GenerateResponse represents a video generation response
@@ -143,20 +132,9 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		Duration:    req.Duration,
 		AspectRatio: req.AspectRatio,
 
-		// Enhanced prompt options (Phase 1)
-		Style:             req.Style,
-		Tone:              req.Tone,
-		Tempo:             req.Tempo,
-		Platform:          req.Platform,
-		Audience:          req.Audience,
-		Goal:              req.Goal,
-		CallToAction:      req.CallToAction,
-		ProCinematography: req.ProCinematography,
-		CreativeBoost:     req.CreativeBoost,
-
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		TTL:         time.Now().Add(7 * 24 * time.Hour).Unix(),
+		CreatedAt: now,
+		UpdatedAt: now,
+		TTL:       time.Now().Add(7 * 24 * time.Hour).Unix(),
 	}
 
 	// Set title if provided
