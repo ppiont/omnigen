@@ -384,7 +384,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 
 	// Initialize arrays for accumulating scene data
 	sceneVideoURLs := make([]string, 0, len(script.Scenes))
-	var lastThumbnailURL string
+	var jobThumbnailURL string // Raw S3 URL for the job thumbnail (not presigned)
 
 	for i, scene := range script.Scenes {
 		job.Stage = fmt.Sprintf("scene_%d_generating", i+1)
@@ -464,9 +464,9 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 
 		// Accumulate scene data
 		sceneVideoURLs = append(sceneVideoURLs, clipResult.VideoURL)
-		lastThumbnailURL = clipResult.LastFrameURL
 
-		// Extract and upload job thumbnail from first scene
+		// Extract and upload job thumbnail from first scene only
+		// Note: clipResult.LastFrameURL is presigned (for Veo API continuity) and should NOT be stored in DB
 		if i == 0 {
 			jobThumbnail, err := h.extractJobThumbnail(jobCtx, job.UserID, job.JobID, clipResult.VideoURL)
 			if err != nil {
@@ -476,8 +476,8 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 				)
 				// Continue - this is not critical
 			} else {
-				// Use the job thumbnail (from first I-frame) instead of last frame URL
-				lastThumbnailURL = jobThumbnail
+				// Store raw S3 URL (not presigned) - will be presigned when served via API
+				jobThumbnailURL = jobThumbnail
 				h.logger.Info("Job thumbnail set from first scene",
 					zap.String("job_id", job.JobID),
 					zap.String("thumbnail_url", jobThumbnail),
@@ -489,7 +489,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		job.Stage = fmt.Sprintf("scene_%d_complete", i+1)
 		job.ScenesCompleted = i + 1
 		job.SceneVideoURLs = sceneVideoURLs
-		job.ThumbnailURL = lastThumbnailURL
+		job.ThumbnailURL = jobThumbnailURL
 
 		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
 			h.logger.Error("Failed to update job progress",
@@ -808,32 +808,19 @@ func (h *GenerateHandler) extractJobThumbnail(
 		return "", fmt.Errorf("failed to download video: %w", err)
 	}
 
-	// Extract middle frame (at 50% of video duration for best representation)
+	// Extract the very first frame of the video for the thumbnail
 	thumbnailPath := filepath.Join(tmpDir, "thumbnail.jpg")
 	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-ss", "0",           // Seek to the very beginning
 		"-i", videoPath,
-		"-vf", "select='eq(pict_type\\,I)',scale=1280:-1", // Extract I-frame, scale to 1280px width
-		"-frames:v", "1",
-		"-q:v", "2", // High quality
+		"-frames:v", "1",     // Extract exactly 1 frame
+		"-vf", "scale=1280:-1", // Scale to 1280px width, maintain aspect ratio
+		"-q:v", "2",          // High quality
 		"-y", thumbnailPath,
 	)
 
 	if err := cmd.Run(); err != nil {
-		h.logger.Warn("Failed to extract thumbnail, trying simpler method",
-			zap.String("job_id", jobID),
-			zap.Error(err),
-		)
-		// Fallback: extract frame at 1 second
-		cmd = exec.CommandContext(ctx, "ffmpeg",
-			"-ss", "1",
-			"-i", videoPath,
-			"-frames:v", "1",
-			"-q:v", "2",
-			"-y", thumbnailPath,
-		)
-		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("failed to extract thumbnail: %w", err)
-		}
+		return "", fmt.Errorf("failed to extract thumbnail: %w", err)
 	}
 
 	// Upload to S3
@@ -1476,6 +1463,11 @@ func (h *GenerateHandler) downloadFile(ctx context.Context, url string, destPath
 
 // extractS3Key extracts the S3 key from an S3 URL
 func extractS3Key(s3URL string) string {
+	// Strip query parameters first (handles presigned URLs stored in DB)
+	if idx := strings.Index(s3URL, "?"); idx != -1 {
+		s3URL = s3URL[:idx]
+	}
+
 	// Extract key from URL like https://bucket.s3.amazonaws.com/key or https://s3.amazonaws.com/bucket/key
 	parts := strings.Split(s3URL, "/")
 	if len(parts) < 4 {
