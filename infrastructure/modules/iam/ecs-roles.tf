@@ -40,7 +40,10 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
         Action = [
           "secretsmanager:GetSecretValue"
         ]
-        Resource = var.replicate_secret_arn
+        Resource = [
+          var.replicate_secret_arn,
+          "arn:aws:secretsmanager:*:*:secret:${var.project_name}/openai-api-key*"
+        ]
       },
       {
         Effect = "Allow"
@@ -123,7 +126,8 @@ resource "aws_iam_role_policy" "ecs_task" {
         ]
         Resource = [
           var.replicate_secret_arn,
-          "arn:aws:secretsmanager:*:*:secret:${var.project_name}/api-keys*"
+          "arn:aws:secretsmanager:*:*:secret:${var.project_name}/api-keys*",
+          "arn:aws:secretsmanager:*:*:secret:${var.project_name}/openai-api-key*"
         ]
       },
       {

@@ -104,8 +104,8 @@ func (s *SecretsService) GetTTSAPIKey(ctx context.Context) (string, error) {
 	}
 
 	// Try to get from Secrets Manager (optional - if not configured, return empty)
-	// For now, we'll use a standard secret name pattern
-	secretName := "omnigen/tts-api-key"
+	// Reuse the existing OpenAI API key secret (same key works for both GPT-4o and TTS)
+	secretName := "omnigen/openai-api-key"
 
 	s.logger.Info("Retrieving TTS API key from Secrets Manager",
 		zap.String("secret_name", secretName),
