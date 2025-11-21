@@ -395,8 +395,12 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content"
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
                     },
                     "404": {
                         "description": "Not Found",
@@ -442,6 +446,64 @@ const docTemplate = `{
                         "description": "Event stream (event types: update, done, error)",
                         "schema": {
                             "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/upload/presigned-url": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generate a presigned URL for uploading a file directly to S3",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "upload"
+                ],
+                "summary": "Get presigned URL for file upload",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Asset type (e.g., 'product_image')",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "Upload request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PresignedURLRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PresignedURLResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -556,6 +618,9 @@ const docTemplate = `{
                     "maxLength": 2000,
                     "minLength": 10
                 },
+                "side_effects": {
+                    "type": "string"
+                },
                 "start_image": {
                     "description": "Image options - TWO separate use cases:",
                     "type": "string"
@@ -598,6 +663,10 @@ const docTemplate = `{
                         "inspiring",
                         "humorous"
                     ]
+                },
+                "voice": {
+                    "description": "Pharmaceutical ad configuration",
+                    "type": "string"
                 }
             }
         },
@@ -680,6 +749,9 @@ const docTemplate = `{
                 "job_id": {
                     "type": "string"
                 },
+                "narrator_audio_url": {
+                    "type": "string"
+                },
                 "progress_percent": {
                     "type": "integer"
                 },
@@ -694,6 +766,13 @@ const docTemplate = `{
                 },
                 "scenes_completed": {
                     "type": "integer"
+                },
+                "side_effects_start_time": {
+                    "type": "number"
+                },
+                "side_effects_text": {
+                    "description": "Side effects fields for text overlay",
+                    "type": "string"
                 },
                 "stage": {
                     "type": "string"
@@ -748,6 +827,37 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.PresignedURLRequest": {
+            "type": "object",
+            "required": [
+                "content_type",
+                "file_size",
+                "filename"
+            ],
+            "properties": {
+                "content_type": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "filename": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.PresignedURLResponse": {
+            "type": "object",
+            "properties": {
+                "asset_url": {
+                    "type": "string"
+                },
+                "upload_url": {
                     "type": "string"
                 }
             }
