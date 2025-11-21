@@ -89,10 +89,9 @@ function Timeline({
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // For videos <= 30 seconds: fill the timeline (100% width)
-  // For videos > 30 seconds: use calculated width (50px per second) and allow horizontal scroll
-  const isShortVideo = videoDuration <= 30;
-  const timelineContentWidth = isShortVideo ? null : videoDuration * 50; // null means use 100%
+  // Always fill the timeline to 100% width (no horizontal scrolling)
+  const isShortVideo = true; // Always use percentage-based layout
+  const timelineContentWidth = null; // Always use 100% width
 
   const renderSegment = (segment, trackWidth, totalDuration) => {
     if (isShortVideo) {
