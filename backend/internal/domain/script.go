@@ -44,7 +44,7 @@ type Scene struct {
 	TransitionOut Transition `json:"transition_out"` // How to exit this scene
 
 	// AI Generation
-	GenerationPrompt string `json:"generation_prompt"`         // Optimized prompt for Kling AI
+	GenerationPrompt string `json:"generation_prompt"`         // Optimized prompt for Veo 3.1
 	StartImageURL    string `json:"start_image_url,omitempty"` // For visual continuity between scenes
 }
 

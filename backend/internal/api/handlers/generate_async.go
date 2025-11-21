@@ -134,7 +134,7 @@ func (h *GenerateHandler) failJob(
 						}
 						errorMessage = fmt.Sprintf("%s (API Error: HTTP 422 - %s)", userMessage, responseBody)
 					} else {
-						errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
+			errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
 					}
 				} else {
 					errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
@@ -409,14 +409,14 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 					zap.Error(err),
 				)
 				// Fall back to direct URL if presigning fails (shouldn't happen, but be safe)
-				scene.StartImageURL = req.StartImage
+			scene.StartImageURL = req.StartImage
 			} else {
 				scene.StartImageURL = presignedURL
-				h.logger.Info("Using product image for last scene (side effects segment)",
-					zap.String("job_id", job.JobID),
-					zap.Int("scene", i+1),
+			h.logger.Info("Using product image for last scene (side effects segment)",
+				zap.String("job_id", job.JobID),
+				zap.Int("scene", i+1),
 					zap.String("product_image_url", presignedURL),
-				)
+			)
 			}
 		} else {
 			scene.StartImageURL = lastFrameURL
@@ -634,15 +634,40 @@ func (h *GenerateHandler) generateClip(
 		}
 
 		if result.Status == "failed" || result.Status == "canceled" {
-			return ClipVideo{}, fmt.Errorf("veo generation failed: %s", result.Error)
+			// Provide better error message if error is empty
+			errorMsg := result.Error
+			if errorMsg == "" {
+				errorMsg = "Unknown error - Veo returned failed status without error details"
+			}
+			h.logger.Error("Veo generation failed",
+				zap.String("job_id", jobID),
+				zap.Int("scene", scene.SceneNumber),
+				zap.String("prediction_id", result.PredictionID),
+				zap.String("error", errorMsg),
+			)
+			return ClipVideo{}, fmt.Errorf("veo generation failed: %s", errorMsg)
 		}
 
 		// Log only every 12th attempt (every minute instead of every 5 seconds)
 		if attempt%12 == 0 {
-			h.logger.Debug("Veo still processing",
+			h.logger.Info("Veo still processing",
 				zap.String("job_id", jobID),
 				zap.Int("attempt", attempt),
+				zap.Int("max_attempts", maxAttempts),
 				zap.String("status", result.Status),
+				zap.String("prediction_id", result.PredictionID),
+			)
+		}
+		
+		// Log every 60th attempt (every 5 minutes) with more detail
+		if attempt > 0 && attempt%60 == 0 {
+			h.logger.Warn("Veo generation taking longer than expected",
+				zap.String("job_id", jobID),
+				zap.Int("attempt", attempt),
+				zap.Int("max_attempts", maxAttempts),
+				zap.String("status", result.Status),
+				zap.String("prediction_id", result.PredictionID),
+				zap.String("error", result.Error),
 			)
 		}
 	}

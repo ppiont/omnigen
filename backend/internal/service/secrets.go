@@ -121,5 +121,19 @@ func (s *SecretsService) GetTTSAPIKey(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("TTS_API_KEY environment variable not set and secret not found in Secrets Manager")
 	}
 
-	return *result.SecretString, nil
+	secretValue := *result.SecretString
+
+	// Try to parse as JSON (in case secret is stored as {"OPENAI_API_KEY":"..."})
+	var jsonSecret map[string]string
+	if err := json.Unmarshal([]byte(secretValue), &jsonSecret); err == nil {
+		// Successfully parsed as JSON, try to extract OPENAI_API_KEY
+		if apiKey, ok := jsonSecret["OPENAI_API_KEY"]; ok && apiKey != "" {
+			s.logger.Info("Extracted TTS API key from JSON secret")
+			return apiKey, nil
+		}
+		// If no OPENAI_API_KEY found, fall through to return raw value
+	}
+
+	// Return as-is if not JSON or if JSON doesn't contain OPENAI_API_KEY
+	return secretValue, nil
 }

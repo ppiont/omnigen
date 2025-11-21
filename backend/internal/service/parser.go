@@ -119,8 +119,10 @@ func (s *ParserService) validateParseRequest(req ParseRequest) error {
 		return fmt.Errorf("duration must be between 10 and 60 seconds")
 	}
 
-	if req.Duration%10 != 0 {
-		return fmt.Errorf("duration must be a multiple of 10 seconds (Kling constraint)")
+	// Veo 3.1 generates 8-second clips, but we accept any duration
+	// The adapter will handle mapping to 8-second increments
+	if req.Duration < 10 {
+		return fmt.Errorf("duration must be at least 10 seconds")
 	}
 
 	if req.AspectRatio != "16:9" && req.AspectRatio != "9:16" && req.AspectRatio != "1:1" {

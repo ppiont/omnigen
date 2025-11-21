@@ -612,7 +612,7 @@ This is a pharmaceutical advertisement that requires:
 **Instructions:**
 - Extract product details, target audience, and brand vibe from the creative direction above
 - Generate varied scenes with different shot types, angles, and lighting (NO repetitive clips!)
-- Each scene must have a unique, detailed generation_prompt optimized for Kling AI
+- Each scene must have a unique, detailed generation_prompt optimized for Veo 3.1
 - Derive appropriate music_mood and music_style based on the content
 - Leave start_image_url empty (will be populated server-side)
 - Return ONLY valid JSON matching the Script schema, no markdown or explanations`
