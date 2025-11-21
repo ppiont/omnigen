@@ -406,7 +406,7 @@ function Create() {
               <div className="option-group">
                 <label className="option-label">Side Effects <span style={{ color: 'var(--error)' }}>*</span></label>
                 <textarea
-                  className="dropdown-field"
+                  className="prompt-textarea"
                   placeholder="Enter side effects information (e.g., Common side effects include headache, nausea, dizziness...)"
                   value={sideEffects}
                   onChange={(e) => setSideEffects(e.target.value)}

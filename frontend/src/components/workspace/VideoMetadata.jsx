@@ -149,12 +149,12 @@ function VideoMetadata({ jobData }) {
       value: jobData.aspect_ratio || "Not specified",
     },
     { label: "Generated", value: formattedCreatedTime },
+    { label: "Estimated Cost", value: formattedCost },
   ];
 
   const derivedFields = [
     { label: "Model", value: MODEL_NAME },
     { label: "Resolution", value: DEFAULT_RESOLUTION },
-    { label: "Estimated Cost", value: formattedCost },
   ];
 
   const collapseContentClassName = [
