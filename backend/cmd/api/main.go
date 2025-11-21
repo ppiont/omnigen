@@ -134,20 +134,21 @@ func main() {
 	minimaxAdapter := adapters.NewMinimaxAdapter(replicateAPIKey, zapLogger)
 	zapLogger.Info("Video and audio generation adapters initialized (Veo 3.1)")
 
-	// Initialize TTS adapter for narrator voiceover generation
-	// Try to get TTS API key from Secrets Manager or environment variable
+	// Initialize OpenAI API key for TTS and title generation
+	// Try to get from Secrets Manager or environment variable
 	var ttsAdapter adapters.TTSAdapter
-	ttsAPIKey, err := secretsService.GetTTSAPIKey(context.Background())
+	var openAIKey string
+	openAIKey, err = secretsService.GetOpenAIAPIKey(context.Background())
 	if err != nil {
-		zapLogger.Warn("TTS API key not available - narrator voiceover generation will not be available",
+		zapLogger.Warn("OpenAI API key not available - TTS and title generation will not be available",
 			zap.Error(err),
 		)
 		// ttsAdapter will remain nil - this is handled gracefully in generateNarratorVoiceover
-	} else if ttsAPIKey != "" {
-		ttsAdapter = adapters.NewOpenAITTSAdapter(ttsAPIKey, zapLogger)
-		zapLogger.Info("TTS adapter initialized with OpenAI TTS API")
+	} else if openAIKey != "" {
+		ttsAdapter = adapters.NewOpenAITTSAdapter(openAIKey, zapLogger)
+		zapLogger.Info("OpenAI adapters initialized (TTS + title generation)")
 	} else {
-		zapLogger.Warn("TTS_API_KEY not configured - narrator voiceover generation will not be available")
+		zapLogger.Warn("OpenAI API key not configured - TTS and title generation will not be available")
 	}
 
 	// Initialize JWT validator
@@ -193,7 +194,7 @@ func main() {
 		CookieConfig:     cookieConfig,
 		CloudFrontDomain: cfg.CloudFrontDomain,
 		CognitoDomain:    cfg.CognitoDomain,
-		OpenAIKey:        cfg.OpenAIKey,
+		OpenAIKey:        openAIKey, // From Secrets Manager or env var
 		ReadTimeout:      time.Duration(cfg.ReadTimeout) * time.Second,
 		WriteTimeout:     time.Duration(cfg.WriteTimeout) * time.Second,
 	})
@@ -255,11 +256,8 @@ type Config struct {
 	// Frontend configuration (optional, for CORS)
 	CloudFrontDomain string `envconfig:"CLOUDFRONT_DOMAIN"`
 
-	// OpenAI configuration (optional, for title generation)
-	OpenAIKey string `envconfig:"GPT4O_API_KEY"` // OpenAI API key for title generation
-
-	// TTS configuration (for narrator voiceover generation)
-	TTSAPIKey string `envconfig:"TTS_API_KEY"` // OpenAI TTS API key for narrator voiceover
+	// Note: OpenAI API key is now retrieved from Secrets Manager (omnigen/openai-api-key)
+	// or OPENAI_API_KEY environment variable. Used for TTS and title generation.
 }
 
 func loadConfig() (*Config, error) {
@@ -269,7 +267,7 @@ func loadConfig() (*Config, error) {
 		log.Printf("Warning: Could not get working directory: %v", err)
 		wd = "."
 	}
-	
+
 	// Try to load .env.local first, then .env (for backwards compatibility)
 	// Try multiple paths to handle different working directories
 	envPaths := []string{
@@ -280,7 +278,7 @@ func loadConfig() (*Config, error) {
 		filepath.Join(wd, "backend", ".env.local"),
 		filepath.Join(wd, "backend", ".env"),
 	}
-	
+
 	loaded := false
 	for _, path := range envPaths {
 		if err := godotenv.Load(path); err == nil {
@@ -289,7 +287,7 @@ func loadConfig() (*Config, error) {
 			break
 		}
 	}
-	
+
 	if !loaded {
 		log.Printf("No .env file found in working directory %s, using environment variables only", wd)
 	}

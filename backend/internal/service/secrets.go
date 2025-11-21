@@ -95,30 +95,33 @@ func (s *SecretsService) GetReplicateAPIKey(ctx context.Context) (string, error)
 	return *result.SecretString, nil
 }
 
-// GetTTSAPIKey retrieves the OpenAI TTS API key
-func (s *SecretsService) GetTTSAPIKey(ctx context.Context) (string, error) {
+// GetOpenAIAPIKey retrieves the OpenAI API key (used for TTS and title generation)
+func (s *SecretsService) GetOpenAIAPIKey(ctx context.Context) (string, error) {
 	// Check environment variable first (for local development)
-	if apiKey := os.Getenv("TTS_API_KEY"); apiKey != "" {
-		s.logger.Info("Using TTS API key from environment variable")
+	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+		s.logger.Info("Using OpenAI API key from environment variable")
 		return apiKey, nil
 	}
 
-	// Try to get from Secrets Manager (optional - if not configured, return empty)
-	// For now, we'll use a standard secret name pattern
-	secretName := "omnigen/tts-api-key"
+	// Get secret ARN from environment variable (set by ECS task definition)
+	secretARN := os.Getenv("OPENAI_SECRET_ARN")
+	if secretARN == "" {
+		return "", fmt.Errorf("OPENAI_API_KEY environment variable not set and OPENAI_SECRET_ARN not configured")
+	}
 
-	s.logger.Info("Retrieving TTS API key from Secrets Manager",
-		zap.String("secret_name", secretName),
+	s.logger.Info("Retrieving OpenAI API key from Secrets Manager",
+		zap.String("secret_arn", secretARN),
 	)
 
 	result, err := s.client.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
-		SecretId: aws.String(secretName),
+		SecretId: aws.String(secretARN),
 	})
 	if err != nil {
-		s.logger.Warn("Failed to retrieve TTS API key from Secrets Manager",
+		s.logger.Error("Failed to retrieve OpenAI API key from Secrets Manager",
+			zap.String("secret_arn", secretARN),
 			zap.Error(err),
 		)
-		return "", fmt.Errorf("TTS_API_KEY environment variable not set and secret not found in Secrets Manager")
+		return "", fmt.Errorf("failed to retrieve OpenAI API key: %w", err)
 	}
 
 	return *result.SecretString, nil

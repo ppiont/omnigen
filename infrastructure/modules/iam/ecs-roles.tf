@@ -121,10 +121,10 @@ resource "aws_iam_role_policy" "ecs_task" {
         Action = [
           "secretsmanager:GetSecretValue"
         ]
-        Resource = [
+        Resource = compact([
           var.replicate_secret_arn,
-          "arn:aws:secretsmanager:*:*:secret:${var.project_name}/api-keys*"
-        ]
+          var.openai_secret_arn,
+        ])
       },
       {
         Effect = "Allow"
