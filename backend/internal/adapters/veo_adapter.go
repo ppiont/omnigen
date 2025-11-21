@@ -173,7 +173,7 @@ func (v *VeoAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRequ
 			v.logger.Error("Veo API validation error - request payload",
 				zap.Any("request_input", veoReq.Input),
 				zap.String("full_request", string(jsonData)),
-			)
+		)
 		}
 		
 		// Provide specific error messages for common status codes
@@ -275,9 +275,32 @@ func (v *VeoAdapter) GetStatus(ctx context.Context, predictionID string) (*Video
 		}
 	}
 
-	if veoResp.Error != "" {
+	// Handle failed status - check both Error field and status
+	if veoResp.Status == "failed" || veoResp.Status == "canceled" {
 		result.Status = "failed"
-		result.Error = veoResp.Error
+		if veoResp.Error != "" {
+			result.Error = veoResp.Error
+		} else if veoResp.Logs != "" {
+			// If no error but logs exist, use logs as error message
+			// Truncate logs if too long
+			logs := veoResp.Logs
+			if len(logs) > 500 {
+				logs = logs[:500] + "..."
+			}
+			result.Error = fmt.Sprintf("Generation failed (status: %s). Logs: %s", veoResp.Status, logs)
+		} else {
+			// No error or logs - provide generic message with status
+			result.Error = fmt.Sprintf("Generation failed with status: %s (no error details provided)", veoResp.Status)
+		}
+		
+		// Log full response for debugging
+		v.logger.Error("Veo generation failed",
+			zap.String("prediction_id", veoResp.ID),
+			zap.String("status", veoResp.Status),
+			zap.String("error", veoResp.Error),
+			zap.String("logs", veoResp.Logs),
+			zap.Any("output", veoResp.Output),
+		)
 	}
 
 	return result, nil
@@ -292,7 +315,7 @@ func (v *VeoAdapter) GetModelName() string {
 // Based on Replicate pricing for Veo 3.1
 func (v *VeoAdapter) GetCostPerSecond() float64 {
 	// Veo 3.1 pricing on Replicate - update this based on actual pricing
-	// Estimated similar to Kling: ~$0.07 per second
+	// Estimated: ~$0.07 per second
 	return 0.07
 }
 

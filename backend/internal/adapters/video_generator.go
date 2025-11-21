@@ -7,7 +7,7 @@ import (
 // VideoGenerationRequest represents a video generation request
 type VideoGenerationRequest struct {
 	Prompt         string
-	Duration       int    // in seconds (5 or 10 for Kling)
+	Duration       int    // in seconds (Veo 3.1 uses 8-second clips)
 	AspectRatio    string // "16:9", "9:16", "1:1"
 	Style          string // optional style modifiers
 	StartImageURL  string // optional: URL to start image (first frame)

@@ -7,8 +7,10 @@ const (
 	// VideoGenerationTimeout is the maximum time for entire video generation pipeline
 	VideoGenerationTimeout = 15 * time.Minute
 
-	// VideoGenerationMaxAttempts is maximum polling attempts for Kling video generation (10 minutes @ 5s intervals)
-	VideoGenerationMaxAttempts = 120
+	// VideoGenerationMaxAttempts is maximum polling attempts for video generation
+	// Veo 3.1 can take 15-20 minutes, especially with images
+	// 240 attempts × 5s = 20 minutes
+	VideoGenerationMaxAttempts = 240
 
 	// AudioGenerationMaxAttempts is maximum polling attempts for Minimax audio generation (5 minutes @ 5s intervals)
 	AudioGenerationMaxAttempts = 60
