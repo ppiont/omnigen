@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -115,6 +114,61 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		}
 	}
 
+	// Generate presigned URL for thumbnail
+	var thumbnailURL string
+	if job.ThumbnailURL != "" {
+		key := extractS3Key(job.ThumbnailURL)
+		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), key, 7*24*time.Hour)
+		if err != nil {
+			h.logger.Warn("Failed to generate presigned URL for thumbnail",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+			thumbnailURL = job.ThumbnailURL // Fallback to raw URL
+		} else {
+			thumbnailURL = url
+		}
+	}
+
+	// Generate presigned URL for audio
+	var audioURL string
+	if job.AudioURL != "" {
+		key := extractS3Key(job.AudioURL)
+		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), key, 7*24*time.Hour)
+		if err != nil {
+			h.logger.Warn("Failed to generate presigned URL for audio",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+			audioURL = job.AudioURL // Fallback to raw URL
+		} else {
+			audioURL = url
+		}
+	}
+
+	// Generate presigned URLs for scene videos
+	var sceneVideoURLs []string
+	if len(job.SceneVideoURLs) > 0 {
+		sceneVideoURLs = make([]string, 0, len(job.SceneVideoURLs))
+		for i, sceneURL := range job.SceneVideoURLs {
+			if sceneURL == "" {
+				continue
+			}
+			key := extractS3Key(sceneURL)
+			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), key, 7*24*time.Hour)
+			if err != nil {
+				h.logger.Warn("Failed to generate presigned URL for scene video",
+					zap.String("job_id", jobID),
+					zap.Int("scene", i+1),
+					zap.Error(err),
+				)
+				sceneVideoURLs = append(sceneVideoURLs, sceneURL) // Fallback to raw URL
+			} else {
+				sceneVideoURLs = append(sceneVideoURLs, url)
+			}
+		}
+	}
+
 	response := JobResponse{
 		JobID:           job.JobID,
 		Status:          job.Status,
@@ -127,10 +181,10 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		UpdatedAt:       job.UpdatedAt,
 		CompletedAt:     job.CompletedAt,
 		ErrorMessage:    job.ErrorMessage,
-		ThumbnailURL:    job.ThumbnailURL,
-		AudioURL:        job.AudioURL,
+		ThumbnailURL:    thumbnailURL,
+		AudioURL:        audioURL,
 		ScenesCompleted: job.ScenesCompleted,
-		SceneVideoURLs:  job.SceneVideoURLs,
+		SceneVideoURLs:  sceneVideoURLs,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -199,6 +253,61 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 			}
 		}
 
+		// Generate presigned URL for thumbnail
+		var thumbnailURL string
+		if job.ThumbnailURL != "" {
+			key := extractS3Key(job.ThumbnailURL)
+			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), key, 1*time.Hour)
+			if err != nil {
+				h.logger.Warn("Failed to generate presigned URL for thumbnail",
+					zap.String("job_id", job.JobID),
+					zap.Error(err),
+				)
+				thumbnailURL = job.ThumbnailURL // Fallback to raw URL
+			} else {
+				thumbnailURL = url
+			}
+		}
+
+		// Generate presigned URL for audio
+		var audioURL string
+		if job.AudioURL != "" {
+			key := extractS3Key(job.AudioURL)
+			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), key, 1*time.Hour)
+			if err != nil {
+				h.logger.Warn("Failed to generate presigned URL for audio",
+					zap.String("job_id", job.JobID),
+					zap.Error(err),
+				)
+				audioURL = job.AudioURL // Fallback to raw URL
+			} else {
+				audioURL = url
+			}
+		}
+
+		// Generate presigned URLs for scene videos
+		var sceneVideoURLs []string
+		if len(job.SceneVideoURLs) > 0 {
+			sceneVideoURLs = make([]string, 0, len(job.SceneVideoURLs))
+			for si, sceneURL := range job.SceneVideoURLs {
+				if sceneURL == "" {
+					continue
+				}
+				key := extractS3Key(sceneURL)
+				url, err := h.s3Service.GetPresignedURL(c.Request.Context(), key, 1*time.Hour)
+				if err != nil {
+					h.logger.Warn("Failed to generate presigned URL for scene video",
+						zap.String("job_id", job.JobID),
+						zap.Int("scene", si+1),
+						zap.Error(err),
+					)
+					sceneVideoURLs = append(sceneVideoURLs, sceneURL) // Fallback to raw URL
+				} else {
+					sceneVideoURLs = append(sceneVideoURLs, url)
+				}
+			}
+		}
+
 		jobResponses[i] = JobResponse{
 			JobID:           job.JobID,
 			Status:          job.Status,
@@ -211,10 +320,10 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 			CreatedAt:       job.CreatedAt,
 			UpdatedAt:       job.UpdatedAt,
 			CompletedAt:     job.CompletedAt,
-			ThumbnailURL:    job.ThumbnailURL,
-			AudioURL:        job.AudioURL,
+			ThumbnailURL:    thumbnailURL,
+			AudioURL:        audioURL,
 			ScenesCompleted: job.ScenesCompleted,
-			SceneVideoURLs:  job.SceneVideoURLs,
+			SceneVideoURLs:  sceneVideoURLs,
 		}
 	}
 
@@ -267,27 +376,6 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 		zap.String("job_id", jobID),
 		zap.String("user_id", userID),
 	)
-
-	// Helper function to extract S3 key from URL
-	extractS3Key := func(url string) string {
-		if strings.HasPrefix(url, "s3://") {
-			parts := strings.SplitN(url[5:], "/", 2)
-			if len(parts) == 2 {
-				return parts[1]
-			}
-			return ""
-		}
-		if strings.HasPrefix(url, "https://") {
-			url = url[8:]
-			// Find first slash after domain
-			slashIndex := strings.Index(url, "/")
-			if slashIndex > 0 {
-				return url[slashIndex+1:]
-			}
-		}
-		// If no prefix, assume it's already a key
-		return url
-	}
 
 	// Delete final video
 	if job.VideoKey != "" {
