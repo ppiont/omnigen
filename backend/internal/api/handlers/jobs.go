@@ -118,6 +118,11 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 	var thumbnailURL string
 	if job.ThumbnailURL != "" {
 		key := extractS3Key(job.ThumbnailURL)
+		h.logger.Debug("Extracting S3 key for thumbnail",
+			zap.String("job_id", jobID),
+			zap.String("original_url", job.ThumbnailURL),
+			zap.String("extracted_key", key),
+		)
 		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), key, 7*24*time.Hour)
 		if err != nil {
 			h.logger.Warn("Failed to generate presigned URL for thumbnail",
@@ -257,6 +262,11 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 		var thumbnailURL string
 		if job.ThumbnailURL != "" {
 			key := extractS3Key(job.ThumbnailURL)
+			h.logger.Debug("Extracting S3 key for thumbnail",
+				zap.String("job_id", job.JobID),
+				zap.String("original_url", job.ThumbnailURL),
+				zap.String("extracted_key", key),
+			)
 			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), key, 1*time.Hour)
 			if err != nil {
 				h.logger.Warn("Failed to generate presigned URL for thumbnail",

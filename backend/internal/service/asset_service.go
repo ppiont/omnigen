@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/omnigen/backend/internal/domain"
@@ -126,6 +127,11 @@ func extractS3Key(s3URL string) string {
 	// This function already exists in generate_async.go (line 636)
 	// We're duplicating it here for the service layer
 	// Could be refactored to a shared utility package later
+
+	// Strip query parameters first (handles presigned URLs that may have been stored)
+	if idx := strings.Index(s3URL, "?"); idx != -1 {
+		s3URL = s3URL[:idx]
+	}
 
 	// Simple implementation: find ".amazonaws.com/" and return everything after it
 	const marker = ".amazonaws.com/"
