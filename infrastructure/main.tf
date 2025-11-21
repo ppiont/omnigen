@@ -34,6 +34,7 @@ module "iam" {
   dynamodb_table_arn       = module.storage.dynamodb_table_arn
   dynamodb_usage_table_arn = module.storage.dynamodb_usage_table_arn
   replicate_secret_arn     = var.replicate_api_key_secret_arn
+  openai_secret_arn        = var.openai_api_key_secret_arn
   ecr_repository_arn       = module.compute.ecr_repository_arn
 }
 
@@ -63,20 +64,20 @@ module "monitoring" {
 module "compute" {
   source = "./modules/compute"
 
-  project_name                = var.project_name
-  environment                 = var.environment
-  vpc_id                      = module.networking.vpc_id
-  private_subnet_ids          = [module.networking.private_subnet_id]
-  ecs_security_group_id       = module.networking.ecs_security_group_id
-  alb_target_group_arn        = module.loadbalancer.target_group_arn
-  task_execution_role_arn     = module.iam.ecs_task_execution_role_arn
-  task_role_arn               = module.iam.ecs_task_role_arn
-  cpu                         = var.ecs_cpu
-  memory                      = var.ecs_memory
-  min_tasks                   = var.ecs_min_tasks
-  max_tasks                   = var.ecs_max_tasks
-  target_cpu_utilization      = var.ecs_target_cpu_utilization
-  container_name              = local.container_name
+  project_name              = var.project_name
+  environment               = var.environment
+  vpc_id                    = module.networking.vpc_id
+  private_subnet_ids        = [module.networking.private_subnet_id]
+  ecs_security_group_id     = module.networking.ecs_security_group_id
+  alb_target_group_arn      = module.loadbalancer.target_group_arn
+  task_execution_role_arn   = module.iam.ecs_task_execution_role_arn
+  task_role_arn             = module.iam.ecs_task_role_arn
+  cpu                       = var.ecs_cpu
+  memory                    = var.ecs_memory
+  min_tasks                 = var.ecs_min_tasks
+  max_tasks                 = var.ecs_max_tasks
+  target_cpu_utilization    = var.ecs_target_cpu_utilization
+  container_name            = local.container_name
   container_port            = local.container_port
   log_group_name            = module.monitoring.ecs_log_group_name
   aws_region                = var.aws_region
@@ -84,11 +85,12 @@ module "compute" {
   dynamodb_table_name       = module.storage.dynamodb_table_name
   dynamodb_usage_table_name = module.storage.dynamodb_usage_table_name
   replicate_secret_arn      = var.replicate_api_key_secret_arn
-  cognito_user_pool_id        = module.auth.user_pool_id
-  cognito_client_id           = module.auth.client_id
-  jwt_issuer                  = module.auth.issuer_url
-  cognito_domain              = module.auth.hosted_ui_domain
-  cloudfront_domain           = module.cdn.cloudfront_domain_name
+  openai_secret_arn         = var.openai_api_key_secret_arn
+  cognito_user_pool_id      = module.auth.user_pool_id
+  cognito_client_id         = module.auth.client_id
+  jwt_issuer                = module.auth.issuer_url
+  cognito_domain            = module.auth.hosted_ui_domain
+  cloudfront_domain         = module.cdn.cloudfront_domain_name
 
   depends_on = [module.monitoring, module.auth]
 }

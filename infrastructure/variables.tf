@@ -71,6 +71,16 @@ variable "replicate_api_key_secret_arn" {
   }
 }
 
+variable "openai_api_key_secret_arn" {
+  description = "ARN of AWS Secrets Manager secret containing OpenAI API key"
+  type        = string
+
+  validation {
+    condition     = can(regex("^arn:aws:secretsmanager:", var.openai_api_key_secret_arn))
+    error_message = "Must be a valid Secrets Manager ARN."
+  }
+}
+
 variable "ecs_min_tasks" {
   description = "Minimum number of ECS tasks"
   type        = number
