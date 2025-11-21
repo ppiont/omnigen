@@ -28,6 +28,11 @@ variable "replicate_secret_arn" {
   type        = string
 }
 
+variable "openai_secret_arn" {
+  description = "ARN of the OpenAI API key secret"
+  type        = string
+}
+
 variable "ecr_repository_arn" {
   description = "ARN of the ECR repository"
   type        = string

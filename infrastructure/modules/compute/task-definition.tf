@@ -54,6 +54,10 @@ resource "aws_ecs_task_definition" "api" {
           value = var.replicate_secret_arn
         },
         {
+          name  = "OPENAI_SECRET_ARN"
+          value = var.openai_secret_arn
+        },
+        {
           name  = "COGNITO_USER_POOL_ID"
           value = var.cognito_user_pool_id
         },

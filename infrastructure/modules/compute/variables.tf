@@ -103,6 +103,11 @@ variable "replicate_secret_arn" {
   type        = string
 }
 
+variable "openai_secret_arn" {
+  description = "ARN of the OpenAI API key secret"
+  type        = string
+}
+
 variable "cognito_user_pool_id" {
   description = "Cognito User Pool ID for authentication"
   type        = string
