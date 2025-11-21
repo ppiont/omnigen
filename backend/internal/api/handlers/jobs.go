@@ -162,6 +162,20 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		}
 	}
 
+	// Generate presigned URL for thumbnail
+	var thumbnailURL string
+	if job.ThumbnailURL != "" {
+		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), extractS3Key(job.ThumbnailURL), 7*24*time.Hour)
+		if err != nil {
+			h.logger.Warn("Failed to generate presigned URL for thumbnail",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+		} else {
+			thumbnailURL = url
+		}
+	}
+
 	// Prepare side effects start time pointer
 	var sideEffectsStartTime *float64
 	if job.SideEffectsStartTime > 0 {
@@ -180,7 +194,7 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		UpdatedAt:           job.UpdatedAt,
 		CompletedAt:         job.CompletedAt,
 		ErrorMessage:        job.ErrorMessage,
-		ThumbnailURL:        job.ThumbnailURL,
+		ThumbnailURL:        thumbnailURL,
 		AudioURL:            audioURL,
 		NarratorAudioURL:    narratorAudioURL,
 		ScenesCompleted:     job.ScenesCompleted,
@@ -282,6 +296,20 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 			}
 		}
 
+		// Generate presigned URL for thumbnail
+		var thumbnailURL string
+		if job.ThumbnailURL != "" {
+			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), extractS3Key(job.ThumbnailURL), 1*time.Hour)
+			if err != nil {
+				h.logger.Warn("Failed to generate presigned URL for thumbnail",
+					zap.String("job_id", job.JobID),
+					zap.Error(err),
+				)
+			} else {
+				thumbnailURL = url
+			}
+		}
+
 		// Prepare side effects start time pointer
 		var sideEffectsStartTime *float64
 		if job.SideEffectsStartTime > 0 {
@@ -300,7 +328,7 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 			CreatedAt:           job.CreatedAt,
 			UpdatedAt:           job.UpdatedAt,
 			CompletedAt:         job.CompletedAt,
-			ThumbnailURL:        job.ThumbnailURL,
+			ThumbnailURL:        thumbnailURL,
 			AudioURL:            audioURL,
 			NarratorAudioURL:    narratorAudioURL,
 			ScenesCompleted:     job.ScenesCompleted,
