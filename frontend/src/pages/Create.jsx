@@ -23,8 +23,6 @@ const styles = ["Clinical", "Professional", "Documentary", "Informative", "Trust
 const durations = ["10s", "20s", "30s", "40s", "50s", "60s"]; // Must be multiple of 10
 const aspects = ["16:9", "9:16", "1:1"]; // Backend only supports these
 
-// Removed unused options: visualStyles, tones, tempos, platforms, goals
-
 function IconChevronDown() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
