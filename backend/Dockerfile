@@ -24,8 +24,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
 # Runtime stage - ARM64-compatible base image
 FROM alpine:3.22
 
-# Install dependencies: ca-certificates for HTTPS, curl for health checks, ffmpeg for video processing
-RUN apk --no-cache add ca-certificates curl ffmpeg
+# Install dependencies: ca-certificates for HTTPS, curl for health checks, ffmpeg for video processing, fonts for text overlay
+RUN apk --no-cache add ca-certificates curl ffmpeg ttf-dejavu fontconfig
 
 WORKDIR /app
 
