@@ -10,6 +10,8 @@ import (
 type AdapterType string
 
 const (
+	AdapterTypeVeo AdapterType = "veo"
+	// Legacy support
 	AdapterTypeKling AdapterType = "kling"
 	// Future adapters:
 	// AdapterTypeRunway AdapterType = "runway"
@@ -33,14 +35,17 @@ func NewAdapterFactory(replicateToken string, logger *zap.Logger) *AdapterFactor
 // CreateAdapter creates a video generation adapter of the specified type
 func (f *AdapterFactory) CreateAdapter(adapterType AdapterType) (VideoGeneratorAdapter, error) {
 	switch adapterType {
+	case AdapterTypeVeo:
+		return NewVeoAdapter(f.replicateToken, f.logger), nil
 	case AdapterTypeKling:
-		return NewKlingAdapter(f.replicateToken, f.logger), nil
+		// Legacy support - map to Veo
+		return NewVeoAdapter(f.replicateToken, f.logger), nil
 	default:
 		return nil, fmt.Errorf("unknown adapter type: %s", adapterType)
 	}
 }
 
-// GetDefaultAdapter returns the default adapter (Kling v2.5 Turbo)
+// GetDefaultAdapter returns the default adapter (Veo 3.1)
 func (f *AdapterFactory) GetDefaultAdapter() VideoGeneratorAdapter {
-	return NewKlingAdapter(f.replicateToken, f.logger)
+	return NewVeoAdapter(f.replicateToken, f.logger)
 }

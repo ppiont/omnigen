@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,8 +22,9 @@ import (
 // GenerateHandler handles video generation requests with goroutine-based async processing
 type GenerateHandler struct {
 	parserService  *service.ParserService
-	klingAdapter   *adapters.KlingAdapter
+	veoAdapter     *adapters.VeoAdapter
 	minimaxAdapter *adapters.MinimaxAdapter
+	ttsAdapter     adapters.TTSAdapter // Text-to-speech adapter for narrator voiceover
 	s3Service      *repository.S3AssetRepository
 	jobRepo        *repository.DynamoDBRepository
 	assetsBucket   string
@@ -33,8 +35,9 @@ type GenerateHandler struct {
 // NewGenerateHandler creates a new generate handler
 func NewGenerateHandler(
 	parserService *service.ParserService,
-	klingAdapter *adapters.KlingAdapter,
+	veoAdapter *adapters.VeoAdapter,
 	minimaxAdapter *adapters.MinimaxAdapter,
+	ttsAdapter adapters.TTSAdapter,
 	s3Service *repository.S3AssetRepository,
 	jobRepo *repository.DynamoDBRepository,
 	assetsBucket string,
@@ -42,8 +45,9 @@ func NewGenerateHandler(
 ) *GenerateHandler {
 	return &GenerateHandler{
 		parserService:  parserService,
-		klingAdapter:   klingAdapter,
+		veoAdapter:     veoAdapter,
 		minimaxAdapter: minimaxAdapter,
+		ttsAdapter:     ttsAdapter,
 		s3Service:      s3Service,
 		jobRepo:        jobRepo,
 		assetsBucket:   assetsBucket,
@@ -57,6 +61,10 @@ type GenerateRequest struct {
 	Prompt      string `json:"prompt" binding:"required,min=10,max=2000"`
 	Duration    int    `json:"duration" binding:"required,min=10,max=60"`
 	AspectRatio string `json:"aspect_ratio" binding:"required,oneof=16:9 9:16 1:1"`
+
+	// Pharmaceutical ad configuration
+	Voice       string `json:"voice,omitempty"`
+	SideEffects string `json:"side_effects,omitempty"`
 
 	// Image options - TWO separate use cases:
 	StartImage          string `json:"start_image,omitempty" binding:"omitempty,url"`           // Used ONLY for first scene initialization
@@ -111,12 +119,70 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// Validate duration is multiple of 5 (Kling constraint: 5s or 10s clips only)
-	if req.Duration%5 != 0 {
+	isPharmaceuticalAd := strings.TrimSpace(req.Voice) != "" || strings.TrimSpace(req.SideEffects) != ""
+
+	if isPharmaceuticalAd {
+		trimmedVoice := strings.TrimSpace(req.Voice)
+		trimmedSideEffects := strings.TrimSpace(req.SideEffects)
+
+		// Voice validation
+		if trimmedVoice == "" {
+			c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+				Error: errors.NewValidationError("voice", "Please select a narrator voice (male or female)"),
+			})
+			return
+		}
+
+		if trimmedVoice != "male" && trimmedVoice != "female" {
+			c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+				Error: errors.NewValidationError("voice", "Invalid voice selection. Choose 'male' or 'female'"),
+			})
+			return
+		}
+
+		// Side effects validation
+		if trimmedSideEffects == "" {
+			c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+				Error: errors.NewValidationError("side_effects", "Side effects disclosure is required for pharmaceutical ads"),
+			})
+			return
+		}
+
+		sideEffectsLength := len(trimmedSideEffects)
+		if sideEffectsLength < 10 {
+			c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+				Error: errors.NewValidationError("side_effects", "Side effects text must be at least 10 characters"),
+			})
+			return
+		}
+
+		if sideEffectsLength > 500 {
+			c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+				Error: errors.NewValidationError("side_effects",
+					fmt.Sprintf("Side effects text cannot exceed 500 characters (currently: %d)", sideEffectsLength)),
+			})
+			return
+		}
+
+		// Product image validation
+		if strings.TrimSpace(req.StartImage) == "" {
+			c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+				Error: errors.NewValidationError("start_image", "Product image is required for pharmaceutical ads"),
+			})
+			return
+		}
+
+		// Persist trimmed values
+		req.Voice = trimmedVoice
+		req.SideEffects = trimmedSideEffects
+	}
+
+	req.StartImage = strings.TrimSpace(req.StartImage)
+
+	// Validate duration is multiple of 5 (Veo constraint: 5s or 10s clips only)
+	if req.Duration < 10 || req.Duration > 60 || req.Duration%5 != 0 {
 		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
-			Error: errors.ErrInvalidRequest.WithDetails(map[string]interface{}{
-				"error": "duration must be a multiple of 5 seconds (Kling v2.5 supports 5s or 10s clips)",
-			}),
+			Error: errors.NewValidationError("duration", "Duration must be between 10-60 seconds and divisible by 5"),
 		})
 		return
 	}
@@ -129,6 +195,9 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		zap.String("prompt", req.Prompt),
 		zap.Int("duration", req.Duration),
 		zap.String("aspect_ratio", req.AspectRatio),
+		zap.String("voice", req.Voice),
+		zap.Int("side_effects_length", len(req.SideEffects)),
+		zap.Bool("is_pharmaceutical_ad", isPharmaceuticalAd),
 	)
 
 	// Create job record IMMEDIATELY (no GPT-4o call yet - that's in the goroutine!)
@@ -143,6 +212,9 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		Duration:    req.Duration,
 		AspectRatio: req.AspectRatio,
 
+		Voice:       req.Voice,
+		SideEffects: req.SideEffects,
+
 		// Enhanced prompt options (Phase 1)
 		Style:             req.Style,
 		Tone:              req.Tone,
@@ -154,9 +226,9 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		ProCinematography: req.ProCinematography,
 		CreativeBoost:     req.CreativeBoost,
 
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		TTL:         time.Now().Add(7 * 24 * time.Hour).Unix(),
+		CreatedAt: now,
+		UpdatedAt: now,
+		TTL:       time.Now().Add(7 * 24 * time.Hour).Unix(),
 	}
 
 	// Set title if provided

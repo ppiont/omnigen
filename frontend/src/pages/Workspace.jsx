@@ -38,6 +38,25 @@ function Workspace() {
    */
   const SKIP_UUID_VALIDATION = false;
 
+  const normalizeStatus = (status) => (status || "").toLowerCase();
+  const isProcessingStatus = (status) => {
+    const normalized = normalizeStatus(status);
+    return normalized === "processing" || normalized === "pending";
+  };
+  const isCompletedStatus = (status) => {
+    const normalized = normalizeStatus(status);
+    return normalized === "completed" || normalized === "complete";
+  };
+  const isTerminalStatus = (status) => {
+    const normalized = normalizeStatus(status);
+    return (
+      normalized === "failed" ||
+      normalized === "cancelled" ||
+      normalized === "canceled" ||
+      isCompletedStatus(normalized)
+    );
+  };
+
   /**
    * Validates whether the provided ID string is a UUID or job-{UUID} format.
    *
@@ -46,16 +65,18 @@ function Workspace() {
    */
   const isValidUUID = (id) => {
     if (!id) return false;
-    
+
     // Check if it's a job-{uuid} format (backend format)
-    if (id.startsWith('job-')) {
+    if (id.startsWith("job-")) {
       const uuidPart = id.substring(4); // Remove 'job-' prefix
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       return uuidRegex.test(uuidPart);
     }
-    
+
     // Check if it's a plain UUID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(id);
   };
 
@@ -117,7 +138,9 @@ function Workspace() {
         return;
       }
 
-      console.log(`[WORKSPACE] 📥 Fetching job: ${id} (showLoader: ${showLoader})`);
+      console.log(
+        `[WORKSPACE] 📥 Fetching job: ${id} (showLoader: ${showLoader})`
+      );
       clearRetryTimeout();
 
       try {
@@ -135,7 +158,7 @@ function Workspace() {
         setJobData(data);
         setRateLimitCountdown(null);
         linkRefreshAttemptsRef.current = 0;
-        
+
         // Track this video as recently opened
         if (data.job_id) {
           addRecentlyOpenedVideo(data.job_id);
@@ -163,7 +186,7 @@ function Workspace() {
           code: err.code,
           message: err.message,
         });
-        
+
         if (err.status === 404) {
           console.error("[WORKSPACE] ❌ Job not found (404)");
           setErrorState({
@@ -278,7 +301,7 @@ function Workspace() {
       console.warn("[WORKSPACE] ⚠️ Cannot start polling: No video ID");
       return;
     }
-    
+
     console.log("[WORKSPACE] 🔄 Starting polling for job:", videoId);
     clearPolling();
 
@@ -286,13 +309,14 @@ function Workspace() {
     const pollOnce = async () => {
       pollCount++;
       try {
-        console.log(`[WORKSPACE] 🔄 Polling job status (poll #${pollCount})...`);
+        console.log(
+          `[WORKSPACE] 🔄 Polling job status (poll #${pollCount})...`
+        );
         const updatedJob = await fetchJob(videoId, { showLoader: false });
-        if (
-          updatedJob?.status === "completed" ||
-          updatedJob?.status === "failed"
-        ) {
-          console.log(`[WORKSPACE] ✅ Polling complete. Final status: ${updatedJob.status}`);
+        if (isTerminalStatus(updatedJob?.status)) {
+          console.log(
+            `[WORKSPACE] ✅ Polling complete. Final status: ${updatedJob.status}`
+          );
           clearPolling();
         }
       } catch (error) {
@@ -301,8 +325,8 @@ function Workspace() {
       }
     };
 
-    console.log("[WORKSPACE] ⏰ Setting up polling interval (every 5 seconds)");
-    pollingIntervalRef.current = setInterval(pollOnce, 5000);
+    console.log("[WORKSPACE] ⏰ Setting up polling interval (every 2 seconds)");
+    pollingIntervalRef.current = setInterval(pollOnce, 2000);
 
     console.log("[WORKSPACE] ⏰ Setting polling timeout (10 minutes)");
     pollingTimeoutRef.current = setTimeout(() => {
@@ -324,7 +348,7 @@ function Workspace() {
    */
   const handleDownload = (job = jobData) => {
     console.log("[WORKSPACE] ⬇️ Download requested for job:", job?.job_id);
-    
+
     if (!job?.video_url) {
       console.warn("[WORKSPACE] ⚠️ Cannot download: No video URL");
       setErrorState({
@@ -381,7 +405,7 @@ function Workspace() {
     console.log("=".repeat(60));
     console.log("[WORKSPACE] 🏗️ Workspace component mounted/updated");
     console.log("[WORKSPACE] Video ID:", videoId);
-    
+
     if (videoId) {
       console.log("[WORKSPACE] 📥 Fetching job data for video:", videoId);
       fetchJob(videoId);
@@ -397,7 +421,7 @@ function Workspace() {
   }, [fetchJob, videoId]);
 
   useEffect(() => {
-    if (jobData?.status === "processing" || jobData?.status === "pending") {
+    if (isProcessingStatus(jobData?.status)) {
       console.log(`[WORKSPACE] 🔄 Job is ${jobData.status}, starting polling`);
       beginPolling();
       return () => {
@@ -729,7 +753,7 @@ function Workspace() {
     });
   }
 
-  if (jobData?.status === "processing" || jobData?.status === "pending") {
+  if (isProcessingStatus(jobData?.status)) {
     return renderProcessingView();
   }
 
@@ -749,6 +773,78 @@ function Workspace() {
       icon: <FileText size={20} />,
     },
   ];
+
+  let scenes =
+    jobData.scenes ||
+    jobData.metadata?.scenes ||
+    jobData.metadata?.script?.scenes ||
+    [];
+
+  if (
+    scenes.length === 0 &&
+    Array.isArray(jobData.scene_video_urls) &&
+    jobData.scene_video_urls.length > 0
+  ) {
+    const numScenes = jobData.scene_video_urls.length;
+    const totalDuration = jobData.duration || 30;
+    const sceneDuration = totalDuration / numScenes;
+
+    scenes = jobData.scene_video_urls.map((url, index) => ({
+      scene_number: index + 1,
+      start_time: index * sceneDuration,
+      duration: sceneDuration,
+      location: `Scene ${index + 1}`,
+      action: `Scene ${index + 1} video clip`,
+    }));
+
+    console.log("[WORKSPACE] Created scenes from scene_video_urls:", scenes);
+  }
+
+  let audioSpec =
+    jobData.audio_spec ||
+    jobData.metadata?.audio_spec ||
+    jobData.metadata?.script?.audio_spec ||
+    null;
+
+  if (!audioSpec && jobData.audio_url) {
+    audioSpec = {
+      enable_audio: true,
+      music_mood: "background",
+      music_style: "background",
+    };
+    console.log("[WORKSPACE] Created audio spec from audio_url");
+  }
+
+  const backgroundMusicUrl =
+    jobData.audio_url || jobData.metadata?.audio_url || null;
+  const narratorAudioUrl =
+    jobData.narrator_audio_url ||
+    jobData.metadata?.narrator_audio_url ||
+    audioSpec?.narrator_audio_url ||
+    null;
+  const sideEffectsText =
+    jobData.side_effects_text ||
+    jobData.side_effects ||
+    audioSpec?.side_effects_text ||
+    jobData.metadata?.audio_spec?.side_effects_text ||
+    null;
+  const sideEffectsStartTime =
+    jobData.side_effects_start_time ??
+    audioSpec?.side_effects_start_time ??
+    jobData.metadata?.audio_spec?.side_effects_start_time ??
+    null;
+
+  console.log("[WORKSPACE] Timeline data:", {
+    videoDuration: jobData.duration || 30,
+    scenesCount: scenes.length,
+    scenes,
+    audioSpec,
+    backgroundMusicUrl,
+    narratorAudioUrl,
+    hasSideEffectsText: Boolean(sideEffectsText),
+    sideEffectsStartTime,
+    sceneVideoURLs: jobData.scene_video_urls,
+  });
 
   return (
     <div className="workspace-page">
@@ -786,6 +882,8 @@ function Workspace() {
                 status={jobData.status}
                 aspectRatio={jobData.aspect_ratio || "16:9"}
                 onRefresh={handleVideoRefresh}
+                backgroundMusicUrl={backgroundMusicUrl}
+                narratorAudioUrl={narratorAudioUrl}
               />
             </div>
           </section>
@@ -827,10 +925,7 @@ function Workspace() {
                 <VideoMetadata key={jobData.job_id} jobData={jobData} />
               )}
               {activeSidebarTab === "script" && (
-                <ScriptEditor
-                  script={script}
-                  onChange={handleScriptChange}
-                />
+                <ScriptEditor script={script} onChange={handleScriptChange} />
               )}
             </div>
           </aside>
@@ -839,68 +934,16 @@ function Workspace() {
         {/* Timeline Editor - Full Width at Bottom */}
         <div className="workspace-timeline-section">
           <div className="workspace-timeline-card">
-            {(() => {
-              // Extract scenes from various possible locations in the data structure
-              let scenes = 
-                jobData.scenes || 
-                jobData.metadata?.scenes || 
-                jobData.metadata?.script?.scenes || 
-                [];
-              
-              // If no scenes but we have scene_video_urls, create scenes from URLs
-              if (scenes.length === 0 && jobData.scene_video_urls && jobData.scene_video_urls.length > 0) {
-                const numScenes = jobData.scene_video_urls.length;
-                const totalDuration = jobData.duration || 30;
-                const sceneDuration = totalDuration / numScenes;
-                
-                scenes = jobData.scene_video_urls.map((url, index) => ({
-                  scene_number: index + 1,
-                  start_time: index * sceneDuration,
-                  duration: sceneDuration,
-                  location: `Scene ${index + 1}`,
-                  action: `Scene ${index + 1} video clip`,
-                }));
-                
-                console.log("[WORKSPACE] Created scenes from scene_video_urls:", scenes);
-              }
-              
-              // Extract audio spec from various possible locations
-              let audioSpec = 
-                jobData.audio_spec || 
-                jobData.metadata?.audio_spec || 
-                jobData.metadata?.script?.audio_spec || 
-                null;
-              
-              // If no audio_spec but we have audio_url, create basic audio spec
-              if (!audioSpec && jobData.audio_url) {
-                audioSpec = {
-                  enable_audio: true,
-                  music_mood: 'background',
-                  music_style: 'background',
-                };
-                console.log("[WORKSPACE] Created audio spec from audio_url");
-              }
-              
-              // Debug logging
-              console.log("[WORKSPACE] Timeline data:", {
-                videoDuration: jobData.duration || 30,
-                scenesCount: scenes.length,
-                scenes: scenes,
-                audioSpec: audioSpec,
-                audioUrl: jobData.audio_url,
-                sceneVideoURLs: jobData.scene_video_urls,
-                fullJobData: jobData,
-              });
-              
-              return (
-                <Timeline 
-                  videoDuration={jobData.duration || 30}
-                  scenes={scenes}
-                  audioSpec={audioSpec}
-                  audioUrl={jobData.audio_url || null}
-                />
-              );
-            })()}
+            <Timeline
+              videoDuration={jobData.duration || 30}
+              scenes={scenes}
+              audioSpec={audioSpec}
+              backgroundMusicUrl={backgroundMusicUrl}
+              audioUrl={backgroundMusicUrl}
+              narratorAudioUrl={narratorAudioUrl}
+              sideEffectsText={sideEffectsText}
+              sideEffectsStartTime={sideEffectsStartTime}
+            />
           </div>
         </div>
       </div>

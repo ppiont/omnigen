@@ -26,8 +26,9 @@ type ServerConfig struct {
 	UsageRepo        *repository.DynamoDBUsageRepository
 	ParserService    *service.ParserService   // Script generation service
 	AssetService     *service.AssetService    // Asset URL generation service
-	KlingAdapter     *adapters.KlingAdapter   // Kling video generation
+	VeoAdapter       *adapters.VeoAdapter     // Veo 3.1 video generation
 	MinimaxAdapter   *adapters.MinimaxAdapter // Minimax audio generation
+	TTSAdapter       adapters.TTSAdapter      // Text-to-speech adapter for narrator voiceover
 	AssetsBucket     string                   // S3 bucket for video assets
 	APIKeys          []string                 // Deprecated: Use JWTValidator instead
 	JWTValidator     *auth.JWTValidator
@@ -157,8 +158,9 @@ func (s *Server) setupRoutes() {
 		// Initialize handlers with goroutine-based async architecture
 		generateHandler := handlers.NewGenerateHandler(
 			s.config.ParserService,
-			s.config.KlingAdapter,
+			s.config.VeoAdapter,
 			s.config.MinimaxAdapter,
+			s.config.TTSAdapter,
 			s.config.S3Service,
 			s.config.JobRepo,
 			s.config.AssetsBucket,
@@ -184,6 +186,12 @@ func (s *Server) setupRoutes() {
 			s.config.Logger,
 		)
 
+		uploadHandler := handlers.NewUploadHandler(
+			s.config.S3Service,
+			s.config.AssetsBucket,
+			s.config.Logger,
+		)
+
 		// Generation routes
 		v1.POST("/generate", generateHandler.Generate)
 		v1.POST("/generate/title", titleHandler.GenerateTitle)
@@ -193,5 +201,8 @@ func (s *Server) setupRoutes() {
 		v1.GET("/jobs", jobsHandler.ListJobs)
 		v1.DELETE("/jobs/:id", jobsHandler.DeleteJob)
 		v1.GET("/jobs/:id/progress", progressHandler.GetProgress) // SSE streaming endpoint
+
+		// Upload routes
+		v1.POST("/upload/presigned-url", uploadHandler.GetPresignedURL)
 	}
 }

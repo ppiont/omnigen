@@ -49,6 +49,7 @@ type ProgressResponse struct {
 	StagesPending          []StageInfo     `json:"stages_pending"`
 	EstimatedTimeRemaining int             `json:"estimated_time_remaining"`
 	Assets                 *ProgressAssets `json:"assets,omitempty"`
+	ErrorMessage           *string         `json:"error_message,omitempty"` // Detailed error message if job failed
 }
 
 // StageInfo contains information about a pipeline stage
@@ -258,6 +259,7 @@ func (h *ProgressHandler) buildProgressResponse(job *domain.Job) (*ProgressRespo
 		StagesPending:          buildStagesPending(job),
 		EstimatedTimeRemaining: eta,
 		Assets:                 progressAssets,
+		ErrorMessage:           job.ErrorMessage, // Include error message if job failed
 	}
 
 	return response, nil
@@ -270,6 +272,10 @@ func formatStageName(stage string) string {
 		return "Generating script with AI"
 	case "script_complete":
 		return "Script ready"
+	case "narrator_generating":
+		return "Generating narrator voiceover"
+	case "narrator_complete":
+		return "Narrator audio ready"
 	case "audio_generating":
 		return "Generating background music"
 	case "audio_complete":
@@ -309,8 +315,19 @@ func buildStagesCompleted(job *domain.Job) []StageInfo {
 		stages = append(stages, StageInfo{
 			Name:        "script_complete",
 			DisplayName: "Script ready",
-			Progress:    15,
+			Progress:    5,
 			CompletedAt: nil, // Could track completion times if needed
+		})
+	}
+
+	// Narrator generation
+	if currentStage != "script_generating" &&
+		currentStage != "script_complete" &&
+		currentStage != "narrator_generating" {
+		stages = append(stages, StageInfo{
+			Name:        "narrator_complete",
+			DisplayName: "Narrator audio ready",
+			Progress:    8,
 		})
 	}
 
@@ -330,7 +347,7 @@ func buildStagesCompleted(job *domain.Job) []StageInfo {
 		stages = append(stages, StageInfo{
 			Name:        "audio_complete",
 			DisplayName: "Audio ready",
-			Progress:    95,
+			Progress:    85,
 		})
 	}
 
@@ -353,6 +370,17 @@ func buildStagesPending(job *domain.Job) []StageInfo {
 	currentStage := job.Stage
 	totalScenes := len(job.Scenes)
 
+	// Narrator (if not yet complete)
+	if currentStage == "script_generating" ||
+		currentStage == "script_complete" ||
+		currentStage == "narrator_generating" {
+		stages = append(stages, StageInfo{
+			Name:        "narrator_generating",
+			DisplayName: "Generating narrator voiceover",
+			Progress:    6,
+		})
+	}
+
 	// Scenes
 	for i := job.ScenesCompleted; i < totalScenes; i++ {
 		stageName := fmt.Sprintf("scene_%d_generating", i+1)
@@ -370,7 +398,7 @@ func buildStagesPending(job *domain.Job) []StageInfo {
 		stages = append(stages, StageInfo{
 			Name:        "audio_generating",
 			DisplayName: "Generating background music",
-			Progress:    85,
+			Progress:    82,
 		})
 	}
 
@@ -379,7 +407,7 @@ func buildStagesPending(job *domain.Job) []StageInfo {
 		stages = append(stages, StageInfo{
 			Name:        "composing",
 			DisplayName: "Composing final video",
-			Progress:    95,
+			Progress:    92,
 		})
 	}
 

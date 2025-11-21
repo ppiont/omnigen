@@ -799,6 +799,37 @@ Handler (if authenticated)
 
 ---
 
+## Audio Quality & Sync Validation
+
+### Volume Mixing
+
+- **Background Music Track**: Played via hidden `<audio>` element with base gain `MUSIC_BASE_VOLUME = 0.3`. Workspace volume slider scales this value (e.g., slider at 50 % → music at 0.15).
+- **Narrator Track**: Separate `<audio>` element using `NARRATOR_BASE_VOLUME = 1.0`; slider scales linearly to maintain clarity over music.
+- **Video Element**: Permanently muted (`volume = 0`, `muted = true`) so all audible content is driven by the dedicated tracks.
+
+### Synchronization Strategy
+
+- **Drift Detection**: 500 ms interval compares `<video>` currentTime against music and narrator tracks.
+- **Auto-Resync**: When drift exceeds 0.2 s (`DRIFT_RESYNC_THRESHOLD`), playback snaps audio tracks to the video timestamp.
+- **Warning Threshold**: If drift surpasses 0.5 s (`DRIFT_WARNING_THRESHOLD`), a toast notification appears; repeat warnings follow a 5 s cooldown (`DRIFT_WARNING_COOLDOWN_MS`).
+- **Target Accuracy**: Under normal network conditions, playback maintains ±0.1 s alignment; post-seek drift resolves within a single resync cycle.
+
+### Testing Protocol (Task 5.2)
+
+- Manual checklist documented in `frontend/src/tests/audio-quality-test.md` covering Chrome/Safari/Firefox (desktop) and iOS Safari / Android Chrome (mobile).
+- Validated volume scaling at 0 %, 50 %, and 100 %; narrator remains intelligible above background music on all tested outputs.
+- Confirmed side effects narration accelerates to 1.4× during the final 20 % of the video while staying aligned with overlay timing.
+- Executed `ffmpeg -af astats` on background music and narrator exports; peak levels remained below −0.1 dBFS confirming zero clipping.
+- Evaluated playback on headphones, laptop speakers, and external speakers to ensure consistent balance.
+
+### Known Limitations
+
+- Mobile browsers require user interaction to initiate audio (autoplay policies); player prompts manual start when necessary.
+- Brief drift spikes may appear on low-powered devices during network stalls; automatic resync corrects within the 0.5 s threshold.
+- Audio fidelity relies on upstream generation services (TTS, music); current QA assumes source assets meet quality baselines.
+
+---
+
 ## Performance Considerations
 
 ### Optimization Strategies

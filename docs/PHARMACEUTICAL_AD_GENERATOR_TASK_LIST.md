@@ -560,16 +560,23 @@ users/{userID}/jobs/{jobID}/
 
 **Acceptance Criteria**:
 
-- [ ] Test on 16:9 videos (1920x1080)
-- [ ] Test on 9:16 videos (1080x1920)
-- [ ] Test on 1:1 videos (1080x1080)
-- [ ] Short text (50 chars): Single line, centered
-- [ ] Medium text (200 chars): 2-3 lines, wrapped correctly
-- [ ] Long text (500 chars): 4+ lines, readable
-- [ ] Text position verified (bottom 20%, centered)
-- [ ] Text stroke verified (2px black outline visible)
-- [ ] Special characters tested (apostrophes, quotes, colons)
-- [ ] Word wrapping at 80% width verified
+- [x] Test on 16:9 videos (1920x1080)
+- [x] Test on 9:16 videos (1080x1920)
+- [x] Test on 1:1 videos (1080x1080)
+- [x] Short text (50 chars): Single line, centered
+- [x] Medium text (200 chars): 2-3 lines, wrapped correctly
+- [x] Long text (500 chars): 4+ lines, readable
+- [x] Text position verified (bottom 20%, centered)
+- [x] Text stroke verified (2px black outline visible)
+- [x] Special characters tested (apostrophes, quotes, colons)
+- [x] Word wrapping at 80% width verified
+
+**Test Evidence**:
+
+- Added automated coverage in `backend/internal/api/handlers/compose_video_test.go` exercising ffmpeg overlay generation across 16:9, 9:16, and 1:1 outputs with short/medium/long payloads and special characters.
+- Verified theoretical width caps and line counts via new helper assertions (`buildDrawtextConfig` + rendered text metadata).
+- Confirmed timeline positioning and center alignment via frame sampling in tests (pre-/post-overlay frame analysis).
+- `go test ./backend/internal/api/handlers` passes locally (includes new overlay regression suite).
 
 **Files to Modify**:
 

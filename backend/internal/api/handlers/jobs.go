@@ -58,8 +58,13 @@ type JobResponse struct {
 	// Progress fields
 	ThumbnailURL    string   `json:"thumbnail_url,omitempty"`
 	AudioURL        string   `json:"audio_url,omitempty"`
+	NarratorAudioURL string  `json:"narrator_audio_url,omitempty"`
 	ScenesCompleted int      `json:"scenes_completed,omitempty"`
 	SceneVideoURLs  []string `json:"scene_video_urls,omitempty"`
+	
+	// Side effects fields for text overlay
+	SideEffectsText      string   `json:"side_effects_text,omitempty"`
+	SideEffectsStartTime *float64 `json:"side_effects_start_time,omitempty"`
 }
 
 // ListJobsResponse represents a list of jobs
@@ -83,6 +88,7 @@ type ListJobsResponse struct {
 // @Security BearerAuth
 func (h *JobsHandler) GetJob(c *gin.Context) {
 	jobID := c.Param("id")
+	userID := auth.MustGetUserID(c)
 
 	// Get job from DynamoDB
 	job, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
@@ -101,6 +107,19 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		return
 	}
 
+	// Verify job belongs to the current user (security check)
+	if job.UserID != userID {
+		h.logger.Warn("User attempted to access job belonging to another user",
+			zap.String("job_id", jobID),
+			zap.String("job_user_id", job.UserID),
+			zap.String("requesting_user_id", userID),
+		)
+		c.JSON(http.StatusNotFound, errors.ErrorResponse{
+			Error: errors.ErrJobNotFound,
+		})
+		return
+	}
+
 	// Generate presigned URL if video is completed
 	var videoURL *string
 	if job.Status == "completed" && job.VideoKey != "" {
@@ -115,22 +134,59 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		}
 	}
 
+	// Generate presigned URL for background music
+	var audioURL string
+	if job.AudioURL != "" {
+		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), extractS3Key(job.AudioURL), 7*24*time.Hour)
+		if err != nil {
+			h.logger.Warn("Failed to generate presigned URL for audio",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+		} else {
+			audioURL = url
+		}
+	}
+
+	// Generate presigned URL for narrator audio
+	var narratorAudioURL string
+	if job.NarratorAudioURL != "" {
+		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), extractS3Key(job.NarratorAudioURL), 7*24*time.Hour)
+		if err != nil {
+			h.logger.Warn("Failed to generate presigned URL for narrator audio",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+		} else {
+			narratorAudioURL = url
+		}
+	}
+
+	// Prepare side effects start time pointer
+	var sideEffectsStartTime *float64
+	if job.SideEffectsStartTime > 0 {
+		sideEffectsStartTime = &job.SideEffectsStartTime
+	}
+
 	response := JobResponse{
-		JobID:           job.JobID,
-		Status:          job.Status,
-		Stage:           job.Stage,
-		ProgressPercent: calculateDynamicProgress(job.Stage, len(job.Scenes)),
-		Prompt:          job.Prompt,
-		Duration:        job.Duration,
-		VideoURL:        videoURL,
-		CreatedAt:       job.CreatedAt,
-		UpdatedAt:       job.UpdatedAt,
-		CompletedAt:     job.CompletedAt,
-		ErrorMessage:    job.ErrorMessage,
-		ThumbnailURL:    job.ThumbnailURL,
-		AudioURL:        job.AudioURL,
-		ScenesCompleted: job.ScenesCompleted,
-		SceneVideoURLs:  job.SceneVideoURLs,
+		JobID:               job.JobID,
+		Status:              job.Status,
+		Stage:               job.Stage,
+		ProgressPercent:     calculateDynamicProgress(job.Stage, len(job.Scenes)),
+		Prompt:              job.Prompt,
+		Duration:            job.Duration,
+		VideoURL:            videoURL,
+		CreatedAt:           job.CreatedAt,
+		UpdatedAt:           job.UpdatedAt,
+		CompletedAt:         job.CompletedAt,
+		ErrorMessage:        job.ErrorMessage,
+		ThumbnailURL:        job.ThumbnailURL,
+		AudioURL:            audioURL,
+		NarratorAudioURL:    narratorAudioURL,
+		ScenesCompleted:     job.ScenesCompleted,
+		SceneVideoURLs:      job.SceneVideoURLs,
+		SideEffectsText:     job.SideEffectsText,
+		SideEffectsStartTime: sideEffectsStartTime,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -199,22 +255,58 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 			}
 		}
 
+		// Generate presigned URLs for audio (if present)
+		var audioURL string
+		if job.AudioURL != "" {
+			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), extractS3Key(job.AudioURL), 1*time.Hour)
+			if err != nil {
+				h.logger.Warn("Failed to generate presigned URL for audio",
+					zap.String("job_id", job.JobID),
+					zap.Error(err),
+				)
+			} else {
+				audioURL = url
+			}
+		}
+
+		var narratorAudioURL string
+		if job.NarratorAudioURL != "" {
+			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), extractS3Key(job.NarratorAudioURL), 1*time.Hour)
+			if err != nil {
+				h.logger.Warn("Failed to generate presigned URL for narrator audio",
+					zap.String("job_id", job.JobID),
+					zap.Error(err),
+				)
+			} else {
+				narratorAudioURL = url
+			}
+		}
+
+		// Prepare side effects start time pointer
+		var sideEffectsStartTime *float64
+		if job.SideEffectsStartTime > 0 {
+			sideEffectsStartTime = &job.SideEffectsStartTime
+		}
+
 		jobResponses[i] = JobResponse{
-			JobID:           job.JobID,
-			Status:          job.Status,
-			Stage:           job.Stage,
-			ProgressPercent: calculateDynamicProgress(job.Stage, len(job.Scenes)),
-			VideoURL:        videoURL,
-			ErrorMessage:    job.ErrorMessage,
-			Prompt:          job.Prompt,
-			Duration:        job.Duration,
-			CreatedAt:       job.CreatedAt,
-			UpdatedAt:       job.UpdatedAt,
-			CompletedAt:     job.CompletedAt,
-			ThumbnailURL:    job.ThumbnailURL,
-			AudioURL:        job.AudioURL,
-			ScenesCompleted: job.ScenesCompleted,
-			SceneVideoURLs:  job.SceneVideoURLs,
+			JobID:               job.JobID,
+			Status:              job.Status,
+			Stage:               job.Stage,
+			ProgressPercent:     calculateDynamicProgress(job.Stage, len(job.Scenes)),
+			VideoURL:            videoURL,
+			ErrorMessage:        job.ErrorMessage,
+			Prompt:              job.Prompt,
+			Duration:            job.Duration,
+			CreatedAt:           job.CreatedAt,
+			UpdatedAt:           job.UpdatedAt,
+			CompletedAt:         job.CompletedAt,
+			ThumbnailURL:        job.ThumbnailURL,
+			AudioURL:            audioURL,
+			NarratorAudioURL:    narratorAudioURL,
+			ScenesCompleted:     job.ScenesCompleted,
+			SceneVideoURLs:      job.SceneVideoURLs,
+			SideEffectsText:     job.SideEffectsText,
+			SideEffectsStartTime: sideEffectsStartTime,
 		}
 	}
 
@@ -372,7 +464,7 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 }
 
 // calculateDynamicProgress calculates progress percentage based on stage and total scenes
-// Progress allocation: Script (15%), Scenes (70%), Audio (10%), Composition (5%)
+// Progress allocation: Script (5%), Narrator (3%), Scenes (72%), Music (5%), Composition (15%)
 // NOTE: This is duplicated from jobs_stream.go - could be refactored to shared package
 func calculateDynamicProgress(stage string, totalScenes int) int {
 	// Handle edge case
@@ -382,42 +474,53 @@ func calculateDynamicProgress(stage string, totalScenes int) int {
 
 	// Script generation stages
 	if stage == "script_generating" {
-		return 5
+		return 2
 	}
 	if stage == "script_complete" {
-		return 15
+		return 5
 	}
 
-	// Scene generation stages (70% allocated, split evenly)
+	// Narrator generation stages
+	if stage == "narrator_generating" {
+		return 6
+	}
+	if stage == "narrator_complete" {
+		return 8
+	}
+
+	// Scene generation stages (72% allocated, split evenly)
 	if len(stage) > 6 && stage[:6] == "scene_" {
 		var sceneNum int
 		var suffix string
 		_, err := fmt.Sscanf(stage, "scene_%d_%s", &sceneNum, &suffix)
 		if err == nil && sceneNum > 0 && sceneNum <= totalScenes {
-			percentPerScene := 70.0 / float64(totalScenes)
+			percentPerScene := 72.0 / float64(totalScenes)
 
 			switch suffix {
 			case "generating":
-				progress := 15.0 + float64(sceneNum-1)*percentPerScene
+				progress := 8.0 + float64(sceneNum-1)*percentPerScene
 				return int(progress)
 			case "complete":
-				progress := 15.0 + float64(sceneNum)*percentPerScene
+				progress := 8.0 + float64(sceneNum)*percentPerScene
+				if sceneNum == totalScenes {
+					return 80
+				}
 				return int(progress)
 			}
 		}
 	}
 
-	// Audio generation stages
+	// Music generation stages
 	if stage == "audio_generating" {
-		return 85
+		return 82
 	}
 	if stage == "audio_complete" {
-		return 95
+		return 85
 	}
 
 	// Composition stage
 	if stage == "composing" {
-		return 95
+		return 92
 	}
 
 	// Completion

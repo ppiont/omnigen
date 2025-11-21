@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/omnigen/backend/internal/adapters"
 	"github.com/omnigen/backend/internal/domain"
@@ -24,8 +26,33 @@ type ClipVideo struct {
 	Duration     float64
 }
 
-// S3 key generation helpers for new folder structure
-// Pattern: users/{userID}/jobs/{jobID}/{type}/filename
+// S3 Key Generation Helpers
+//
+// These helpers centralize S3 key construction for all job assets.
+// Every key follows the pattern: users/{userID}/jobs/{jobID}/{type}/{filename}
+//
+// Folder structure:
+//
+//   users/{userID}/jobs/{jobID}/
+//     ├── clips/
+//     │   ├── scene-001.mp4          (buildSceneClipKey)
+//     │   ├── scene-002.mp4
+//     │   └── scene-NNN.mp4
+//     ├── thumbnails/
+//     │   ├── scene-001.jpg          (buildSceneThumbnailKey)
+//     │   ├── scene-002.jpg
+//     │   └── job-thumbnail.jpg      (buildJobThumbnailKey)
+//     ├── audio/
+//     │   ├── background-music.mp3   (buildAudioKey)
+//     │   └── narrator-voiceover.mp3 (buildNarratorAudioKey)
+//     └── final/
+//         └── video.mp4               (buildFinalVideoKey)
+//
+// Usage notes:
+//   - Clips: Raw scene videos generated per scene (no audio)
+//   - Thumbnails: Preview frames used for UI cards and continuity
+//   - Audio: Separate tracks (music via Minimax, narrator via TTS)
+//   - Final: Composited video without audio tracks, ready for playback
 
 func buildSceneClipKey(userID, jobID string, sceneNumber int) string {
 	return fmt.Sprintf("users/%s/jobs/%s/clips/scene-%03d.mp4", userID, jobID, sceneNumber)
@@ -39,12 +66,152 @@ func buildAudioKey(userID, jobID string) string {
 	return fmt.Sprintf("users/%s/jobs/%s/audio/background-music.mp3", userID, jobID)
 }
 
+func buildNarratorAudioKey(userID, jobID string) string {
+	return fmt.Sprintf("users/%s/jobs/%s/audio/narrator-voiceover.mp3", userID, jobID)
+}
+
 func buildFinalVideoKey(userID, jobID string) string {
 	return fmt.Sprintf("users/%s/jobs/%s/final/video.mp4", userID, jobID)
 }
 
 func buildJobThumbnailKey(userID, jobID string) string {
 	return fmt.Sprintf("users/%s/jobs/%s/thumbnails/job-thumbnail.jpg", userID, jobID)
+}
+
+const (
+	scriptFailureMessage      = "Script generation failed. Please check your prompt and try again."
+	narratorFailureMessage    = "Voiceover generation failed. Please try again later."
+	sceneFailureMessageFormat = "Video generation failed at scene %d. Please try again."
+	audioFailureMessage       = "Background music generation failed. Please try again."
+	compositionFailureMessage = "Video composition failed. Please try again."
+)
+
+func (h *GenerateHandler) failJob(
+	ctx context.Context,
+	job *domain.Job,
+	userMessage string,
+	internalErr error,
+	fields ...zap.Field,
+) {
+	logFields := []zap.Field{
+		zap.String("job_id", job.JobID),
+		zap.String("user_message", userMessage),
+	}
+	if internalErr != nil {
+		logFields = append(logFields, zap.Error(internalErr))
+	}
+	if len(fields) > 0 {
+		logFields = append(logFields, fields...)
+	}
+
+	h.logger.Error("Job failed", logFields...)
+	h.cleanupJobAssets(job.UserID, job.JobID)
+
+	// Build detailed error message for user
+	errorMessage := userMessage
+	if internalErr != nil {
+		// Extract meaningful error details
+		errStr := internalErr.Error()
+		
+		// Add technical details in a user-friendly way
+		// Check for common error patterns and provide helpful context
+		if strings.Contains(errStr, "Payment required") || strings.Contains(errStr, "status 402") || strings.Contains(errStr, "status 402") {
+			// HTTP 402 - Payment Required (Replicate credits/billing issue)
+			errorMessage = "Script generation failed due to insufficient Replicate API credits. Please check your Replicate account balance and billing settings."
+		} else if strings.Contains(errStr, "API error") || strings.Contains(errStr, "status") {
+			// API errors - include status code if available
+			// For 422 errors, try to extract more details from the response
+			if strings.Contains(errStr, "422") {
+				// Try to extract the actual error message from Replicate
+				if strings.Contains(errStr, "Response:") {
+					// Extract the response body which should contain the actual error
+					parts := strings.Split(errStr, "Response:")
+					if len(parts) > 1 {
+						responseBody := strings.TrimSpace(parts[1])
+						// Limit response body length
+						if len(responseBody) > 200 {
+							responseBody = responseBody[:200] + "..."
+						}
+						errorMessage = fmt.Sprintf("%s (API Error: HTTP 422 - %s)", userMessage, responseBody)
+					} else {
+						errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
+					}
+				} else {
+					errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
+				}
+			} else {
+				errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
+			}
+		} else if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "context deadline") {
+			errorMessage = fmt.Sprintf("%s (Request timed out. The service may be busy. Please try again.)", userMessage)
+		} else if strings.Contains(errStr, "authentication") || strings.Contains(errStr, "unauthorized") || strings.Contains(errStr, "401") {
+			errorMessage = fmt.Sprintf("%s (Authentication failed. Please check API configuration.)", userMessage)
+		} else if strings.Contains(errStr, "rate limit") || strings.Contains(errStr, "429") {
+			errorMessage = fmt.Sprintf("%s (Rate limit exceeded. Please wait a moment and try again.)", userMessage)
+		} else {
+			// For other errors, include a sanitized version of the error
+			// Truncate very long error messages
+			if len(errStr) > 200 {
+				errStr = errStr[:200] + "..."
+			}
+			errorMessage = fmt.Sprintf("%s (Error: %s)", userMessage, errStr)
+		}
+	}
+
+	if err := h.jobRepo.MarkJobFailed(ctx, job.JobID, errorMessage); err != nil {
+		h.logger.Error("Failed to mark job failed",
+			zap.String("job_id", job.JobID),
+			zap.Error(err),
+		)
+	}
+}
+
+// extractAPIError extracts meaningful information from API error messages
+func extractAPIError(errStr string) string {
+	// Try to extract status code
+	if strings.Contains(errStr, "status") {
+		// Look for patterns like "status 401" or "status 500"
+		parts := strings.Split(errStr, "status")
+		if len(parts) > 1 {
+			statusPart := strings.TrimSpace(parts[1])
+			// Extract just the status code
+			statusCode := ""
+			for _, char := range statusPart {
+				if char >= '0' && char <= '9' {
+					statusCode += string(char)
+				} else if statusCode != "" {
+					break
+				}
+			}
+			if statusCode != "" {
+				return fmt.Sprintf("HTTP %s", statusCode)
+			}
+		}
+	}
+	
+	// Fallback: return first 100 chars
+	if len(errStr) > 100 {
+		return errStr[:100] + "..."
+	}
+	return errStr
+}
+
+func (h *GenerateHandler) cleanupJobAssets(userID, jobID string) {
+	if h.s3Service == nil || h.assetsBucket == "" {
+		return
+	}
+
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	prefix := fmt.Sprintf("users/%s/jobs/%s/", userID, jobID)
+	if err := h.s3Service.DeletePrefix(cleanupCtx, h.assetsBucket, prefix); err != nil {
+		h.logger.Warn("Failed to cleanup S3 assets after job failure",
+			zap.String("job_id", jobID),
+			zap.String("prefix", prefix),
+			zap.Error(err),
+		)
+	}
 }
 
 // generateVideoAsync runs the entire video generation pipeline in a goroutine
@@ -78,6 +245,10 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		// Style reference image - will be analyzed and converted to text
 		StyleReferenceImage: req.StyleReferenceImage,
 
+		// Pharmaceutical ad configuration
+		Voice:       job.Voice,
+		SideEffects: job.SideEffects,
+
 		// Enhanced prompt options (Phase 1)
 		Style:             req.Style,
 		Tone:              req.Tone,
@@ -90,8 +261,14 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		CreativeBoost:     req.CreativeBoost,
 	})
 	if err != nil {
-		h.logger.Error("Script generation failed", zap.String("job_id", job.JobID), zap.Error(err))
-		h.jobRepo.MarkJobFailed(jobCtx, job.JobID, fmt.Sprintf("Script generation failed: %v", err))
+		h.logger.Error("Script generation failed with error",
+			zap.String("job_id", job.JobID),
+			zap.String("stage", "script_generating"),
+			zap.Error(err),
+			zap.String("error_type", fmt.Sprintf("%T", err)),
+			zap.String("error_string", err.Error()),
+		)
+		h.failJob(jobCtx, job, scriptFailureMessage, err, zap.String("stage", "script_generating"))
 		return
 	}
 
@@ -100,6 +277,8 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	job.Scenes = script.Scenes
 	job.AudioSpec = script.AudioSpec
 	job.ScriptMetadata = script.Metadata
+	job.SideEffectsText = script.AudioSpec.SideEffectsText
+	job.SideEffectsStartTime = script.AudioSpec.SideEffectsStartTime
 
 	// Update job with embedded script
 	job.Stage = "script_complete"
@@ -135,10 +314,62 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		)
 	}
 
-	// STEP 2: Generate video clips sequentially
+	// STEP 2: Generate narrator voiceover (if configured)
+	if job.Voice != "" && job.AudioSpec.NarratorScript != "" {
+		job.Stage = "narrator_generating"
+		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+			h.logger.Error("Failed to update job stage",
+				zap.String("job_id", job.JobID),
+				zap.String("stage", "narrator_generating"),
+				zap.Error(err),
+			)
+		}
+
+		narratorAudioURL, err := h.generateNarratorVoiceover(
+			jobCtx,
+			job.UserID,
+			job.JobID,
+			job.Voice,
+			job.AudioSpec.NarratorScript,
+			job.AudioSpec.SideEffectsStartTime,
+			job.Duration,
+		)
+		if err != nil {
+			h.failJob(jobCtx, job, narratorFailureMessage, err, zap.String("stage", "narrator_generating"))
+			return
+		}
+
+		job.Stage = "narrator_complete"
+		job.NarratorAudioURL = narratorAudioURL
+
+		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+			h.logger.Error("Failed to update job with narrator audio URL",
+				zap.String("job_id", job.JobID),
+				zap.Error(err),
+			)
+		}
+
+		h.logger.Info("Narrator voiceover generation complete",
+			zap.String("job_id", job.JobID),
+			zap.String("narrator_audio_url", narratorAudioURL),
+		)
+	} else {
+		if job.Voice == "" {
+			h.logger.Info("Skipping narrator voiceover generation (voice not configured)",
+				zap.String("job_id", job.JobID),
+			)
+		} else {
+			h.logger.Warn("Skipping narrator voiceover generation (narrator script missing)",
+				zap.String("job_id", job.JobID),
+				zap.Int("script_length", len(job.AudioSpec.NarratorScript)),
+			)
+		}
+	}
+
+	// STEP 3: Generate video clips sequentially
 	var clipVideos []ClipVideo
-	// Initialize lastFrameURL with user's start_image (for first scene)
-	var lastFrameURL string = req.StartImage
+	// Start with empty lastFrameURL so the first scene is pure AI generation
+	var lastFrameURL string
 
 	// Initialize arrays for accumulating scene data
 	sceneVideoURLs := make([]string, 0, len(script.Scenes))
@@ -161,31 +392,59 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 			zap.Int("total", len(script.Scenes)),
 		)
 
-		// Image selection logic (style is now handled via text in generation_prompt):
-		// 1. First scene: use user's start_image if provided
-		// 2. Subsequent scenes: use last frame from previous clip for visual continuity
-		scene.StartImageURL = lastFrameURL
-		if i == 0 && lastFrameURL != "" {
-			h.logger.Info("Using start image for first scene",
-				zap.String("job_id", job.JobID),
-				zap.String("start_image_url", lastFrameURL),
-			)
-		} else if lastFrameURL != "" {
-			h.logger.Info("Using last frame for visual continuity",
-				zap.String("job_id", job.JobID),
-				zap.Int("scene", i+1),
-			)
+		// Image selection logic for pharmaceutical ads:
+		// 1. Scenes 1..N-1 use the previous clip's last frame for continuity.
+		// 2. Last scene (N) uses the product image provided by the user.
+		if i == len(script.Scenes)-1 && strings.TrimSpace(req.StartImage) != "" {
+			// Extract S3 key from the product image URL
+			s3Key := extractS3Key(req.StartImage)
+			
+			// Generate presigned URL for video API access (valid for 1 hour)
+			presignedURL, err := h.s3Service.GetPresignedURL(jobCtx, s3Key, 1*time.Hour)
+			if err != nil {
+				h.logger.Error("Failed to generate presigned URL for product image",
+					zap.String("job_id", job.JobID),
+					zap.String("s3_key", s3Key),
+					zap.String("original_url", req.StartImage),
+					zap.Error(err),
+				)
+				// Fall back to direct URL if presigning fails (shouldn't happen, but be safe)
+				scene.StartImageURL = req.StartImage
+			} else {
+				scene.StartImageURL = presignedURL
+				h.logger.Info("Using product image for last scene (side effects segment)",
+					zap.String("job_id", job.JobID),
+					zap.Int("scene", i+1),
+					zap.String("product_image_url", presignedURL),
+				)
+			}
+		} else {
+			scene.StartImageURL = lastFrameURL
+			if lastFrameURL != "" {
+				h.logger.Info("Using last frame for visual continuity",
+					zap.String("job_id", job.JobID),
+					zap.Int("scene", i+1),
+				)
+			} else if i != len(script.Scenes)-1 {
+				h.logger.Info("No continuity frame available, generating scene without start image",
+					zap.String("job_id", job.JobID),
+					zap.Int("scene", i+1),
+				)
+			} else {
+				h.logger.Warn("Product image missing for last scene; falling back to continuity frame",
+					zap.String("job_id", job.JobID),
+					zap.Int("scene", i+1),
+				)
+			}
 		}
 
-		// Call Kling API (synchronous polling in this goroutine)
+		// Call Veo API (synchronous polling in this goroutine)
 		clipResult, err := h.generateClip(jobCtx, job.UserID, job.JobID, scene, req.AspectRatio, i+1)
 		if err != nil {
-			h.logger.Error("Scene generation failed",
-				zap.String("job_id", job.JobID),
+			h.failJob(jobCtx, job, fmt.Sprintf(sceneFailureMessageFormat, i+1), err,
+				zap.String("stage", fmt.Sprintf("scene_%d_generating", i+1)),
 				zap.Int("scene", i+1),
-				zap.Error(err),
 			)
-			h.jobRepo.MarkJobFailed(jobCtx, job.JobID, fmt.Sprintf("Scene %d generation failed: %v", i+1, err))
 			return
 		}
 
@@ -243,7 +502,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		)
 	}
 
-	// STEP 3: Generate audio
+	// STEP 4: Generate audio
 	job.Stage = "audio_generating"
 	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
 		h.logger.Error("Failed to update job stage",
@@ -256,8 +515,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 
 	audioURL, err := h.generateAudio(jobCtx, job.UserID, job.JobID, script)
 	if err != nil {
-		h.logger.Error("Audio generation failed", zap.String("job_id", job.JobID), zap.Error(err))
-		h.jobRepo.MarkJobFailed(jobCtx, job.JobID, fmt.Sprintf("Audio generation failed: %v", err))
+		h.failJob(jobCtx, job, audioFailureMessage, err, zap.String("stage", "audio_generating"))
 		return
 	}
 
@@ -276,7 +534,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		zap.String("audio_url", audioURL),
 	)
 
-	// STEP 4: Compose final video
+	// STEP 5: Compose final video
 	job.Stage = "composing"
 	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
 		h.logger.Error("Failed to update job stage",
@@ -285,16 +543,22 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 			zap.Error(err),
 		)
 	}
-	h.logger.Info("Composing final video", zap.String("job_id", job.JobID))
+	h.logger.Info("Composing final video (video track only)", zap.String("job_id", job.JobID))
 
-	finalVideoKey, err := h.composeVideo(jobCtx, job.UserID, job.JobID, clipVideos, audioURL)
+	finalVideoKey, err := h.composeVideo(
+		jobCtx,
+		job.UserID,
+		job.JobID,
+		clipVideos,
+		job.SideEffectsText,
+		job.SideEffectsStartTime,
+	)
 	if err != nil {
-		h.logger.Error("Video composition failed", zap.String("job_id", job.JobID), zap.Error(err))
-		h.jobRepo.MarkJobFailed(jobCtx, job.JobID, fmt.Sprintf("Video composition failed: %v", err))
+		h.failJob(jobCtx, job, compositionFailureMessage, err, zap.String("stage", "composing"))
 		return
 	}
 
-	// STEP 5: Mark job complete with video URL
+	// STEP 6: Mark job complete with video URL
 	err = h.jobRepo.MarkJobComplete(jobCtx, job.JobID, finalVideoKey)
 	if err != nil {
 		h.logger.Error("Failed to mark job complete", zap.String("job_id", job.JobID), zap.Error(err))
@@ -307,7 +571,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	)
 }
 
-// generateClip generates a single video clip using Kling AI
+// generateClip generates a single video clip using Veo 3.1
 func (h *GenerateHandler) generateClip(
 	ctx context.Context,
 	userID string,
@@ -316,13 +580,13 @@ func (h *GenerateHandler) generateClip(
 	aspectRatio string,
 	clipNumber int,
 ) (ClipVideo, error) {
-	h.logger.Info("Calling Kling adapter",
+	h.logger.Info("Calling Veo adapter",
 		zap.String("job_id", jobID),
 		zap.Int("scene", scene.SceneNumber),
 		zap.String("prompt", scene.GenerationPrompt),
 	)
 
-	// Call Kling adapter
+	// Call Veo adapter
 	req := &adapters.VideoGenerationRequest{
 		Prompt:        scene.GenerationPrompt,
 		Duration:      int(scene.Duration),
@@ -330,9 +594,9 @@ func (h *GenerateHandler) generateClip(
 		StartImageURL: scene.StartImageURL,
 	}
 
-	result, err := h.klingAdapter.GenerateVideo(ctx, req)
+	result, err := h.veoAdapter.GenerateVideo(ctx, req)
 	if err != nil {
-		return ClipVideo{}, fmt.Errorf("kling API failed: %w", err)
+		return ClipVideo{}, fmt.Errorf("veo API failed: %w", err)
 	}
 
 	// Poll until complete (max 10 minutes)
@@ -348,9 +612,9 @@ func (h *GenerateHandler) generateClip(
 
 		if attempt > 0 {
 			time.Sleep(pollInterval)
-			result, err = h.klingAdapter.GetStatus(ctx, result.PredictionID)
+			result, err = h.veoAdapter.GetStatus(ctx, result.PredictionID)
 			if err != nil {
-				h.logger.Warn("Kling polling failed, retrying", zap.Error(err))
+				h.logger.Warn("Veo polling failed, retrying", zap.Error(err))
 				continue
 			}
 		}
@@ -370,12 +634,12 @@ func (h *GenerateHandler) generateClip(
 		}
 
 		if result.Status == "failed" || result.Status == "canceled" {
-			return ClipVideo{}, fmt.Errorf("kling generation failed: %s", result.Error)
+			return ClipVideo{}, fmt.Errorf("veo generation failed: %s", result.Error)
 		}
 
 		// Log only every 12th attempt (every minute instead of every 5 seconds)
 		if attempt%12 == 0 {
-			h.logger.Debug("Kling still processing",
+			h.logger.Debug("Veo still processing",
 				zap.String("job_id", jobID),
 				zap.Int("attempt", attempt),
 				zap.String("status", result.Status),
@@ -462,7 +726,7 @@ func (h *GenerateHandler) processVideo(
 			)
 			lastFrameS3URL = "" // Continue without last frame URL
 		} else {
-			// Generate presigned URL for Kling API access (valid for 1 hour)
+			// Generate presigned URL for Veo API access (valid for 1 hour)
 			lastFrameS3URL, err = h.s3Service.GetPresignedURL(ctx, lastFrameS3Key, 1*time.Hour)
 			if err != nil {
 				h.logger.Warn("Failed to generate presigned URL for last frame, continuing",
@@ -617,6 +881,139 @@ func (h *GenerateHandler) generateAudio(
 	return "", fmt.Errorf("audio generation timed out")
 }
 
+// generateNarratorVoiceover generates narrator voiceover with variable speed for side effects
+func (h *GenerateHandler) generateNarratorVoiceover(
+	ctx context.Context,
+	userID string,
+	jobID string,
+	voice string,
+	narratorScript string,
+	sideEffectsStartTime float64,
+	duration int,
+) (string, error) {
+	if h.ttsAdapter == nil {
+		return "", fmt.Errorf("tts adapter not configured")
+	}
+
+	if strings.TrimSpace(narratorScript) == "" {
+		return "", fmt.Errorf("narrator script is empty")
+	}
+
+	h.logger.Info("Generating narrator voiceover",
+		zap.String("job_id", jobID),
+		zap.String("voice", voice),
+		zap.Int("script_length", len(narratorScript)),
+		zap.Float64("side_effects_start_time", sideEffectsStartTime),
+	)
+
+	audioData, err := h.ttsAdapter.GenerateVoiceover(ctx, narratorScript, voice)
+	if err != nil {
+		return "", fmt.Errorf("tts generation failed: %w", err)
+	}
+
+	h.logger.Info("TTS generation successful",
+		zap.String("job_id", jobID),
+		zap.Int("audio_size_bytes", len(audioData)),
+	)
+
+	tmpDir := filepath.Join("/tmp", jobID, "narrator")
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	rawAudioPath := filepath.Join(tmpDir, "narrator-raw.mp3")
+	if err := os.WriteFile(rawAudioPath, audioData, 0o644); err != nil {
+		return "", fmt.Errorf("failed to write narrator audio: %w", err)
+	}
+
+	processedAudioPath := filepath.Join(tmpDir, "narrator-processed.mp3")
+	durationSeconds := float64(duration)
+
+	if sideEffectsStartTime > 0 && durationSeconds > 0 && sideEffectsStartTime < durationSeconds {
+		h.logger.Info("Applying variable speed to narrator audio",
+			zap.String("job_id", jobID),
+			zap.Float64("split_time", sideEffectsStartTime),
+		)
+
+		mainSegmentPath := filepath.Join(tmpDir, "main-segment.mp3")
+		sideEffectsSegmentPath := filepath.Join(tmpDir, "side-effects.mp3")
+		sideEffectsFastPath := filepath.Join(tmpDir, "side-effects-fast.mp3")
+
+		cmd := exec.CommandContext(ctx, "ffmpeg",
+			"-i", rawAudioPath,
+			"-ss", "0",
+			"-to", fmt.Sprintf("%.2f", sideEffectsStartTime),
+			"-c", "copy",
+			"-y", mainSegmentPath,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("failed to extract main segment: %w (%s)", err, strings.TrimSpace(string(output)))
+		}
+
+		cmd = exec.CommandContext(ctx, "ffmpeg",
+			"-i", rawAudioPath,
+			"-ss", fmt.Sprintf("%.2f", sideEffectsStartTime),
+			"-c", "copy",
+			"-y", sideEffectsSegmentPath,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("failed to extract side effects segment: %w (%s)", err, strings.TrimSpace(string(output)))
+		}
+
+		cmd = exec.CommandContext(ctx, "ffmpeg",
+			"-i", sideEffectsSegmentPath,
+			"-filter:a", "atempo=1.4",
+			"-y", sideEffectsFastPath,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("failed to speed up side effects segment: %w (%s)", err, strings.TrimSpace(string(output)))
+		}
+
+		concatFile := filepath.Join(tmpDir, "concat.txt")
+		concatContent := fmt.Sprintf("file '%s'\nfile '%s'\n", mainSegmentPath, sideEffectsFastPath)
+		if err := os.WriteFile(concatFile, []byte(concatContent), 0o644); err != nil {
+			return "", fmt.Errorf("failed to create concat file: %w", err)
+		}
+
+		cmd = exec.CommandContext(ctx, "ffmpeg",
+			"-f", "concat",
+			"-safe", "0",
+			"-i", concatFile,
+			"-c", "copy",
+			"-y", processedAudioPath,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("failed to concatenate narrator segments: %w (%s)", err, strings.TrimSpace(string(output)))
+		}
+	} else {
+		h.logger.Info("Skipping variable speed for narrator audio",
+			zap.String("job_id", jobID),
+			zap.Float64("side_effects_start_time", sideEffectsStartTime),
+			zap.Float64("duration_seconds", durationSeconds),
+		)
+
+		if err := os.Rename(rawAudioPath, processedAudioPath); err != nil {
+			return "", fmt.Errorf("failed to finalize narrator audio: %w", err)
+		}
+	}
+
+	h.logger.Info("Uploading narrator audio to S3", zap.String("job_id", jobID))
+	s3Key := buildNarratorAudioKey(userID, jobID)
+	narratorAudioURL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, s3Key, processedAudioPath, "audio/mpeg")
+	if err != nil {
+		return "", fmt.Errorf("failed to upload narrator audio: %w", err)
+	}
+
+	h.logger.Info("Narrator voiceover uploaded",
+		zap.String("job_id", jobID),
+		zap.String("s3_key", s3Key),
+		zap.String("url", narratorAudioURL),
+	)
+
+	return narratorAudioURL, nil
+}
+
 // processAudio downloads audio from Replicate, uploads to S3
 func (h *GenerateHandler) processAudio(ctx context.Context, userID string, jobID string, audioURL string) (string, error) {
 	tmpDir := filepath.Join("/tmp", jobID, "audio")
@@ -649,18 +1046,237 @@ func (h *GenerateHandler) processAudio(ctx context.Context, userID string, jobID
 	return audioS3URL, nil
 }
 
-// composeVideo stitches clips together with audio using ffmpeg
+// detectAvailableFont returns the first available font file path from a prioritized list.
+func detectAvailableFont(logger *zap.Logger) string {
+	fontPaths := []string{
+		"/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+		"/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+		"/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+	}
+
+	for _, path := range fontPaths {
+		if _, err := os.Stat(path); err == nil {
+			logger.Info("Font detected for text overlay", zap.String("font_path", path))
+			return path
+		}
+	}
+
+	logger.Warn("No preferred fonts found, using ffmpeg default font")
+	return ""
+}
+
+// escapeFfmpegText escapes special characters so they are safe for ffmpeg drawtext filters.
+func escapeFfmpegText(text string) string {
+	replacer := strings.NewReplacer(
+		"\\", "\\\\", // Backslashes (must be first)
+		"'", "\\'", // Single quotes
+		":", "\\:", // Colons
+		"%", "\\%", // Percent signs
+		"\n", "\\n", // Newlines → \n
+		"\"", "\\\"", // Double quotes
+	)
+	return replacer.Replace(text)
+}
+
+type drawtextConfig struct {
+	Filter         string
+	OverlayStart   float64
+	OverlayEnd     float64
+	RuneCount      int
+	BaseFontSize   float64
+	MaxChars       int
+	EstimatedWidth float64
+	RenderedText   string
+}
+
+func buildDrawtextConfig(
+	logger *zap.Logger,
+	text string,
+	sideEffectsStartTime float64,
+	totalDuration float64,
+	videoWidth int,
+	videoHeight int,
+) (*drawtextConfig, error) {
+	trimmedText := strings.TrimSpace(text)
+	if trimmedText == "" {
+		return nil, nil
+	}
+
+	if totalDuration <= 0 {
+		logger.Warn("Skipping text overlay (unknown video duration)",
+			zap.Float64("video_duration", totalDuration),
+		)
+		return nil, nil
+	}
+
+	overlayStart := sideEffectsStartTime
+	if overlayStart <= 0 {
+		overlayStart = totalDuration * 0.8
+		logger.Warn("Non-positive side effects start time; defaulting to last 20%",
+			zap.Float64("original_start_time", sideEffectsStartTime),
+			zap.Float64("fallback_start_time", overlayStart),
+		)
+	}
+
+	overlayEnd := totalDuration
+	if overlayStart >= overlayEnd {
+		logger.Warn("Skipping text overlay (start time beyond duration)",
+			zap.Float64("side_effects_start_time", overlayStart),
+			zap.Float64("video_duration", overlayEnd),
+		)
+		return nil, nil
+	}
+
+	runeCount := utf8.RuneCountInString(trimmedText)
+	baseFontSize := 36.0
+	if runeCount > 360 {
+		baseFontSize = 32.0
+	}
+	if runeCount > 440 {
+		baseFontSize = 28.0
+	}
+
+	if videoWidth <= 0 {
+		videoWidth = 1920
+	}
+	if videoHeight <= 0 {
+		videoHeight = 1080
+	}
+
+	scaleFactor := float64(videoHeight) / 1080.0
+	fontSizePixels := baseFontSize * scaleFactor
+	if fontSizePixels < 18 {
+		fontSizePixels = 18
+	}
+
+	lineSpacingPixels := int(math.Round(fontSizePixels * (8.0 / 36.0)))
+	wrappedText, maxChars := wrapText(trimmedText, videoWidth, fontSizePixels)
+
+	estimatedWidthPx := float64(maxChars) * fontSizePixels * 0.6
+	if estimatedWidthPx > float64(videoWidth) {
+		estimatedWidthPx = float64(videoWidth)
+	}
+
+	fontFile := detectAvailableFont(logger)
+	escapedText := escapeFfmpegText(wrappedText)
+
+	filterParts := []string{
+		fmt.Sprintf("text='%s'", escapedText),
+		fmt.Sprintf("fontsize=%.2f", fontSizePixels),
+	}
+	if fontFile != "" {
+		filterParts = append(filterParts, fmt.Sprintf("fontfile='%s'", fontFile))
+	}
+	filterParts = append(filterParts,
+		"fontcolor=white",
+		"bordercolor=black",
+		"borderw=2",
+		fmt.Sprintf("x=(w-%.2f)/2", estimatedWidthPx),
+		"y=h-h*0.2",
+		fmt.Sprintf("line_spacing=%d", lineSpacingPixels),
+		fmt.Sprintf("enable='between(t,%.2f,%.2f)'", overlayStart, overlayEnd),
+	)
+
+	return &drawtextConfig{
+		Filter:         fmt.Sprintf("drawtext=%s", strings.Join(filterParts, ":")),
+		OverlayStart:   overlayStart,
+		OverlayEnd:     overlayEnd,
+		RuneCount:      runeCount,
+		BaseFontSize:   baseFontSize,
+		MaxChars:       maxChars,
+		EstimatedWidth: estimatedWidthPx,
+		RenderedText:   wrappedText,
+	}, nil
+}
+
+func wrapText(text string, videoWidth int, fontSize float64) (string, int) {
+	totalRunes := utf8.RuneCountInString(text)
+	if totalRunes <= 60 {
+		estimatedWidth := float64(totalRunes) * fontSize * 0.6
+		if estimatedWidth <= float64(videoWidth)*0.8 {
+			return text, totalRunes
+		}
+	}
+
+	maxCharsPerLine := int((float64(videoWidth) * 0.8) / (fontSize * 0.6))
+	if maxCharsPerLine >= totalRunes {
+		return text, totalRunes
+	}
+	if maxCharsPerLine < 20 {
+		maxCharsPerLine = 20
+	}
+
+	lines := make([]string, 0)
+	for _, rawLine := range strings.Split(text, "\n") {
+		words := strings.Fields(rawLine)
+		if len(words) == 0 {
+			lines = append(lines, "")
+			continue
+		}
+
+		var currentWords []string
+		currentLen := 0
+		for _, word := range words {
+			wordLen := utf8.RuneCountInString(word)
+			additionalLen := wordLen
+			if currentLen > 0 {
+				additionalLen++ // account for space
+			}
+
+			if currentLen+additionalLen > maxCharsPerLine {
+				lines = append(lines, strings.Join(currentWords, " "))
+				currentWords = []string{word}
+				currentLen = wordLen
+			} else {
+				if currentLen > 0 {
+					currentLen++ // space
+				}
+				currentWords = append(currentWords, word)
+				currentLen += wordLen
+			}
+		}
+
+		if len(currentWords) > 0 {
+			lines = append(lines, strings.Join(currentWords, " "))
+		}
+	}
+
+	return strings.Join(lines, "\n"), maxCharsPerLine
+}
+
+// composeVideo concatenates video clips and prepares the final video track (no audio mixing).
+// 4-Track Architecture:
+//   - Video Track: final/video.mp4 (output of this function)
+//   - Music Track: audio/background-music.mp3 (generated separately)
+//   - Narrator Track: audio/narrator-voiceover.mp3 (generated separately)
+//   - Text Track: side_effects_text metadata (rendered by the frontend)
+//
+// All audio playback, mixing, and synchronization happens in the frontend.
 func (h *GenerateHandler) composeVideo(
 	ctx context.Context,
 	userID string,
 	jobID string,
 	clips []ClipVideo,
-	audioURL string,
+	sideEffectsText string,
+	sideEffectsStartTime float64,
 ) (string, error) {
-	h.logger.Info("Composing video with ffmpeg",
+	trimmedText := strings.TrimSpace(sideEffectsText)
+	var totalDuration float64
+	for _, clip := range clips {
+		totalDuration += clip.Duration
+	}
+
+	h.logger.Info("Composing final video",
 		zap.String("job_id", jobID),
 		zap.Int("num_clips", len(clips)),
+		zap.Bool("has_side_effects", trimmedText != ""),
+		zap.Float64("side_effects_start_time", sideEffectsStartTime),
+		zap.Float64("video_duration_estimate", totalDuration),
 	)
+
+	if sideEffectsStartTime > 0 && trimmedText == "" {
+		return "", fmt.Errorf("side effects text is required when sideEffectsStartTime is provided")
+	}
 
 	tmpDir := filepath.Join("/tmp", jobID, "composition")
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
@@ -682,15 +1298,6 @@ func (h *GenerateHandler) composeVideo(
 		clipPaths = append(clipPaths, clipPath)
 	}
 
-	// Download audio from S3
-	h.logger.Info("Downloading audio from S3 for composition",
-		zap.String("job_id", jobID),
-	)
-	audioPath := filepath.Join(tmpDir, "music.mp3")
-	if err := h.s3Service.DownloadFile(ctx, h.assetsBucket, extractS3Key(audioURL), audioPath); err != nil {
-		return "", fmt.Errorf("failed to download audio: %w", err)
-	}
-
 	// Create concat file for ffmpeg
 	concatFile := filepath.Join(tmpDir, "concat.txt")
 	f, err := os.Create(concatFile)
@@ -700,20 +1307,23 @@ func (h *GenerateHandler) composeVideo(
 	for _, path := range clipPaths {
 		fmt.Fprintf(f, "file '%s'\n", path)
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		return "", fmt.Errorf("failed to close concat file: %w", err)
+	}
 
-	// Concatenate clips
-	h.logger.Info("Concatenating video clips with ffmpeg",
+	// Concatenate clips (video track only)
+	h.logger.Info("Concatenating video clips (video track only)",
 		zap.String("job_id", jobID),
 		zap.Int("num_clips", len(clipPaths)),
 	)
-	videoNoAudio := filepath.Join(tmpDir, "video_no_audio.mp4")
+	finalVideo := filepath.Join(tmpDir, "final.mp4")
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-f", "concat",
 		"-safe", "0",
 		"-i", concatFile,
-		"-c", "copy",
-		"-y", videoNoAudio,
+		"-c:v", "copy",
+		"-an", // Explicitly drop audio streams (frontend handles audio tracks)
+		"-y", finalVideo,
 	)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		h.logger.Error("ffmpeg concat failed",
@@ -724,26 +1334,58 @@ func (h *GenerateHandler) composeVideo(
 		return "", fmt.Errorf("ffmpeg concat failed: %w", err)
 	}
 
-	// Add audio
-	h.logger.Info("Merging audio track with ffmpeg",
-		zap.String("job_id", jobID),
-	)
-	finalVideo := filepath.Join(tmpDir, "final.mp4")
-	cmd = exec.CommandContext(ctx, "ffmpeg",
-		"-i", videoNoAudio,
-		"-i", audioPath,
-		"-c:v", "copy",
-		"-c:a", "aac",
-		"-shortest",
-		"-y", finalVideo,
-	)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		h.logger.Error("ffmpeg audio merge failed",
+	if trimmedText != "" && totalDuration > 0 {
+		videoWidth, videoHeight, err := probeVideoDimensions(finalVideo)
+		if err != nil {
+			h.logger.Warn("Failed to probe video dimensions, using defaults",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+			videoWidth = 1920
+			videoHeight = 1080
+		}
+
+		config, err := buildDrawtextConfig(h.logger, trimmedText, sideEffectsStartTime, totalDuration, videoWidth, videoHeight)
+		if err != nil {
+			return "", err
+		}
+		if config != nil {
+			h.logger.Info("Applying side effects text overlay",
+				zap.String("job_id", jobID),
+				zap.Float64("overlay_start", config.OverlayStart),
+				zap.Float64("overlay_end", config.OverlayEnd),
+				zap.Int("rune_count", config.RuneCount),
+				zap.Float64("base_font_size", config.BaseFontSize),
+			)
+
+			videoWithText := filepath.Join(tmpDir, "video_with_text.mp4")
+			cmd = exec.CommandContext(ctx, "ffmpeg",
+				"-i", finalVideo,
+				"-vf", config.Filter,
+				"-c:v", "libx264",
+				"-preset", "medium",
+				"-crf", "21",
+				"-y", videoWithText,
+			)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				h.logger.Error("ffmpeg text overlay failed",
+					zap.String("job_id", jobID),
+					zap.String("output", string(output)),
+					zap.Error(err),
+				)
+				return "", fmt.Errorf("ffmpeg text overlay failed: %w", err)
+			}
+
+			h.logger.Info("Text overlay applied successfully", zap.String("job_id", jobID))
+			finalVideo = videoWithText
+		}
+	} else if trimmedText == "" {
+		h.logger.Info("Skipping text overlay (no side effects text)", zap.String("job_id", jobID))
+	} else {
+		h.logger.Warn("Skipping text overlay (unknown video duration)",
 			zap.String("job_id", jobID),
-			zap.String("output", string(output)),
-			zap.Error(err),
+			zap.Float64("video_duration", totalDuration),
 		)
-		return "", fmt.Errorf("ffmpeg audio merge failed: %w", err)
 	}
 
 	// Upload final video to S3
@@ -810,4 +1452,25 @@ func extractS3Key(s3URL string) string {
 
 	// Fallback: return everything after the first 3 slashes
 	return strings.Join(parts[3:], "/")
+}
+
+func probeVideoDimensions(videoPath string) (int, int, error) {
+	cmd := exec.Command(
+		"ffprobe",
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=width,height",
+		"-of", "csv=p=0:s=x",
+		videoPath,
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, 0, fmt.Errorf("ffprobe failed: %w", err)
+	}
+
+	var width, height int
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(output)), "%dx%d", &width, &height); err != nil {
+		return 0, 0, fmt.Errorf("failed to parse ffprobe dimensions: %w", err)
+	}
+	return width, height, nil
 }

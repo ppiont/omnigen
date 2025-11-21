@@ -17,6 +17,9 @@ function MediaUploadBar({
   selectedDuration,
   onDurationChange,
   disabled = false,
+  uploadStatus = "idle",
+  uploadError = "",
+  onRetryUpload,
 }) {
   const [productError, setProductError] = useState("");
   const productInputRef = useRef(null);
@@ -75,19 +78,24 @@ function MediaUploadBar({
     <div className="media-upload-bar">
       {/* Product Image Upload Button */}
       <div className="media-upload-item">
-        <button
-          type="button"
-          className={`media-upload-btn ${productImage ? "has-media" : ""}`}
-          onClick={() => !productImage && !disabled && productInputRef.current?.click()}
-          title="Upload product image (optional)"
-          disabled={disabled}
-        >
-          <ImageIcon size={18} className="media-icon" />
-          <span className="media-label">
-            {productImage ? "Product Image" : "Upload Product Image"}
-          </span>
+        <div className="media-upload-btn-wrapper">
+          <button
+            type="button"
+            className={`media-upload-btn ${productImage ? "has-media" : ""}`}
+            onClick={() =>
+              !productImage && !disabled && productInputRef.current?.click()
+            }
+            title="Upload product image (optional)"
+            disabled={disabled}
+          >
+            <ImageIcon size={18} className="media-icon" />
+            <span className="media-label">
+              {productImage ? "Product Image" : "Upload Product Image"}
+            </span>
+          </button>
           {productImage && (
             <button
+              type="button"
               className="media-clear-btn"
               onClick={(e) => {
                 e.stopPropagation();
@@ -99,7 +107,7 @@ function MediaUploadBar({
               <X size={14} />
             </button>
           )}
-        </button>
+        </div>
         <input
           ref={productInputRef}
           type="file"
@@ -133,6 +141,39 @@ function MediaUploadBar({
             <p className="media-preview-description">
               Used as the starting frame for your video
             </p>
+          </div>
+        )}
+
+        {productImage && (
+          <div className="media-upload-status">
+            {uploadStatus === "uploading" && (
+              <span className="media-upload-status__message">
+                Uploading image...
+              </span>
+            )}
+            {uploadStatus === "success" && (
+              <span className="media-upload-status__message success">
+                Upload ready
+              </span>
+            )}
+            {uploadStatus === "error" && (
+              <span className="media-upload-status__message error">
+                {uploadError || "Upload failed. Please retry."}
+                {onRetryUpload && (
+                  <button
+                    type="button"
+                    className="media-upload-retry-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRetryUpload();
+                    }}
+                    disabled={disabled}
+                  >
+                    Retry
+                  </button>
+                )}
+              </span>
+            )}
           </div>
         )}
 
@@ -181,6 +222,9 @@ MediaUploadBar.propTypes = {
   selectedDuration: PropTypes.string.isRequired,
   onDurationChange: PropTypes.func.isRequired,
   disabled: PropTypes.bool,
+  uploadStatus: PropTypes.oneOf(["idle", "uploading", "success", "error"]),
+  uploadError: PropTypes.string,
+  onRetryUpload: PropTypes.func,
 };
 
 export default MediaUploadBar;

@@ -45,7 +45,11 @@ export function useJobProgress(jobId, options = {}) {
     if (finalStatus === 'completed') {
       onComplete?.(finalProgress);
     } else {
-      setError('Video generation failed. Please try again.');
+      // Extract error message from job data if available
+      const errorMessage = finalProgress?.error_message || 
+                          finalProgress?.message || 
+                          'Video generation failed. Please try again.';
+      setError(errorMessage);
       onFailed?.(finalProgress);
     }
   }, [progress, onComplete, onFailed]);

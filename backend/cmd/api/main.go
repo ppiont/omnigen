@@ -8,9 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	_ "github.com/omnigen/backend/docs" // Import generated docs
 	"github.com/omnigen/backend/internal/adapters"
@@ -128,9 +130,25 @@ func main() {
 	zapLogger.Info("Asset service initialized")
 
 	// Initialize video and audio generation adapters
-	klingAdapter := adapters.NewKlingAdapter(replicateAPIKey, zapLogger)
+	veoAdapter := adapters.NewVeoAdapter(replicateAPIKey, zapLogger)
 	minimaxAdapter := adapters.NewMinimaxAdapter(replicateAPIKey, zapLogger)
-	zapLogger.Info("Video and audio generation adapters initialized")
+	zapLogger.Info("Video and audio generation adapters initialized (Veo 3.1)")
+
+	// Initialize TTS adapter for narrator voiceover generation
+	// Try to get TTS API key from Secrets Manager or environment variable
+	var ttsAdapter adapters.TTSAdapter
+	ttsAPIKey, err := secretsService.GetTTSAPIKey(context.Background())
+	if err != nil {
+		zapLogger.Warn("TTS API key not available - narrator voiceover generation will not be available",
+			zap.Error(err),
+		)
+		// ttsAdapter will remain nil - this is handled gracefully in generateNarratorVoiceover
+	} else if ttsAPIKey != "" {
+		ttsAdapter = adapters.NewOpenAITTSAdapter(ttsAPIKey, zapLogger)
+		zapLogger.Info("TTS adapter initialized with OpenAI TTS API")
+	} else {
+		zapLogger.Warn("TTS_API_KEY not configured - narrator voiceover generation will not be available")
+	}
 
 	// Initialize JWT validator
 	jwksURL := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
@@ -166,8 +184,9 @@ func main() {
 		UsageRepo:        usageRepo,
 		ParserService:    parserService,
 		AssetService:     assetService,
-		KlingAdapter:     klingAdapter,   // Video generation
+		VeoAdapter:       veoAdapter,     // Video generation (Veo 3.1)
 		MinimaxAdapter:   minimaxAdapter, // Audio generation
+		TTSAdapter:       ttsAdapter,     // Text-to-speech for narrator voiceover
 		AssetsBucket:     cfg.AssetsBucket,
 		APIKeys:          apiKeys,
 		JWTValidator:     jwtValidator,
@@ -225,7 +244,7 @@ type Config struct {
 	AssetsBucket       string `envconfig:"ASSETS_BUCKET" required:"true"`
 	JobTable           string `envconfig:"JOB_TABLE" required:"true"`
 	UsageTable         string `envconfig:"USAGE_TABLE" required:"true"`
-	ReplicateSecretARN string `envconfig:"REPLICATE_SECRET_ARN" required:"true"`
+	ReplicateSecretARN string `envconfig:"REPLICATE_SECRET_ARN"` // Optional: if not set, will use REPLICATE_API_KEY env var
 
 	// Authentication configuration
 	CognitoUserPoolID string `envconfig:"COGNITO_USER_POOL_ID" required:"true"`
@@ -238,9 +257,43 @@ type Config struct {
 
 	// OpenAI configuration (optional, for title generation)
 	OpenAIKey string `envconfig:"GPT4O_API_KEY"` // OpenAI API key for title generation
+
+	// TTS configuration (for narrator voiceover generation)
+	TTSAPIKey string `envconfig:"TTS_API_KEY"` // OpenAI TTS API key for narrator voiceover
 }
 
 func loadConfig() (*Config, error) {
+	// Get the current working directory
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Printf("Warning: Could not get working directory: %v", err)
+		wd = "."
+	}
+	
+	// Try to load .env.local first, then .env (for backwards compatibility)
+	// Try multiple paths to handle different working directories
+	envPaths := []string{
+		".env.local",
+		".env",
+		filepath.Join(wd, ".env.local"),
+		filepath.Join(wd, ".env"),
+		filepath.Join(wd, "backend", ".env.local"),
+		filepath.Join(wd, "backend", ".env"),
+	}
+	
+	loaded := false
+	for _, path := range envPaths {
+		if err := godotenv.Load(path); err == nil {
+			loaded = true
+			log.Printf("Loaded environment variables from %s (working dir: %s)", path, wd)
+			break
+		}
+	}
+	
+	if !loaded {
+		log.Printf("No .env file found in working directory %s, using environment variables only", wd)
+	}
+
 	var cfg Config
 	if err := envconfig.Process("", &cfg); err != nil {
 		return nil, fmt.Errorf("failed to process environment variables: %w", err)

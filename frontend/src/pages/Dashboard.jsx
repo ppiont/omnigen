@@ -5,7 +5,7 @@ import { jobs as jobsAPI } from "../utils/api";
 import StatCard from "../components/StatCard";
 import VideoCard from "../components/VideoCard";
 import { useAuth } from "../contexts/useAuth.js";
-import { getRecentlyOpenedVideos } from "../utils/recentVideos";
+import { getRecentlyOpenedVideos, removeRecentlyOpenedVideo } from "../utils/recentVideos";
 import OnboardingSection from "../components/OnboardingSection";
 import "../styles/dashboard.css";
 
@@ -45,7 +45,13 @@ function Dashboard() {
               openedAt: recent.openedAt,
             };
           } catch (err) {
-            console.warn(`Failed to load job ${recent.jobId}:`, err);
+            // If job not found (404), remove it from localStorage to prevent future errors
+            if (err.status === 404) {
+              removeRecentlyOpenedVideo(recent.jobId);
+            } else {
+              // Only log non-404 errors to reduce console noise
+              console.warn(`Failed to load job ${recent.jobId}:`, err);
+            }
             return null;
           }
         });

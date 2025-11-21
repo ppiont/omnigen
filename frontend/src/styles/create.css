@@ -166,6 +166,12 @@
   pointer-events: none;
 }
 
+.media-upload-btn-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
 .media-upload-btn {
   display: flex;
   align-items: center;
@@ -226,7 +232,6 @@
   border-radius: 50%;
   cursor: pointer;
   transition: all 0.2s ease;
-  margin-left: var(--space-4);
   padding: 0;
   flex-shrink: 0;
 }
@@ -270,7 +275,9 @@
   display: none;
 }
 
-.media-upload-btn.has-media:hover + .media-upload-input + .media-preview-tooltip {
+.media-upload-btn.has-media:hover
+  + .media-upload-input
+  + .media-preview-tooltip {
   display: block;
 }
 
@@ -368,6 +375,46 @@
   font-size: 0.75rem;
   z-index: 10;
   animation: errorSlideIn 0.2s ease;
+}
+
+.media-upload-status {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #9ca3b8);
+}
+
+.media-upload-status__message {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.media-upload-status__message.success {
+  color: var(--create-success, #7cff00);
+}
+
+.media-upload-status__message.error {
+  color: var(--create-error, #ff4d6a);
+}
+
+.media-upload-retry-btn {
+  background: transparent;
+  border: 1px solid var(--create-error, #ff4d6a);
+  color: var(--create-error, #ff4d6a);
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.media-upload-retry-btn:hover:not(:disabled) {
+  background: rgba(255, 77, 106, 0.12);
+}
+
+.media-upload-retry-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @keyframes errorSlideIn {
@@ -1164,11 +1211,7 @@
 
 .btn-view-workspace {
   padding: 0.875rem 2rem;
-  background: linear-gradient(
-    135deg,
-    var(--mint-accent),
-    var(--blue-medium)
-  );
+  background: linear-gradient(135deg, var(--mint-accent), var(--blue-medium));
   color: #000000;
   border: none;
   border-radius: 8px;

@@ -55,6 +55,9 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
     "music_mood": "string - e.g., 'upbeat', 'inspiring', 'dramatic'",
     "music_style": "string - e.g., 'electronic', 'acoustic', 'orchestral'",
     "voiceover_text": "string - optional voiceover script",
+    "narrator_script": "string - full narrator script including side effects (for pharmaceutical ads)",
+    "side_effects_text": "string - exact side effects disclosure text (for pharmaceutical ads, use verbatim from user input)",
+    "side_effects_start_time": number - timestamp when side effects segment begins (typically 80% of duration),
     "sync_points": [
       {
         "timestamp": number - time in seconds,
@@ -119,6 +122,15 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
    - Add sync_points for beat drops, product reveals, text appearances
    - Voiceover should complement, not narrate everything
    - Music mood must match visual mood
+
+8. **Pharmaceutical Ads** (when narrator_script is requested):
+   - Generate a complete narrator_script in audio_spec that includes:
+     * Product benefits and messaging (first 80% of duration)
+     * Side effects disclosure (last 20% of duration, read faster)
+   - Use side_effects_text EXACTLY as provided by user (verbatim, no modifications)
+   - Set side_effects_start_time to 80% of total duration (e.g., 24.0s for 30s video)
+   - Narrator script should be ~2.5 words per second (e.g., 60-80 words for 30s video)
+   - Professional pharmaceutical ad tone: clear, authoritative, compliant
 
 ## Quality Standards
 

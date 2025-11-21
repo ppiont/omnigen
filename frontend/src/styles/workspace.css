@@ -101,8 +101,7 @@
   border-radius: var(--radius-lg);
   border: none;
   padding: 0;
-  box-shadow: 
-    0 4px 16px rgba(0, 0, 0, 0.08),
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.5);
   overflow: hidden;
 }
@@ -238,8 +237,11 @@
   flex-direction: column;
   padding: 0;
   margin: 0;
-  background:
-    radial-gradient(1200px at 20% 20%, rgba(168, 230, 207, 0.22), transparent 70%),
+  background: radial-gradient(
+      1200px at 20% 20%,
+      rgba(168, 230, 207, 0.22),
+      transparent 70%
+    ),
     radial-gradient(900px at 80% 0%, rgba(179, 229, 252, 0.18), transparent 65%),
     var(--bg);
   color: var(--text-primary);
@@ -317,7 +319,8 @@
 }
 
 .workspace-video-id code {
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code",
+    "Droid Sans Mono", "Source Code Pro", monospace;
   background: var(--bg-elevated);
   padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-base);
@@ -630,7 +633,8 @@
   color: var(--text-primary);
   padding: var(--space-4) 0;
   transition: border-color 0.2s ease, color 0.2s ease;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
 }
 
 .editable-title:hover {
@@ -661,7 +665,8 @@
 
 .metadata-job-id code,
 .metadata-code {
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code",
+    "Droid Sans Mono", "Source Code Pro", monospace;
   font-size: 0.9rem;
   padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-base);
@@ -1976,7 +1981,8 @@
   border-radius: var(--radius-base);
   background: rgba(255, 255, 255, 0.9);
   color: var(--text-primary);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   font-size: 0.95rem;
   line-height: 1.7;
   resize: none;
@@ -2081,7 +2087,8 @@
 }
 
 .timeline-time {
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code",
+    "Droid Sans Mono", "Source Code Pro", monospace;
   font-size: 0.9rem;
   color: #333333;
   font-variant-numeric: tabular-nums;
@@ -2132,9 +2139,7 @@
   border-radius: 50%;
   background: #5ec19a;
   cursor: pointer;
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.2),
-    0 0 0 2px rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 0 2px rgba(255, 255, 255, 0.8);
 }
 
 .timeline-zoom-slider::-moz-range-thumb {
@@ -2144,9 +2149,7 @@
   background: #5ec19a;
   border: none;
   cursor: pointer;
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.2),
-    0 0 0 2px rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 0 2px rgba(255, 255, 255, 0.8);
 }
 
 .timeline-fit-btn {
@@ -2162,16 +2165,14 @@
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 
-    0 2px 4px rgba(94, 193, 154, 0.3),
+  box-shadow: 0 2px 4px rgba(94, 193, 154, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .timeline-fit-btn:hover {
   background: #4a9d7a;
   transform: translateY(-1px);
-  box-shadow: 
-    0 4px 8px rgba(94, 193, 154, 0.4),
+  box-shadow: 0 4px 8px rgba(94, 193, 154, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
@@ -2244,7 +2245,8 @@
   font-size: 11px;
   color: var(--mint-accent);
   font-weight: 500;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code",
+    "Droid Sans Mono", "Source Code Pro", monospace;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -2296,7 +2298,8 @@
 
 .timeline-track-label {
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
 }
 
 .timeline-track-content {
@@ -2329,6 +2332,16 @@
   );
 }
 
+.timeline-track-content-audio {
+  background: repeating-linear-gradient(
+    to right,
+    var(--bg) 0px,
+    var(--bg) 49px,
+    var(--bg-elevated) 50px,
+    var(--bg-elevated) 50px
+  );
+}
+
 .timeline-track-content-text {
   background: repeating-linear-gradient(
     to right,
@@ -2351,7 +2364,8 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease;
   overflow: hidden;
   min-width: 40px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -2366,6 +2380,11 @@
 .timeline-track-content-music .timeline-segment {
   background: #81d4fa;
   border-color: #4fc3f7;
+}
+
+.timeline-track-content-audio .timeline-segment {
+  background: #9575cd;
+  border-color: #7e57c2;
 }
 
 .timeline-track-content-text .timeline-segment {
@@ -2385,6 +2404,12 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
+.timeline-track-content-audio .timeline-segment:hover {
+  background: #7e57c2;
+  border-color: #673ab7;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
 .timeline-track-content-text .timeline-segment:hover {
   background: #4a9d7a;
   border-color: #3d8a6b;
@@ -2399,7 +2424,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 

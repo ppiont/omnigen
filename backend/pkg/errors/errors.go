@@ -150,3 +150,17 @@ func NewAPIError(base *APIError, message string, details map[string]interface{})
 	}
 	return &err
 }
+
+// NewValidationError creates a field-specific validation error derived from ErrInvalidRequest.
+func NewValidationError(field, message string) *APIError {
+	return NewAPIError(ErrInvalidRequest, message, map[string]interface{}{
+		"field": field,
+	})
+}
+
+// NewServiceError creates a sanitized internal server error for downstream service failures.
+func NewServiceError(service, message string) *APIError {
+	return NewAPIError(ErrInternalServer, message, map[string]interface{}{
+		"service": service,
+	})
+}

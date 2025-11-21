@@ -4,7 +4,7 @@
  * Handles automatic token refresh on 401 errors
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
 // Track ongoing refresh to prevent multiple simultaneous refreshes
 let isRefreshing = false;
@@ -16,7 +16,7 @@ let refreshPromise = null;
 export class APIError extends Error {
   constructor(message, status, code, details) {
     super(message);
-    this.name = 'APIError';
+    this.name = "APIError";
     this.status = status;
     this.code = code;
     this.details = details;
@@ -31,7 +31,7 @@ export class APIError extends Error {
  */
 export async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
-  const method = options.method || 'GET';
+  const method = options.method || "GET";
   const timestamp = new Date().toISOString();
 
   // Log API request
@@ -43,9 +43,9 @@ export async function apiRequest(endpoint, options = {}) {
   });
 
   const defaultOptions = {
-    credentials: 'include', // Include httpOnly cookies
+    credentials: "include", // Include httpOnly cookies
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...options.headers,
     },
   };
@@ -67,55 +67,75 @@ export async function apiRequest(endpoint, options = {}) {
     // Handle successful responses
     if (response.ok) {
       // Check if response has content
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
         const data = await response.json();
-        console.log(`[API] ${new Date().toISOString()} ← ${method} ${endpoint} (${response.status}) [${duration}ms]`, data);
+        console.log(
+          `[API] ${new Date().toISOString()} ← ${method} ${endpoint} (${
+            response.status
+          }) [${duration}ms]`,
+          data
+        );
         return data;
       }
-      console.log(`[API] ${new Date().toISOString()} ← ${method} ${endpoint} (${response.status}) [${duration}ms] (no content)`);
+      console.log(
+        `[API] ${new Date().toISOString()} ← ${method} ${endpoint} (${
+          response.status
+        }) [${duration}ms] (no content)`
+      );
       return null;
     }
 
     // Handle 401 errors with automatic token refresh
     // Exclude login and refresh endpoints to prevent infinite loops
-    if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
-      console.warn(`[API] ${new Date().toISOString()} ⚠️  401 Unauthorized on ${method} ${endpoint}. Attempting token refresh...`);
+    if (
+      response.status === 401 &&
+      !endpoint.includes("/auth/login") &&
+      !endpoint.includes("/auth/refresh")
+    ) {
+      console.warn(
+        `[API] ${new Date().toISOString()} ⚠️  401 Unauthorized on ${method} ${endpoint}. Attempting token refresh...`
+      );
 
       try {
         // Import refreshSession dynamically to avoid circular dependency
-        const { refreshSession } = await import('../services/cognito.js');
+        const { refreshSession } = await import("../services/cognito.js");
 
         // If already refreshing, wait for that to complete
         if (isRefreshing && refreshPromise) {
-          console.log('[API] 🔄 Token refresh already in progress, waiting...');
+          console.log("[API] 🔄 Token refresh already in progress, waiting...");
           await refreshPromise;
         } else {
           // Start new refresh
           isRefreshing = true;
           refreshPromise = (async () => {
             try {
-              console.log('[API] 🔑 Refreshing tokens with Cognito...');
+              console.log("[API] 🔑 Refreshing tokens with Cognito...");
               const newTokens = await refreshSession();
 
               // Update backend cookies with new tokens
-              const refreshResponse = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  access_token: newTokens.accessToken,
-                  id_token: newTokens.idToken,
-                  refresh_token: newTokens.refreshToken,
-                }),
-              });
+              const refreshResponse = await fetch(
+                `${API_BASE_URL}/api/v1/auth/refresh`,
+                {
+                  method: "POST",
+                  credentials: "include",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    access_token: newTokens.accessToken,
+                    id_token: newTokens.idToken,
+                    refresh_token: newTokens.refreshToken,
+                  }),
+                }
+              );
 
               if (!refreshResponse.ok) {
                 const errorText = await refreshResponse.text();
-                throw new Error(`Failed to update backend cookies: ${errorText}`);
+                throw new Error(
+                  `Failed to update backend cookies: ${errorText}`
+                );
               }
 
-              console.log('[API] ✅ Token refresh successful');
+              console.log("[API] ✅ Token refresh successful");
             } finally {
               isRefreshing = false;
               refreshPromise = null;
@@ -126,18 +146,20 @@ export async function apiRequest(endpoint, options = {}) {
         }
 
         // Retry the original request with new tokens
-        console.log(`[API] 🔄 Retrying ${method} ${endpoint} with refreshed tokens...`);
+        console.log(
+          `[API] 🔄 Retrying ${method} ${endpoint} with refreshed tokens...`
+        );
         return apiRequest(endpoint, options);
       } catch (refreshError) {
-        console.error('[API] ❌ Token refresh failed:', refreshError);
+        console.error("[API] ❌ Token refresh failed:", refreshError);
         // Clear refresh state
         isRefreshing = false;
         refreshPromise = null;
         // Throw the original 401 error so the app can handle logout
         throw new APIError(
-          'Session expired. Please log in again.',
+          "Session expired. Please log in again.",
           401,
-          'REFRESH_FAILED',
+          "REFRESH_FAILED",
           { originalError: refreshError.message }
         );
       }
@@ -150,9 +172,9 @@ export async function apiRequest(endpoint, options = {}) {
     } catch {
       // Response is not JSON
       throw new APIError(
-        response.statusText || 'Request failed',
+        response.statusText || "Request failed",
         response.status,
-        'UNKNOWN_ERROR',
+        "UNKNOWN_ERROR",
         null
       );
     }
@@ -160,17 +182,34 @@ export async function apiRequest(endpoint, options = {}) {
     // Extract error details from response
     const error = errorData.error || errorData;
     const apiError = new APIError(
-      error.message || error.Message || 'Request failed',
+      error.message || error.Message || "Request failed",
       response.status,
-      error.code || error.Code || 'UNKNOWN_ERROR',
+      error.code || error.Code || "UNKNOWN_ERROR",
       error.details || error.Details || null
     );
 
     // Don't log 401 errors as errors (they're expected when not logged in)
     if (response.status === 401) {
-      console.log(`[API] ${new Date().toISOString()} ← ${method} ${endpoint} (${response.status}) [${duration}ms] (Unauthenticated)`);
+      console.log(
+        `[API] ${new Date().toISOString()} ← ${method} ${endpoint} (${
+          response.status
+        }) [${duration}ms] (Unauthenticated)`
+      );
+    } else if (response.status === 404) {
+      // Log 404s as warnings instead of errors (often expected, e.g., checking if jobs exist)
+      console.warn(
+        `[API] ${new Date().toISOString()} ⚠ ${method} ${endpoint} (${
+          response.status
+        }) [${duration}ms]`,
+        apiError.message
+      );
     } else {
-      console.error(`[API] ${new Date().toISOString()} ✗ ${method} ${endpoint} (${response.status}) [${duration}ms]`, apiError);
+      console.error(
+        `[API] ${new Date().toISOString()} ✗ ${method} ${endpoint} (${
+          response.status
+        }) [${duration}ms]`,
+        apiError
+      );
     }
 
     throw apiError;
@@ -182,12 +221,15 @@ export async function apiRequest(endpoint, options = {}) {
 
     // Network errors or other exceptions
     const networkError = new APIError(
-      error.message || 'Network error',
+      error.message || "Network error",
       0,
-      'NETWORK_ERROR',
+      "NETWORK_ERROR",
       null
     );
-    console.error(`[API] ${new Date().toISOString()} ✗ ${method} ${endpoint} (NETWORK_ERROR)`, networkError);
+    console.error(
+      `[API] ${new Date().toISOString()} ✗ ${method} ${endpoint} (NETWORK_ERROR)`,
+      networkError
+    );
     throw networkError;
   }
 }
@@ -205,8 +247,8 @@ export const auth = {
    * @returns {Promise<{user_id: string, email: string, subscription_tier: string}>}
    */
   login: (tokens) =>
-    apiRequest('/api/v1/auth/login', {
-      method: 'POST',
+    apiRequest("/api/v1/auth/login", {
+      method: "POST",
       body: JSON.stringify({
         access_token: tokens.accessToken,
         id_token: tokens.idToken,
@@ -219,23 +261,23 @@ export const auth = {
    * @returns {Promise<void>}
    */
   logout: () =>
-    apiRequest('/api/v1/auth/logout', {
-      method: 'POST',
+    apiRequest("/api/v1/auth/logout", {
+      method: "POST",
     }),
 
   /**
    * Get current user info
    * @returns {Promise<{user_id: string, email: string, subscription_tier: string}>}
    */
-  me: () => apiRequest('/api/v1/auth/me'),
+  me: () => apiRequest("/api/v1/auth/me"),
 
   /**
    * Refresh tokens
    * @returns {Promise<any>}
    */
   refresh: () =>
-    apiRequest('/api/v1/auth/refresh', {
-      method: 'POST',
+    apiRequest("/api/v1/auth/refresh", {
+      method: "POST",
     }),
 };
 
@@ -253,12 +295,12 @@ export const jobs = {
    */
   list: (params = {}) => {
     const queryParams = new URLSearchParams();
-    if (params.page) queryParams.append('page', params.page);
-    if (params.page_size) queryParams.append('page_size', params.page_size);
-    if (params.status) queryParams.append('status', params.status);
+    if (params.page) queryParams.append("page", params.page);
+    if (params.page_size) queryParams.append("page_size", params.page_size);
+    if (params.status) queryParams.append("status", params.status);
 
     const query = queryParams.toString();
-    return apiRequest(`/api/v1/jobs${query ? `?${query}` : ''}`);
+    return apiRequest(`/api/v1/jobs${query ? `?${query}` : ""}`);
   },
 
   /**
@@ -282,7 +324,7 @@ export const jobs = {
    */
   delete: (id) =>
     apiRequest(`/api/v1/jobs/${id}`, {
-      method: 'DELETE',
+      method: "DELETE",
     }),
 };
 
@@ -301,8 +343,8 @@ export const generate = {
    * @returns {Promise<{job_id: string, status: string}>}
    */
   create: (params) =>
-    apiRequest('/api/v1/generate', {
-      method: 'POST',
+    apiRequest("/api/v1/generate", {
+      method: "POST",
       body: JSON.stringify(params),
     }),
 
@@ -313,10 +355,36 @@ export const generate = {
    * @returns {Promise<{title: string}>}
    */
   title: (params) =>
-    apiRequest('/api/v1/generate-title', {
-      method: 'POST',
+    apiRequest("/api/v1/generate-title", {
+      method: "POST",
       body: JSON.stringify(params),
     }),
+};
+
+/**
+ * Upload API endpoints
+ */
+export const uploads = {
+  /**
+   * Request a presigned URL for uploading an asset
+   * @param {Object} params
+   * @param {string} params.type - Asset type (e.g., 'product_image')
+   * @param {string} params.filename - Original filename
+   * @param {string} params.contentType - MIME type
+   * @param {number} params.fileSize - File size in bytes
+   * @returns {Promise<{upload_url: string, asset_url: string}>}
+   */
+  getPresignedUrl: ({ type, filename, contentType, fileSize }) => {
+    const query = new URLSearchParams({ type }).toString();
+    return apiRequest(`/api/v1/upload/presigned-url?${query}`, {
+      method: "POST",
+      body: JSON.stringify({
+        filename,
+        content_type: contentType,
+        file_size: fileSize,
+      }),
+    });
+  },
 };
 
 /**
@@ -334,8 +402,8 @@ export const scripts = {
    * @returns {Promise<{script_id: string, status: string, message: string}>}
    */
   parse: (params) =>
-    apiRequest('/api/v1/parse', {
-      method: 'POST',
+    apiRequest("/api/v1/parse", {
+      method: "POST",
       body: JSON.stringify(params),
     }),
 
@@ -355,7 +423,7 @@ export const presets = {
    * Get all brand style presets
    * @returns {Promise<{presets: Array}>}
    */
-  list: () => apiRequest('/api/v1/presets'),
+  list: () => apiRequest("/api/v1/presets"),
 };
 
 /**
@@ -363,7 +431,7 @@ export const presets = {
  */
 export const health = {
   check: () =>
-    apiRequest('/health', {
-      credentials: 'omit', // No cookies needed for health check
+    apiRequest("/health", {
+      credentials: "omit", // No cookies needed for health check
     }),
 };

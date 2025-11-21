@@ -9,15 +9,20 @@ type Job struct {
 	Stage    string `dynamodbav:"stage,omitempty" json:"stage,omitempty"` // Granular progress: script_generating, scene_1_complete, etc.
 
 	// Progress fields (structured for better API responses)
-	ThumbnailURL    string   `dynamodbav:"thumbnail_url,omitempty" json:"thumbnail_url,omitempty"`
-	AudioURL        string   `dynamodbav:"audio_url,omitempty" json:"audio_url,omitempty"`
-	ScenesCompleted int      `dynamodbav:"scenes_completed,omitempty" json:"scenes_completed,omitempty"`
-	SceneVideoURLs  []string `dynamodbav:"scene_video_urls,omitempty" json:"scene_video_urls,omitempty"`
+	ThumbnailURL     string   `dynamodbav:"thumbnail_url,omitempty" json:"thumbnail_url,omitempty"`
+	AudioURL         string   `dynamodbav:"audio_url,omitempty" json:"audio_url,omitempty"`
+	NarratorAudioURL string   `dynamodbav:"narrator_audio_url,omitempty" json:"narrator_audio_url,omitempty"`
+	ScenesCompleted  int      `dynamodbav:"scenes_completed,omitempty" json:"scenes_completed,omitempty"`
+	SceneVideoURLs   []string `dynamodbav:"scene_video_urls,omitempty" json:"scene_video_urls,omitempty"`
 
 	Prompt      string `dynamodbav:"prompt,omitempty" json:"prompt,omitempty"`
 	Title       string `dynamodbav:"title,omitempty" json:"title,omitempty"` // Video title
 	Duration    int    `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
 	AspectRatio string `dynamodbav:"aspect_ratio,omitempty" json:"aspect_ratio,omitempty"`
+
+	// Pharmaceutical ad configuration
+	Voice       string `dynamodbav:"voice,omitempty" json:"voice,omitempty"`               // "male" or "female"
+	SideEffects string `dynamodbav:"side_effects,omitempty" json:"side_effects,omitempty"` // User-provided disclosure text
 
 	// Enhanced prompt options (Phase 1 - all optional)
 	Style             string `dynamodbav:"style,omitempty" json:"style,omitempty"`
@@ -34,6 +39,10 @@ type Job struct {
 	Scenes         []Scene   `dynamodbav:"scenes,omitempty" json:"scenes,omitempty"`
 	AudioSpec      AudioSpec `dynamodbav:"audio_spec,omitempty" json:"audio_spec,omitempty"`
 	ScriptMetadata Metadata  `dynamodbav:"script_metadata,omitempty" json:"script_metadata,omitempty"`
+
+	// Side effects metadata (populated post script generation)
+	SideEffectsText      string  `dynamodbav:"side_effects_text,omitempty" json:"side_effects_text,omitempty"`
+	SideEffectsStartTime float64 `dynamodbav:"side_effects_start_time,omitempty" json:"side_effects_start_time,omitempty"`
 
 	VideoKey     string  `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"` // S3 key
 	CreatedAt    int64   `dynamodbav:"created_at" json:"created_at"`

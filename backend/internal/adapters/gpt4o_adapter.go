@@ -43,6 +43,10 @@ type ScriptGenerationRequest struct {
 	AspectRatio string // "16:9", "9:16", or "1:1"
 	StartImage  string // Optional starting image URL for first scene
 
+	// Pharmaceutical ad configuration
+	Voice       string // "male" or "female" for narrator voice
+	SideEffects string // User-provided side effects disclosure text (use verbatim)
+
 	// Enhanced prompt options (optional)
 	EnhancedOptions *prompts.EnhancedPromptOptions
 
@@ -151,6 +155,10 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 
 	resp, err := g.httpClient.Do(httpReq)
 	if err != nil {
+		g.logger.Error("Failed to send request to Replicate API",
+			zap.Error(err),
+			zap.String("url", "https://api.replicate.com/v1/predictions"),
+		)
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -161,6 +169,18 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
+		errorMsg := fmt.Sprintf("API error (status %d): %s", resp.StatusCode, string(body))
+		g.logger.Error("Replicate API returned error",
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("response_body", string(body)),
+			zap.String("error_message", errorMsg),
+		)
+		
+		// Provide specific error messages for common status codes
+		if resp.StatusCode == 402 { // Payment Required
+			return nil, fmt.Errorf("API error (status %d): Payment required - Replicate account has insufficient credits or billing issue. Please check your Replicate account balance. Response: %s", resp.StatusCode, string(body))
+		}
+		
 		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -451,6 +471,10 @@ Provide a concise 2-3 sentence description that captures the essence of this vis
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
+		// Provide specific error messages for common status codes
+		if resp.StatusCode == 402 { // Payment Required
+			return "", fmt.Errorf("API error (status %d): Payment required - Replicate account has insufficient credits or billing issue. Please check your Replicate account balance. Response: %s", resp.StatusCode, string(body))
+		}
 		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -545,6 +569,42 @@ func buildUserPrompt(req *ScriptGenerationRequest) string {
 
 	if req.StartImage != "" {
 		prompt += "\n**Starting Image:** A starting image will be provided for the first scene (leave start_image_url empty in JSON)"
+	}
+
+	// Add pharmaceutical ad instructions if Voice and SideEffects are provided
+	isPharmaceuticalAd := req.Voice != "" && req.SideEffects != ""
+	if isPharmaceuticalAd {
+		sideEffectsStartTime := float64(req.Duration) * 0.8 // 80% of duration
+		wordCount := int(float64(req.Duration) * 2.5)      // ~2.5 words per second
+
+		prompt += fmt.Sprintf(`
+
+**PHARMACEUTICAL AD CONFIGURATION:**
+This is a pharmaceutical advertisement that requires:
+1. **Narrator Voiceover**: Generate a complete narrator script in audio_spec.narrator_script
+   - Narrator voice: %s
+   - Word count: ~%d words total (approximately 2.5 words per second)
+   - Structure: 80%% product benefits (0-%.1fs), 20%% side effects disclosure (%.1fs-%ds)
+   - Tone: Professional pharmaceutical ad voice, clear and authoritative
+
+2. **Side Effects Disclosure**:
+   - Use the EXACT text provided below (DO NOT modify, rewrite, or rephrase)
+   - Include this text verbatim at the end of narrator_script
+   - Set audio_spec.side_effects_text to the EXACT text below
+   - Set audio_spec.side_effects_start_time to %.1f (80%% of duration)
+
+**SIDE EFFECTS TEXT (USE VERBATIM - DO NOT MODIFY):**
+%s
+
+**CRITICAL**: The side effects text above is legally approved wording. You MUST use it EXACTLY as provided without any changes.`,
+			req.Voice,
+			wordCount,
+			sideEffectsStartTime,
+			sideEffectsStartTime,
+			req.Duration,
+			sideEffectsStartTime,
+			req.SideEffects,
+		)
 	}
 
 	prompt += `

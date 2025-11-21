@@ -50,11 +50,17 @@ type Scene struct {
 
 // AudioSpec defines the audio requirements for the advertisement
 type AudioSpec struct {
-	EnableAudio   bool        `json:"enable_audio"`
-	MusicMood     string      `json:"music_mood"`               // "upbeat", "calm", "dramatic", etc.
-	MusicStyle    string      `json:"music_style"`              // "electronic", "acoustic", "orchestral", etc.
-	VoiceoverText string      `json:"voiceover_text,omitempty"` // Optional voiceover script
-	SyncPoints    []SyncPoint `json:"sync_points"`              // Audio-visual synchronization markers
+	EnableAudio   bool   `json:"enable_audio"`
+	MusicMood     string `json:"music_mood"`               // "upbeat", "calm", "dramatic", etc.
+	MusicStyle    string `json:"music_style"`              // "electronic", "acoustic", "orchestral", etc.
+	VoiceoverText string `json:"voiceover_text,omitempty"` // Optional voiceover script (legacy)
+
+	// Pharmaceutical ad narrator metadata
+	NarratorScript       string  `json:"narrator_script,omitempty"`         // Full narrator script including side effects
+	SideEffectsText      string  `json:"side_effects_text,omitempty"`       // Exact text for on-screen disclosure
+	SideEffectsStartTime float64 `json:"side_effects_start_time,omitempty"` // Timestamp (seconds) when side effects begin
+
+	SyncPoints []SyncPoint `json:"sync_points"` // Audio-visual synchronization markers
 }
 
 // SyncPoint marks specific audio-visual synchronization moments

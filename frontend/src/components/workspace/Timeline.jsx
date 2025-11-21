@@ -1,16 +1,20 @@
 import PropTypes from "prop-types";
-import { Video, Music, Type } from "lucide-react";
+import { Video, Music, Type, Mic } from "lucide-react";
 
 /**
  * Timeline component for video editing with video, music, and text tracks
  * @param {Object} props - Component props
  */
-function Timeline({ 
-  videoDuration = 30, 
-  scenes = [], 
-  audioSpec = null, 
+function Timeline({
+  videoDuration = 30,
+  scenes = [],
+  audioSpec = null,
+  backgroundMusicUrl = null,
+  narratorAudioUrl = null,
+  sideEffectsText = null,
+  sideEffectsStartTime = null,
   audioUrl = null,
-  onSeek 
+  onSeek,
 }) {
   // Debug logging
   console.log("[TIMELINE] Received props:", {
@@ -18,9 +22,13 @@ function Timeline({
     scenesCount: scenes.length,
     scenes: scenes,
     audioSpec: audioSpec,
-    audioUrl: audioUrl,
+    backgroundMusicUrl,
+    narratorAudioUrl,
+    sideEffectsText,
+    sideEffectsStartTime,
+    deprecatedAudioUrl: audioUrl,
   });
-  
+
   // Map scenes to video track segments
   const videoTrack = {
     segments: scenes.map((scene, index) => {
@@ -28,60 +36,85 @@ function Timeline({
         id: scene.scene_number || scene.sceneNumber || index + 1,
         start: scene.start_time || scene.startTime || 0,
         end: (scene.start_time || scene.startTime || 0) + (scene.duration || 0),
-        label: scene.location || `Scene ${scene.scene_number || scene.sceneNumber || index + 1}`,
+        label:
+          scene.location ||
+          `Scene ${scene.scene_number || scene.sceneNumber || index + 1}`,
         action: scene.action,
       };
       console.log(`[TIMELINE] Mapped scene ${index + 1}:`, segment);
       return segment;
     }),
   };
-  
-  console.log("[TIMELINE] Video track segments:", videoTrack.segments);
+
+  const resolvedMusicUrl = backgroundMusicUrl || audioUrl;
 
   // Map audio to music track (if audio is enabled and URL exists)
   const musicTrack = {
-    segments: audioSpec?.enable_audio && audioUrl ? [
-      {
-        id: 1,
-        start: 0,
-        end: videoDuration,
-        label: audioSpec.music_mood ? `${audioSpec.music_style || 'Music'} - ${audioSpec.music_mood}` : 'Background Music',
-      },
-    ] : [],
+    segments:
+      audioSpec?.enable_audio && resolvedMusicUrl
+        ? [
+            {
+              id: 1,
+              start: 0,
+              end: videoDuration,
+              label: audioSpec.music_mood
+                ? `${audioSpec.music_style || "Music"} - ${
+                    audioSpec.music_mood
+                  }`
+                : "Background Music",
+            },
+          ]
+        : [],
   };
 
-  // Map voiceover/sync points to text track
-  const textTrack = {
-    segments: (() => {
-      const segments = [];
-      
-      // Add voiceover text if available
-      if (audioSpec?.voiceover_text) {
-        // Split voiceover into segments based on sync points or evenly distribute
-        if (audioSpec.sync_points && audioSpec.sync_points.length > 0) {
-          audioSpec.sync_points.forEach((syncPoint, index) => {
-            const nextPoint = audioSpec.sync_points[index + 1];
-            segments.push({
-              id: `voiceover-${index + 1}`,
-              start: syncPoint.timestamp || 0,
-              end: nextPoint ? nextPoint.timestamp : videoDuration,
-              text: syncPoint.description || audioSpec.voiceover_text,
-            });
-          });
-        } else {
-          // Single voiceover segment spanning the duration
-          segments.push({
-            id: 'voiceover-1',
+  // Map narrator voiceover audio to audio track
+  const audioTrack = {
+    segments: narratorAudioUrl
+      ? [
+          {
+            id: 1,
             start: 0,
             end: videoDuration,
-            text: audioSpec.voiceover_text,
-          });
-        }
-      }
-      
-      return segments;
-    })(),
+            label: "Narrator Voiceover",
+          },
+        ]
+      : [],
   };
+
+  const resolvedSideEffectsStart =
+    typeof sideEffectsStartTime === "number"
+      ? sideEffectsStartTime
+      : sideEffectsText
+      ? videoDuration * 0.8
+      : null;
+
+  const truncatedSideEffectsText =
+    sideEffectsText && sideEffectsText.length > 80
+      ? `${sideEffectsText.slice(0, 77)}...`
+      : sideEffectsText || null;
+
+  // Map side effects overlay to text track
+  const textTrack = {
+    segments:
+      truncatedSideEffectsText && typeof resolvedSideEffectsStart === "number"
+        ? [
+            {
+              id: "side-effects",
+              start: Math.max(
+                0,
+                Math.min(resolvedSideEffectsStart, videoDuration)
+              ),
+              end: videoDuration,
+              text: truncatedSideEffectsText,
+            },
+          ]
+        : [],
+  };
+
+  console.log("[TIMELINE] Video track segments:", videoTrack.segments);
+  console.log("[TIMELINE] Music track segments:", musicTrack.segments);
+  console.log("[TIMELINE] Audio track segments:", audioTrack.segments);
+  console.log("[TIMELINE] Text track segments:", textTrack.segments);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -97,7 +130,8 @@ function Timeline({
   const renderSegment = (segment, trackWidth, totalDuration) => {
     if (isShortVideo) {
       // Use percentage-based positioning for short videos
-      const widthPercent = ((segment.end - segment.start) / totalDuration) * 100;
+      const widthPercent =
+        ((segment.end - segment.start) / totalDuration) * 100;
       const leftPercent = (segment.start / totalDuration) * 100;
       return (
         <div
@@ -118,7 +152,8 @@ function Timeline({
       );
     } else {
       // Use pixel-based positioning for longer videos
-      const width = ((segment.end - segment.start) / totalDuration) * timelineContentWidth;
+      const width =
+        ((segment.end - segment.start) / totalDuration) * timelineContentWidth;
       const left = (segment.start / totalDuration) * timelineContentWidth;
       return (
         <div
@@ -143,18 +178,18 @@ function Timeline({
   // Generate multi-level time markers with dynamic intervals
   // Calculate appropriate interval based on video duration
   const getMajorInterval = (duration) => {
-    if (duration <= 10) return 2;      // Every 2 seconds for very short videos
-    if (duration <= 30) return 5;      // Every 5 seconds for short videos
-    if (duration <= 120) return 10;    // Every 10 seconds for medium videos
-    if (duration <= 300) return 30;    // Every 30 seconds for long videos
-    return 60;                          // Every 60 seconds for very long videos
+    if (duration <= 10) return 2; // Every 2 seconds for very short videos
+    if (duration <= 30) return 5; // Every 5 seconds for short videos
+    if (duration <= 120) return 10; // Every 10 seconds for medium videos
+    if (duration <= 300) return 30; // Every 30 seconds for long videos
+    return 60; // Every 60 seconds for very long videos
   };
 
   const getMinorInterval = (duration) => {
-    if (duration <= 10) return 1;       // Every 1 second for very short videos
-    if (duration <= 30) return 1;       // Every 1 second for short videos
-    if (duration <= 120) return 5;     // Every 5 seconds for medium videos
-    return 10;                          // Every 10 seconds for longer videos
+    if (duration <= 10) return 1; // Every 1 second for very short videos
+    if (duration <= 30) return 1; // Every 1 second for short videos
+    if (duration <= 120) return 5; // Every 5 seconds for medium videos
+    return 10; // Every 10 seconds for longer videos
   };
 
   const majorInterval = getMajorInterval(videoDuration);
@@ -186,7 +221,11 @@ function Timeline({
   // Generate sub-minor markers (every 0.5 seconds, exclude major and minor)
   const subMinorMarkers = [];
   for (let time = 0; time <= videoDuration; time += 0.5) {
-    if (time <= videoDuration && !finalMajorMarkers.includes(time) && !minorMarkers.includes(time)) {
+    if (
+      time <= videoDuration &&
+      !finalMajorMarkers.includes(time) &&
+      !minorMarkers.includes(time)
+    ) {
       subMinorMarkers.push(time);
     }
   }
@@ -197,11 +236,15 @@ function Timeline({
         {/* Time Ruler */}
         <div className="timeline-ruler">
           <div className="timeline-ruler-spacer"></div>
-          <div 
+          <div
             className="timeline-ruler-content"
-            style={isShortVideo 
-              ? { width: '100%' } 
-              : { width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }
+            style={
+              isShortVideo
+                ? { width: "100%" }
+                : {
+                    width: `${timelineContentWidth}px`,
+                    minWidth: `${timelineContentWidth}px`,
+                  }
             }
           >
             {/* Sub-minor markers (thin lines, no labels) */}
@@ -209,9 +252,14 @@ function Timeline({
               <div
                 key={`sub-${time}`}
                 className="timeline-ruler-marker timeline-ruler-marker-subminor"
-                style={isShortVideo 
-                  ? { left: `${(time / videoDuration) * 100}%` }
-                  : { left: `${(time / videoDuration) * timelineContentWidth}px` }
+                style={
+                  isShortVideo
+                    ? { left: `${(time / videoDuration) * 100}%` }
+                    : {
+                        left: `${
+                          (time / videoDuration) * timelineContentWidth
+                        }px`,
+                      }
                 }
               />
             ))}
@@ -220,9 +268,14 @@ function Timeline({
               <div
                 key={`minor-${time}`}
                 className="timeline-ruler-marker timeline-ruler-marker-minor"
-                style={isShortVideo 
-                  ? { left: `${(time / videoDuration) * 100}%` }
-                  : { left: `${(time / videoDuration) * timelineContentWidth}px` }
+                style={
+                  isShortVideo
+                    ? { left: `${(time / videoDuration) * 100}%` }
+                    : {
+                        left: `${
+                          (time / videoDuration) * timelineContentWidth
+                        }px`,
+                      }
                 }
               />
             ))}
@@ -231,9 +284,14 @@ function Timeline({
               <div
                 key={`major-${time}`}
                 className="timeline-ruler-marker timeline-ruler-marker-major"
-                style={isShortVideo 
-                  ? { left: `${(time / videoDuration) * 100}%` }
-                  : { left: `${(time / videoDuration) * timelineContentWidth}px` }
+                style={
+                  isShortVideo
+                    ? { left: `${(time / videoDuration) * 100}%` }
+                    : {
+                        left: `${
+                          (time / videoDuration) * timelineContentWidth
+                        }px`,
+                      }
                 }
               >
                 <span className="timeline-ruler-label">{time}s</span>
@@ -243,63 +301,98 @@ function Timeline({
         </div>
 
         <div className="timeline-tracks">
-        {/* Video Track */}
-        <div className="timeline-track">
-          <div className="timeline-track-header">
-            <Video size={18} />
-            <span className="timeline-track-label">Video</span>
+          {/* Video Track */}
+          <div className="timeline-track">
+            <div className="timeline-track-header">
+              <Video size={18} />
+              <span className="timeline-track-label">Video</span>
+            </div>
+            <div
+              className="timeline-track-content timeline-track-content-video"
+              style={
+                isShortVideo
+                  ? { width: "100%" }
+                  : {
+                      width: `${timelineContentWidth}px`,
+                      minWidth: `${timelineContentWidth}px`,
+                    }
+              }
+            >
+              {videoTrack.segments.map((segment) =>
+                renderSegment(segment, 100, videoDuration)
+              )}
+            </div>
           </div>
-          <div 
-            className="timeline-track-content timeline-track-content-video"
-            style={isShortVideo 
-              ? { width: '100%' } 
-              : { width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }
-            }
-          >
-            {videoTrack.segments.map((segment) =>
-              renderSegment(segment, 100, videoDuration)
-            )}
-          </div>
-        </div>
 
-        {/* Music Track */}
-        <div className="timeline-track">
-          <div className="timeline-track-header">
-            <Music size={18} />
-            <span className="timeline-track-label">Music</span>
+          {/* Music Track */}
+          <div className="timeline-track">
+            <div className="timeline-track-header">
+              <Music size={18} />
+              <span className="timeline-track-label">Music</span>
+            </div>
+            <div
+              className="timeline-track-content timeline-track-content-music"
+              style={
+                isShortVideo
+                  ? { width: "100%" }
+                  : {
+                      width: `${timelineContentWidth}px`,
+                      minWidth: `${timelineContentWidth}px`,
+                    }
+              }
+            >
+              {musicTrack.segments.map((segment) =>
+                renderSegment(segment, 100, videoDuration)
+              )}
+            </div>
           </div>
-          <div 
-            className="timeline-track-content timeline-track-content-music"
-            style={isShortVideo 
-              ? { width: '100%' } 
-              : { width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }
-            }
-          >
-            {musicTrack.segments.map((segment) =>
-              renderSegment(segment, 100, videoDuration)
-            )}
-          </div>
-        </div>
 
-        {/* Text Track */}
-        <div className="timeline-track">
-          <div className="timeline-track-header">
-            <Type size={18} />
-            <span className="timeline-track-label">Text</span>
+          {/* Audio Track */}
+          <div className="timeline-track">
+            <div className="timeline-track-header">
+              <Mic size={18} />
+              <span className="timeline-track-label">Audio</span>
+            </div>
+            <div
+              className="timeline-track-content timeline-track-content-audio"
+              style={
+                isShortVideo
+                  ? { width: "100%" }
+                  : {
+                      width: `${timelineContentWidth}px`,
+                      minWidth: `${timelineContentWidth}px`,
+                    }
+              }
+            >
+              {audioTrack.segments.map((segment) =>
+                renderSegment(segment, 100, videoDuration)
+              )}
+            </div>
           </div>
-          <div 
-            className="timeline-track-content timeline-track-content-text"
-            style={isShortVideo 
-              ? { width: '100%' } 
-              : { width: `${timelineContentWidth}px`, minWidth: `${timelineContentWidth}px` }
-            }
-          >
-            {textTrack.segments.map((segment) =>
-              renderSegment(segment, 100, videoDuration)
-            )}
+
+          {/* Text Track */}
+          <div className="timeline-track">
+            <div className="timeline-track-header">
+              <Type size={18} />
+              <span className="timeline-track-label">Text</span>
+            </div>
+            <div
+              className="timeline-track-content timeline-track-content-text"
+              style={
+                isShortVideo
+                  ? { width: "100%" }
+                  : {
+                      width: `${timelineContentWidth}px`,
+                      minWidth: `${timelineContentWidth}px`,
+                    }
+              }
+            >
+              {textTrack.segments.map((segment) =>
+                renderSegment(segment, 100, videoDuration)
+              )}
+            </div>
           </div>
         </div>
-      </div>
       </div>
     </div>
   );
@@ -307,23 +400,24 @@ function Timeline({
 
 Timeline.propTypes = {
   videoDuration: PropTypes.number,
-  scenes: PropTypes.arrayOf(PropTypes.shape({
-    scene_number: PropTypes.number,
-    start_time: PropTypes.number,
-    duration: PropTypes.number,
-    location: PropTypes.string,
-    action: PropTypes.string,
-  })),
+  scenes: PropTypes.arrayOf(
+    PropTypes.shape({
+      scene_number: PropTypes.number,
+      start_time: PropTypes.number,
+      duration: PropTypes.number,
+      location: PropTypes.string,
+      action: PropTypes.string,
+    })
+  ),
   audioSpec: PropTypes.shape({
     enable_audio: PropTypes.bool,
     music_mood: PropTypes.string,
     music_style: PropTypes.string,
-    voiceover_text: PropTypes.string,
-    sync_points: PropTypes.arrayOf(PropTypes.shape({
-      timestamp: PropTypes.number,
-      description: PropTypes.string,
-    })),
   }),
+  backgroundMusicUrl: PropTypes.string,
+  narratorAudioUrl: PropTypes.string,
+  sideEffectsText: PropTypes.string,
+  sideEffectsStartTime: PropTypes.number,
   audioUrl: PropTypes.string,
   onSeek: PropTypes.func,
 };
@@ -332,9 +426,12 @@ Timeline.defaultProps = {
   videoDuration: 30,
   scenes: [],
   audioSpec: null,
+  backgroundMusicUrl: null,
+  narratorAudioUrl: null,
+  sideEffectsText: null,
+  sideEffectsStartTime: null,
   audioUrl: null,
   onSeek: undefined,
 };
 
 export default Timeline;
-

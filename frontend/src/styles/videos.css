@@ -241,8 +241,16 @@
 .video-thumbnail {
   position: relative;
   padding-top: 56.25%;
-  background: radial-gradient(circle at 30% 20%, rgba(124, 255, 0, 0.35), transparent 60%),
-    radial-gradient(circle at 70% 40%, rgba(180, 76, 255, 0.35), transparent 55%),
+  background: radial-gradient(
+      circle at 30% 20%,
+      rgba(124, 255, 0, 0.35),
+      transparent 60%
+    ),
+    radial-gradient(
+      circle at 70% 40%,
+      rgba(180, 76, 255, 0.35),
+      transparent 55%
+    ),
     linear-gradient(135deg, rgba(10, 14, 26, 0.9), rgba(20, 25, 38, 0.9));
   overflow: hidden;
   border-radius: var(--radius-base) var(--radius-base) 0 0;
@@ -264,7 +272,11 @@
   align-items: center;
   color: var(--text-primary);
   gap: var(--space-8);
-  background: linear-gradient(120deg, rgba(10, 14, 26, 0.5), rgba(20, 25, 38, 0.7));
+  background: linear-gradient(
+    120deg,
+    rgba(10, 14, 26, 0.5),
+    rgba(20, 25, 38, 0.7)
+  );
   text-transform: uppercase;
   font-size: 0.75rem;
   letter-spacing: 0.2em;

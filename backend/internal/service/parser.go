@@ -28,6 +28,10 @@ type ParseRequest struct {
 	// Style reference image - analyzed and converted to text description for ALL scenes
 	StyleReferenceImage string `json:"style_reference_image,omitempty"`
 
+	// Pharmaceutical ad configuration
+	Voice       string `json:"voice,omitempty"`       // "male" or "female" for narrator
+	SideEffects string `json:"side_effects,omitempty"` // User-provided side effects disclosure text
+
 	// Enhanced prompt options (Phase 1 - all optional)
 	Style             string
 	Tone              string
@@ -87,6 +91,8 @@ func (s *ParserService) GenerateScript(ctx context.Context, req ParseRequest) (*
 		AspectRatio:         req.AspectRatio,
 		StartImage:          req.StartImage,
 		StyleReferenceImage: req.StyleReferenceImage,
+		Voice:               req.Voice,
+		SideEffects:         req.SideEffects,
 		EnhancedOptions:     enhancedOptions,
 	}
 

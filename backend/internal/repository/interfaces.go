@@ -48,6 +48,9 @@ type AssetRepository interface {
 	// DownloadFile downloads a file from storage
 	DownloadFile(ctx context.Context, bucket, key, destPath string) error
 
+	// DeletePrefix deletes all assets under a prefix (best-effort cleanup)
+	DeletePrefix(ctx context.Context, bucket, prefix string) error
+
 	// HealthCheck verifies the repository is operational
 	HealthCheck(ctx context.Context) error
 }

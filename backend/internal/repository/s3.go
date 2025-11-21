@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"go.uber.org/zap"
 )
 
@@ -53,6 +54,36 @@ func (s *S3AssetRepository) GetPresignedURL(ctx context.Context, key string, dur
 
 	s.logger.Info("Presigned URL generated",
 		zap.String("key", key),
+		zap.Duration("expiration", duration),
+	)
+
+	return request.URL, nil
+}
+
+// GetPresignedPutURL generates a presigned URL for uploading a file
+func (s *S3AssetRepository) GetPresignedPutURL(ctx context.Context, key string, contentType string, duration time.Duration) (string, error) {
+	presignClient := s3.NewPresignClient(s.client)
+
+	request, err := presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.bucketName),
+		Key:         aws.String(key),
+		ContentType: aws.String(contentType),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = duration
+	})
+	if err != nil {
+		s.logger.Error("Failed to generate presigned PUT URL",
+			zap.String("bucket", s.bucketName),
+			zap.String("key", key),
+			zap.String("content_type", contentType),
+			zap.Error(err),
+		)
+		return "", fmt.Errorf("failed to generate presigned PUT URL: %w", err)
+	}
+
+	s.logger.Info("Presigned PUT URL generated",
+		zap.String("key", key),
+		zap.String("content_type", contentType),
 		zap.Duration("expiration", duration),
 	)
 
@@ -125,6 +156,54 @@ func (s *S3AssetRepository) DeleteFile(ctx context.Context, bucket, key string) 
 	s.logger.Info("File deleted from S3",
 		zap.String("bucket", bucket),
 		zap.String("key", key),
+	)
+	return nil
+}
+
+// DeletePrefix deletes all objects under a given prefix (best-effort cleanup).
+func (s *S3AssetRepository) DeletePrefix(ctx context.Context, bucket, prefix string) error {
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucket),
+		Prefix: aws.String(prefix),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list objects for prefix %s: %w", prefix, err)
+		}
+
+		if len(page.Contents) == 0 {
+			continue
+		}
+
+		identifiers := make([]types.ObjectIdentifier, 0, len(page.Contents))
+		for _, object := range page.Contents {
+			if object.Key == nil {
+				continue
+			}
+			identifiers = append(identifiers, types.ObjectIdentifier{Key: object.Key})
+		}
+
+		if len(identifiers) == 0 {
+			continue
+		}
+
+		_, err = s.client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(bucket),
+			Delete: &types.Delete{
+				Objects: identifiers,
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to delete objects for prefix %s: %w", prefix, err)
+		}
+	}
+
+	s.logger.Info("Deleted S3 assets for prefix",
+		zap.String("bucket", bucket),
+		zap.String("prefix", prefix),
 	)
 	return nil
 }

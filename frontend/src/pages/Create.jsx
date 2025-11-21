@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ToggleSwitch from "../components/ToggleSwitch.jsx";
 import BrandPresetSelector from "../components/create/BrandPresetSelector.jsx";
@@ -8,7 +8,8 @@ import BatchGenerationToggle from "../components/create/BatchGenerationToggle.js
 import GenerationState from "../components/create/GenerationState.jsx";
 import ScenePreviewGrid from "../components/create/ScenePreviewGrid.jsx";
 import { useJobProgress } from "../hooks/useJobProgress.js";
-import { generate, jobs } from "../utils/api.js";
+import { APIError, generate, uploads } from "../utils/api.js";
+import { showToast } from "../utils/toast.js";
 import "../styles/dashboard.css";
 import "../styles/create.css";
 
@@ -22,6 +23,9 @@ const categories = [
 const styles = ["Clinical", "Professional", "Documentary", "Informative", "Trustworthy"];
 const durations = ["10s", "20s", "30s", "40s", "50s", "60s"]; // Must be multiple of 10
 const aspects = ["16:9", "9:16", "1:1"]; // Backend only supports these
+
+const SIDE_EFFECTS_MIN = 10;
+const SIDE_EFFECTS_MAX = 500;
 
 // Removed unused options: visualStyles, tones, tempos, platforms, goals
 
@@ -56,6 +60,11 @@ function Create() {
   // Phase 1 additions
   const [selectedBrandPreset, setSelectedBrandPreset] = useState("default");
   const [productImage, setProductImage] = useState(null);
+  const [productImageAssetUrl, setProductImageAssetUrl] = useState(null);
+  const [productUploadStatus, setProductUploadStatus] = useState("idle"); // idle | uploading | success | error
+  const [productUploadError, setProductUploadError] = useState("");
+  const [productUploadAttempt, setProductUploadAttempt] = useState(0);
+  const uploadAbortControllerRef = useRef(null);
   const [validationError, setValidationError] = useState("");
 
 
@@ -88,16 +97,129 @@ function Create() {
     },
     onFailed: (finalProgress) => {
       console.error("[CREATE] ❌ Job failed:", finalProgress);
+      
+      // Extract detailed error message from job if available
+      let errorMessage = "Video generation failed. Please try again.";
+      if (finalProgress?.error_message) {
+        errorMessage = finalProgress.error_message;
+        console.error("[CREATE] Error details:", finalProgress.error_message);
+      } else if (finalProgress?.message) {
+        errorMessage = finalProgress.message;
+      }
+      
       setGenerationState("error");
-      setGenerationError("Video generation failed. Please try again.");
+      setGenerationError(errorMessage);
       setIsGenerating(false);
     }
   });
+
+  // Handle product image upload to S3 via presigned URL
+  useEffect(() => {
+    const file = productImage?.file;
+
+    // Reset state when image removed
+    if (!file) {
+      setProductUploadStatus("idle");
+      setProductUploadError("");
+      setProductImageAssetUrl(null);
+      if (uploadAbortControllerRef.current) {
+        uploadAbortControllerRef.current.abort();
+        uploadAbortControllerRef.current = null;
+      }
+      return;
+    }
+
+    let isCancelled = false;
+    const abortController = new AbortController();
+    uploadAbortControllerRef.current = abortController;
+
+    const uploadProductImage = async () => {
+      setProductUploadStatus("uploading");
+      setProductUploadError("");
+      setProductImageAssetUrl(null);
+
+      try {
+        console.log("[CREATE] 📤 Requesting presigned URL for product image upload");
+        const presignResponse = await uploads.getPresignedUrl({
+          type: "product_image",
+          filename: file.name,
+          contentType: file.type,
+          fileSize: file.size,
+        });
+
+        if (isCancelled) {
+          return;
+        }
+
+        const { upload_url: uploadUrl, asset_url: assetUrl } = presignResponse || {};
+        if (!uploadUrl || !assetUrl) {
+          throw new Error("Invalid presigned URL response from server.");
+        }
+
+        console.log("[CREATE] 🚀 Uploading product image to S3");
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: {
+            "Content-Type": file.type || "application/octet-stream",
+          },
+          signal: abortController.signal,
+        });
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text().catch(() => uploadResponse.statusText);
+          throw new Error(
+            `Upload failed with status ${uploadResponse.status}: ${errorText || "Unknown error"}`
+          );
+        }
+
+        setProductImageAssetUrl(assetUrl);
+        setProductUploadStatus("success");
+        console.log("[CREATE] ✅ Product image uploaded successfully:", assetUrl);
+      } catch (error) {
+        if (isCancelled || error.name === "AbortError") {
+          console.warn("[CREATE] ⚠️ Product image upload aborted");
+          return;
+        }
+
+        console.error("[CREATE] ❌ Product image upload failed:", error);
+        setProductUploadStatus("error");
+        setProductUploadError(
+          error.message || "Failed to upload product image. Please try again."
+        );
+        setProductImageAssetUrl(null);
+      } finally {
+        if (uploadAbortControllerRef.current === abortController) {
+          uploadAbortControllerRef.current = null;
+        }
+      }
+    };
+
+    uploadProductImage();
+
+    return () => {
+      isCancelled = true;
+      abortController.abort();
+    };
+  }, [productImage?.file, productUploadAttempt]);
 
   // Voice selection
   const [voice, setVoice] = useState("Ash"); // Default to Ash (male)
   // Side Effects - Required field for pharmaceutical ads
   const [sideEffects, setSideEffects] = useState("");
+
+  // Voice mapping: UI → Backend
+  const voiceMap = useMemo(
+    () => ({
+      Ash: "male",
+      Rebecca: "female",
+    }),
+    []
+  );
 
   // Map pharmaceutical styles to backend-compatible styles
   const styleMap = {
@@ -110,6 +232,28 @@ function Create() {
 
   const characterLimit = 2000;
   const characterCount = prompt.length;
+  const sideEffectsLimit = SIDE_EFFECTS_MAX;
+  const sideEffectsCount = sideEffects.length;
+  const sideEffectsTrimmedCount = sideEffects.trim().length;
+  const isSideEffectsValid =
+    sideEffectsTrimmedCount >= SIDE_EFFECTS_MIN &&
+    sideEffectsTrimmedCount <= SIDE_EFFECTS_MAX;
+  const isGenerateDisabled = useMemo(() => {
+    if (!prompt.trim()) return true;
+    if (!isSideEffectsValid) return true;
+    if (isGenerating) return true;
+    if (generationState !== "idle") return true;
+    if (activeJobId) return true;
+    if (productUploadStatus === "uploading") return true;
+    return false;
+  }, [
+    prompt,
+    isSideEffectsValid,
+    isGenerating,
+    generationState,
+    activeJobId,
+    productUploadStatus,
+  ]);
 
   const getEstimatedTime = () => {
     const durationNum = parseInt(selectedDuration);
@@ -129,26 +273,57 @@ function Create() {
     console.log("=".repeat(80));
     console.log("🎬 [CREATE] VIDEO GENERATION PIPELINE STARTED");
     console.log("=".repeat(80));
+    const trimmedPrompt = prompt.trim();
+    const trimmedSideEffects = sideEffects.trim();
+    const backendVoice = voiceMap[voice] || "male";
+
     console.log("[CREATE] 📝 User Input:", {
-      prompt: prompt.trim(),
+      prompt: trimmedPrompt,
       category: selectedCategory,
       style: selectedStyle,
       duration: selectedDuration,
       aspectRatio: selectedAspect,
       brandPreset: selectedBrandPreset,
+      voice: voice,
+      backendVoice,
+      sideEffectsLength: trimmedSideEffects.length,
     });
 
     // Validation
-    if (!prompt.trim()) {
+    if (!trimmedPrompt) {
       console.warn("[CREATE] ⚠️ Validation failed: Empty prompt");
       setValidationError("Please describe your video to get started");
       return;
     }
 
     // Validate side effects (required for pharmaceutical ads)
-    if (!sideEffects.trim()) {
+    if (!trimmedSideEffects) {
       console.warn("[CREATE] ⚠️ Validation failed: Empty side effects");
       setValidationError("Side Effects is required. Please enter the side effects information.");
+      return;
+    }
+
+    if (trimmedSideEffects.length < SIDE_EFFECTS_MIN) {
+      console.warn("[CREATE] ⚠️ Validation failed: Side effects too short");
+      setValidationError(`Side effects must be at least ${SIDE_EFFECTS_MIN} characters.`);
+      return;
+    }
+
+    if (trimmedSideEffects.length > SIDE_EFFECTS_MAX) {
+      console.warn("[CREATE] ⚠️ Validation failed: Side effects too long");
+      setValidationError(`Side effects cannot exceed ${SIDE_EFFECTS_MAX} characters (currently: ${trimmedSideEffects.length}).`);
+      return;
+    }
+
+    if (!productImage) {
+      console.warn("[CREATE] ⚠️ Validation failed: Missing product image");
+      setValidationError("Product image is required for pharmaceutical ads.");
+      return;
+    }
+
+    if (productUploadStatus === "uploading") {
+      console.warn("[CREATE] ⚠️ Validation failed: Product image still uploading");
+      setValidationError("Product image is still uploading. Please wait for the upload to complete.");
       return;
     }
 
@@ -181,7 +356,7 @@ function Create() {
 
       // Prepare generate request with required fields
       const generateParams = {
-        prompt: prompt.trim(),
+        prompt: trimmedPrompt,
         duration: durationNum,
         aspect_ratio: selectedAspect,
       };
@@ -194,36 +369,24 @@ function Create() {
         console.log(`[CREATE] Mapped style "${selectedStyle}" to backend style "${backendStyle}"`);
       }
 
-      // Voice and side_effects are kept in UI for future use but not sent to API yet
-      // TODO: Add voice and side_effects support when backend is ready
-      // if (voice) {
-      //   generateParams.voice = voice;
-      // }
-      // if (sideEffects.trim()) {
-      //   generateParams.side_effects = sideEffects.trim();
-      // }
+      if (voice) {
+        generateParams.voice = backendVoice;
+        console.log(`[CREATE] 🎙️ Voice selection mapped to "${backendVoice}"`);
+      }
+
+      if (trimmedSideEffects) {
+        generateParams.side_effects = trimmedSideEffects;
+        console.log(`[CREATE] 💊 Side effects included (${trimmedSideEffects.length} characters)`);
+      }
 
       // Add start_image (Product Image - used ONLY for first scene)
-      if (productImage) {
-        // Use preview (data URI) if available, otherwise skip
-        if (
-          productImage.preview &&
-          productImage.preview.startsWith("data:image/")
-        ) {
-          generateParams.start_image = productImage.preview;
-          console.log("[CREATE] 📸 Using product image for first scene (data URI)");
-        } else if (
-          productImage.url &&
-          (productImage.url.startsWith("http://") ||
-            productImage.url.startsWith("https://"))
-        ) {
-          generateParams.start_image = productImage.url;
-          console.log("[CREATE] 📸 Using product image for first scene (URL)");
-        } else {
-          console.log(
-            "[CREATE] ⚠️ Product image provided but not a valid URL, skipping"
-          );
-        }
+      if (productImageAssetUrl) {
+        generateParams.start_image = productImageAssetUrl;
+        console.log("[CREATE] 📸 Using uploaded product image asset:", productImageAssetUrl);
+      } else if (productImage?.preview) {
+        // Fallback to preview data URI if presigned upload not available
+        generateParams.start_image = productImage.preview;
+        console.warn("[CREATE] ⚠️ Falling back to inline product image preview (upload URL unavailable)");
       }
 
       console.log("[CREATE] 📡 API Call: POST /api/v1/generate");
@@ -249,8 +412,33 @@ function Create() {
       console.error("❌ [ERROR] VIDEO GENERATION PIPELINE ERROR");
       console.error("=".repeat(80));
       console.error("[ERROR] Generation failed:", error);
+
+      let message = error?.message || "Video generation failed. Please try again.";
+
+      if (error instanceof APIError) {
+        message = error.message || message;
+
+        if (error.status === 400) {
+          setGenerationState("idle");
+          setIsGenerating(false);
+
+          if (error.details?.field) {
+            console.warn(`[CREATE] Validation error on field "${error.details.field}": ${message}`);
+            setValidationError(message);
+          } else {
+            setValidationError("");
+            setGenerationError(message);
+          }
+
+          showToast(message, "error");
+          return;
+        }
+      }
+
       setGenerationState("error");
-      setGenerationError(error.message || "Generation failed");
+      setValidationError("");
+      setGenerationError(message);
+      showToast(message, "error");
       setIsGenerating(false);
     }
 
@@ -262,6 +450,25 @@ function Create() {
     if (characterCount >= characterLimit) return "char-counter danger";
     if (characterCount >= characterLimit * 0.9) return "char-counter warning";
     return "char-counter normal";
+  };
+
+  const getSideEffectsCounterClass = () => {
+    if (sideEffectsTrimmedCount >= sideEffectsLimit) return "char-counter danger";
+    if (sideEffectsTrimmedCount >= sideEffectsLimit - 9) return "char-counter danger";
+    if (sideEffectsTrimmedCount >= sideEffectsLimit - 50) return "char-counter warning";
+    return "char-counter normal";
+  };
+
+  const retryProductUpload = () => {
+    if (!productImage?.file) {
+      return;
+    }
+
+    console.log("[CREATE] 🔄 Retrying product image upload");
+    setProductUploadStatus("idle");
+    setProductUploadError("");
+    setProductImageAssetUrl(null);
+    setProductUploadAttempt((attempt) => attempt + 1);
   };
 
   const toggleAdvanced = () => setIsAdvancedOpen(!isAdvancedOpen);
@@ -339,6 +546,9 @@ function Create() {
               durations={durations}
               selectedDuration={selectedDuration}
               onDurationChange={setSelectedDuration}
+              uploadStatus={productUploadStatus}
+              uploadError={productUploadError}
+              onRetryUpload={retryProductUpload}
               disabled={isGenerating || generationState !== "idle"}
             />
 
@@ -404,18 +614,27 @@ function Create() {
             <div className="options-grid">
               {/* Side Effects - Required field for pharmaceutical ads */}
               <div className="option-group">
-                <label className="option-label">Side Effects <span style={{ color: 'var(--error)' }}>*</span></label>
+                <label className="option-label">
+                  Side Effects <span style={{ color: 'var(--error)' }}>*</span>
+                  <span className={getSideEffectsCounterClass()}>
+                    {sideEffectsTrimmedCount} / {SIDE_EFFECTS_MAX}
+                  </span>
+                </label>
                 <textarea
                   className="prompt-textarea"
                   placeholder="Enter side effects information (e.g., Common side effects include headache, nausea, dizziness...)"
                   value={sideEffects}
-                  onChange={(e) => setSideEffects(e.target.value)}
+                  onChange={(e) => {
+                    setSideEffects(e.target.value);
+                    if (validationError) setValidationError("");
+                  }}
                   rows={4}
                   required
                   disabled={isGenerating || generationState !== "idle"}
+                  maxLength={SIDE_EFFECTS_MAX}
                 />
                 <p className="option-helper">
-                  Required: Enter the side effects information that will be included in your pharmaceutical ad video
+                  Required: 10-500 characters (trimmed). This text appears in narration and on-screen disclosures.
                 </p>
               </div>
 
@@ -505,7 +724,7 @@ function Create() {
       <button
         type="button"
         className="generate-button"
-        disabled={!prompt.trim() || !sideEffects.trim() || isGenerating || generationState !== "idle" || !!activeJobId}
+        disabled={isGenerateDisabled}
         onClick={handleGenerate}
       >
         {isGenerating ? "Generating..." : "Generate Video"}
