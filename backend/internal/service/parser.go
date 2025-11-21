@@ -109,12 +109,12 @@ func (s *ParserService) validateParseRequest(req ParseRequest) error {
 		return fmt.Errorf("prompt is required")
 	}
 
-	if req.Duration < 10 || req.Duration > 60 {
-		return fmt.Errorf("duration must be between 10 and 60 seconds")
+	if req.Duration < 4 || req.Duration > 60 {
+		return fmt.Errorf("duration must be between 4 and 60 seconds")
 	}
 
-	if req.Duration%10 != 0 {
-		return fmt.Errorf("duration must be a multiple of 10 seconds (Kling constraint)")
+	if req.Duration%4 != 0 {
+		return fmt.Errorf("duration must be a multiple of 4 seconds (Veo supports 4s, 6s, and 8s scenes)")
 	}
 
 	if req.AspectRatio != "16:9" && req.AspectRatio != "9:16" && req.AspectRatio != "1:1" {

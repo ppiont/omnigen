@@ -22,6 +22,7 @@ type ClipVideo struct {
 	VideoURL     string
 	LastFrameURL string
 	Duration     float64
+	HasAudio     bool // indicates if the clip has embedded audio
 }
 
 // S3 key generation helpers for new folder structure
@@ -61,12 +62,17 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	h.logger.Info("Generating script with GPT-4o", zap.String("job_id", job.JobID))
 	job.Stage = "script_generating"
 	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
-		h.logger.Error("Failed to update job stage",
+		h.logger.Error("CRITICAL: Failed to update job stage to script_generating - DynamoDB write failed",
 			zap.String("job_id", job.JobID),
 			zap.String("stage", "script_generating"),
+			zap.String("table_name", "check JOB_TABLE env var"),
 			zap.Error(err),
 		)
+		// Mark job as failed so user knows something went wrong
+		h.jobRepo.MarkJobFailed(jobCtx, job.JobID, "Database write error - check logs")
+		return
 	}
+	h.logger.Info("Successfully updated job stage to script_generating", zap.String("job_id", job.JobID))
 
 	script, err := h.parserService.GenerateScript(jobCtx, service.ParseRequest{
 		UserID:      job.UserID,
@@ -243,38 +249,60 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		)
 	}
 
-	// STEP 3: Generate audio
-	job.Stage = "audio_generating"
-	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
-		h.logger.Error("Failed to update job stage",
+	// STEP 3: Generate audio (conditional based on adapter)
+	audioURL := ""
+	shouldGenerateSeparateAudio := true
+
+	// Check if video clips already have native audio embedded
+	// Only skip Minimax if Veo generated audio (VEO_GENERATE_AUDIO=true)
+	if len(clipVideos) > 0 && clipVideos[0].HasAudio {
+		h.logger.Info("Videos have native audio embedded, skipping Minimax",
 			zap.String("job_id", job.JobID),
-			zap.String("stage", "audio_generating"),
-			zap.Error(err),
+			zap.String("adapter", h.videoAdapter.GetModelName()))
+		shouldGenerateSeparateAudio = false
+		// Audio is embedded in video clips
+	} else {
+		h.logger.Info("No native audio in clips, will generate with Minimax",
+			zap.String("job_id", job.JobID),
+			zap.String("adapter", h.videoAdapter.GetModelName()),
+			zap.Int("num_clips", len(clipVideos)),
+			zap.Bool("first_clip_has_audio", len(clipVideos) > 0 && clipVideos[0].HasAudio))
+	}
+
+	if shouldGenerateSeparateAudio {
+		job.Stage = "audio_generating"
+		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+			h.logger.Error("Failed to update job stage",
+				zap.String("job_id", job.JobID),
+				zap.String("stage", "audio_generating"),
+				zap.Error(err),
+			)
+		}
+		h.logger.Info("Generating separate audio track with Minimax",
+			zap.String("job_id", job.JobID))
+
+		audioURL, err = h.generateAudio(jobCtx, job.UserID, job.JobID, script)
+		if err != nil {
+			h.logger.Error("Audio generation failed", zap.String("job_id", job.JobID), zap.Error(err))
+			h.jobRepo.MarkJobFailed(jobCtx, job.JobID, fmt.Sprintf("Audio generation failed: %v", err))
+			return
+		}
+
+		job.Stage = "audio_complete"
+		job.AudioURL = audioURL
+
+		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+			h.logger.Error("Failed to update job with audio URL",
+				zap.String("job_id", job.JobID),
+				zap.Error(err),
+			)
+		}
+
+		h.logger.Info("Audio generation complete",
+			zap.String("job_id", job.JobID),
+			zap.String("audio_url", audioURL),
 		)
 	}
-	h.logger.Info("Generating audio", zap.String("job_id", job.JobID))
-
-	audioURL, err := h.generateAudio(jobCtx, job.UserID, job.JobID, script)
-	if err != nil {
-		h.logger.Error("Audio generation failed", zap.String("job_id", job.JobID), zap.Error(err))
-		h.jobRepo.MarkJobFailed(jobCtx, job.JobID, fmt.Sprintf("Audio generation failed: %v", err))
-		return
-	}
-
-	job.Stage = "audio_complete"
-	job.AudioURL = audioURL
-
-	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
-		h.logger.Error("Failed to update job with audio URL",
-			zap.String("job_id", job.JobID),
-			zap.Error(err),
-		)
-	}
-
-	h.logger.Info("Audio generation complete",
-		zap.String("job_id", job.JobID),
-		zap.String("audio_url", audioURL),
-	)
 
 	// STEP 4: Compose final video
 	job.Stage = "composing"
@@ -316,23 +344,32 @@ func (h *GenerateHandler) generateClip(
 	aspectRatio string,
 	clipNumber int,
 ) (ClipVideo, error) {
-	h.logger.Info("Calling Kling adapter",
+	h.logger.Info("Calling video generation adapter",
 		zap.String("job_id", jobID),
 		zap.Int("scene", scene.SceneNumber),
 		zap.String("prompt", scene.GenerationPrompt),
 	)
 
-	// Call Kling adapter
+	// Determine if we should generate audio based on adapter type and configuration
+	// Only generate audio if using Veo AND VEO_GENERATE_AUDIO is explicitly set to true
+	generateAudio := false
+	if h.videoAdapter.GetModelName() == "Google Veo 3.1" {
+		veoGenerateAudio := os.Getenv("VEO_GENERATE_AUDIO")
+		generateAudio = veoGenerateAudio == "true"
+	}
+
+	// Call video adapter
 	req := &adapters.VideoGenerationRequest{
 		Prompt:        scene.GenerationPrompt,
 		Duration:      int(scene.Duration),
 		AspectRatio:   aspectRatio,
 		StartImageURL: scene.StartImageURL,
+		GenerateAudio: generateAudio, // Only Veo supports native audio
 	}
 
-	result, err := h.klingAdapter.GenerateVideo(ctx, req)
+	result, err := h.videoAdapter.GenerateVideo(ctx, req)
 	if err != nil {
-		return ClipVideo{}, fmt.Errorf("kling API failed: %w", err)
+		return ClipVideo{}, fmt.Errorf("video generation API failed: %w", err)
 	}
 
 	// Poll until complete (max 10 minutes)
@@ -348,9 +385,9 @@ func (h *GenerateHandler) generateClip(
 
 		if attempt > 0 {
 			time.Sleep(pollInterval)
-			result, err = h.klingAdapter.GetStatus(ctx, result.PredictionID)
+			result, err = h.videoAdapter.GetStatus(ctx, result.PredictionID)
 			if err != nil {
-				h.logger.Warn("Kling polling failed, retrying", zap.Error(err))
+				h.logger.Warn("Video adapter polling failed, retrying", zap.Error(err))
 				continue
 			}
 		}
@@ -366,16 +403,17 @@ func (h *GenerateHandler) generateClip(
 				VideoURL:     clipURL,
 				LastFrameURL: lastFrameURL,
 				Duration:     scene.Duration,
+				HasAudio:     generateAudio, // Track if audio is embedded
 			}, nil
 		}
 
 		if result.Status == "failed" || result.Status == "canceled" {
-			return ClipVideo{}, fmt.Errorf("kling generation failed: %s", result.Error)
+			return ClipVideo{}, fmt.Errorf("video generation failed: %s", result.Error)
 		}
 
 		// Log only every 12th attempt (every minute instead of every 5 seconds)
 		if attempt%12 == 0 {
-			h.logger.Debug("Kling still processing",
+			h.logger.Debug("Video generation still processing",
 				zap.String("job_id", jobID),
 				zap.Int("attempt", attempt),
 				zap.String("status", result.Status),
@@ -662,6 +700,9 @@ func (h *GenerateHandler) composeVideo(
 		zap.Int("num_clips", len(clips)),
 	)
 
+	// Check if clips have native audio (Veo)
+	hasNativeAudio := len(clips) > 0 && clips[0].HasAudio
+
 	tmpDir := filepath.Join("/tmp", jobID, "composition")
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create temp dir: %w", err)
@@ -682,15 +723,6 @@ func (h *GenerateHandler) composeVideo(
 		clipPaths = append(clipPaths, clipPath)
 	}
 
-	// Download audio from S3
-	h.logger.Info("Downloading audio from S3 for composition",
-		zap.String("job_id", jobID),
-	)
-	audioPath := filepath.Join(tmpDir, "music.mp3")
-	if err := h.s3Service.DownloadFile(ctx, h.assetsBucket, extractS3Key(audioURL), audioPath); err != nil {
-		return "", fmt.Errorf("failed to download audio: %w", err)
-	}
-
 	// Create concat file for ffmpeg
 	concatFile := filepath.Join(tmpDir, "concat.txt")
 	f, err := os.Create(concatFile)
@@ -702,48 +734,103 @@ func (h *GenerateHandler) composeVideo(
 	}
 	f.Close()
 
-	// Concatenate clips
-	h.logger.Info("Concatenating video clips with ffmpeg",
-		zap.String("job_id", jobID),
-		zap.Int("num_clips", len(clipPaths)),
-	)
-	videoNoAudio := filepath.Join(tmpDir, "video_no_audio.mp4")
-	cmd := exec.CommandContext(ctx, "ffmpeg",
-		"-f", "concat",
-		"-safe", "0",
-		"-i", concatFile,
-		"-c", "copy",
-		"-y", videoNoAudio,
-	)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		h.logger.Error("ffmpeg concat failed",
-			zap.String("job_id", jobID),
-			zap.String("output", string(output)),
-			zap.Error(err),
-		)
-		return "", fmt.Errorf("ffmpeg concat failed: %w", err)
-	}
-
-	// Add audio
-	h.logger.Info("Merging audio track with ffmpeg",
-		zap.String("job_id", jobID),
-	)
 	finalVideo := filepath.Join(tmpDir, "final.mp4")
-	cmd = exec.CommandContext(ctx, "ffmpeg",
-		"-i", videoNoAudio,
-		"-i", audioPath,
-		"-c:v", "copy",
-		"-c:a", "aac",
-		"-shortest",
-		"-y", finalVideo,
-	)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		h.logger.Error("ffmpeg audio merge failed",
+
+	if hasNativeAudio {
+		// Videos already have audio, just concatenate with audio copy
+		h.logger.Info("Concatenating videos with native audio",
 			zap.String("job_id", jobID),
-			zap.String("output", string(output)),
-			zap.Error(err),
 		)
-		return "", fmt.Errorf("ffmpeg audio merge failed: %w", err)
+		cmd := exec.CommandContext(ctx, "ffmpeg",
+			"-f", "concat",
+			"-safe", "0",
+			"-i", concatFile,
+			"-c:v", "copy",
+			"-c:a", "copy", // Copy audio from source videos
+			"-y",
+			finalVideo,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			h.logger.Error("ffmpeg concat with native audio failed",
+				zap.String("job_id", jobID),
+				zap.String("output", string(output)),
+				zap.Error(err),
+			)
+			return "", fmt.Errorf("ffmpeg concat failed: %w", err)
+		}
+	} else if audioURL != "" {
+		// Original logic: concatenate videos, then add separate audio track
+		h.logger.Info("Downloading audio from S3 for composition",
+			zap.String("job_id", jobID),
+		)
+		audioPath := filepath.Join(tmpDir, "music.mp3")
+		if err := h.s3Service.DownloadFile(ctx, h.assetsBucket, extractS3Key(audioURL), audioPath); err != nil {
+			return "", fmt.Errorf("failed to download audio: %w", err)
+		}
+
+		// Concatenate clips
+		h.logger.Info("Concatenating video clips with ffmpeg",
+			zap.String("job_id", jobID),
+			zap.Int("num_clips", len(clipPaths)),
+		)
+		videoNoAudio := filepath.Join(tmpDir, "video_no_audio.mp4")
+		cmd := exec.CommandContext(ctx, "ffmpeg",
+			"-f", "concat",
+			"-safe", "0",
+			"-i", concatFile,
+			"-c", "copy",
+			"-y", videoNoAudio,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			h.logger.Error("ffmpeg concat failed",
+				zap.String("job_id", jobID),
+				zap.String("output", string(output)),
+				zap.Error(err),
+			)
+			return "", fmt.Errorf("ffmpeg concat failed: %w", err)
+		}
+
+		// Add audio
+		h.logger.Info("Merging audio track with ffmpeg",
+			zap.String("job_id", jobID),
+		)
+		cmd = exec.CommandContext(ctx, "ffmpeg",
+			"-i", videoNoAudio,
+			"-i", audioPath,
+			"-c:v", "copy",
+			"-c:a", "aac",
+			"-shortest",
+			"-y", finalVideo,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			h.logger.Error("ffmpeg audio merge failed",
+				zap.String("job_id", jobID),
+				zap.String("output", string(output)),
+				zap.Error(err),
+			)
+			return "", fmt.Errorf("ffmpeg audio merge failed: %w", err)
+		}
+	} else {
+		// No audio at all - just concatenate videos
+		h.logger.Info("Concatenating videos without audio",
+			zap.String("job_id", jobID),
+		)
+		cmd := exec.CommandContext(ctx, "ffmpeg",
+			"-f", "concat",
+			"-safe", "0",
+			"-i", concatFile,
+			"-c", "copy",
+			"-y",
+			finalVideo,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			h.logger.Error("ffmpeg concat failed",
+				zap.String("job_id", jobID),
+				zap.String("output", string(output)),
+				zap.Error(err),
+			)
+			return "", fmt.Errorf("ffmpeg concat failed: %w", err)
+		}
 	}
 
 	// Upload final video to S3

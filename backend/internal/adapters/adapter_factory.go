@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"fmt"
+	"os"
 
 	"go.uber.org/zap"
 )
@@ -11,6 +12,7 @@ type AdapterType string
 
 const (
 	AdapterTypeKling AdapterType = "kling"
+	AdapterTypeVeo   AdapterType = "veo"
 	// Future adapters:
 	// AdapterTypeRunway AdapterType = "runway"
 	// AdapterTypePika AdapterType = "pika"
@@ -35,12 +37,27 @@ func (f *AdapterFactory) CreateAdapter(adapterType AdapterType) (VideoGeneratorA
 	switch adapterType {
 	case AdapterTypeKling:
 		return NewKlingAdapter(f.replicateToken, f.logger), nil
+	case AdapterTypeVeo:
+		return NewVeoAdapter(f.replicateToken, f.logger), nil
 	default:
 		return nil, fmt.Errorf("unknown adapter type: %s", adapterType)
 	}
 }
 
-// GetDefaultAdapter returns the default adapter (Kling v2.5 Turbo)
+// GetDefaultAdapter returns the adapter based on environment configuration
 func (f *AdapterFactory) GetDefaultAdapter() VideoGeneratorAdapter {
-	return NewKlingAdapter(f.replicateToken, f.logger)
+	// Check environment variable for adapter type
+	adapterType := os.Getenv("VIDEO_ADAPTER_TYPE")
+	switch adapterType {
+	case "kling":
+		f.logger.Info("Using Kling adapter based on environment configuration")
+		return NewKlingAdapter(f.replicateToken, f.logger)
+	case "veo", "":
+		f.logger.Info("Using Veo 3.1 adapter (default)")
+		return NewVeoAdapter(f.replicateToken, f.logger)
+	default:
+		f.logger.Warn("Unknown VIDEO_ADAPTER_TYPE, falling back to Veo",
+			zap.String("adapter_type", adapterType))
+		return NewVeoAdapter(f.replicateToken, f.logger)
+	}
 }

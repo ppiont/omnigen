@@ -127,3 +127,15 @@ variable "cloudfront_domain" {
   description = "CloudFront domain for CORS configuration"
   type        = string
 }
+
+variable "video_adapter_type" {
+  description = "Video generation adapter type (veo, kling)"
+  type        = string
+  default     = "veo"
+}
+
+variable "veo_generate_audio" {
+  description = "Enable native audio generation for Veo (true/false)"
+  type        = string
+  default     = "false"
+}

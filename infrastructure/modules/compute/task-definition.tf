@@ -72,6 +72,14 @@ resource "aws_ecs_task_definition" "api" {
         {
           name  = "CLOUDFRONT_DOMAIN"
           value = var.cloudfront_domain
+        },
+        {
+          name  = "VIDEO_ADAPTER_TYPE"
+          value = var.video_adapter_type
+        },
+        {
+          name  = "VEO_GENERATE_AUDIO"
+          value = var.veo_generate_audio
         }
       ]
 

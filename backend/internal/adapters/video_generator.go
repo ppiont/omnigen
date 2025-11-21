@@ -7,19 +7,21 @@ import (
 // VideoGenerationRequest represents a video generation request
 type VideoGenerationRequest struct {
 	Prompt         string
-	Duration       int    // in seconds (5 or 10 for Kling)
+	Duration       int    // in seconds (5 or 10 for Kling, 4/6/8 for Veo)
 	AspectRatio    string // "16:9", "9:16", "1:1"
 	Style          string // optional style modifiers
 	StartImageURL  string // optional: URL to start image (first frame)
 	NegativePrompt string // optional: things to avoid in the video
+	GenerateAudio  bool   // whether to generate audio with the video (Veo only)
 }
 
 // VideoGenerationResult represents the result of a video generation
 type VideoGenerationResult struct {
-	VideoURL    string
+	VideoURL     string
 	PredictionID string // ID from the model provider for tracking
-	Status      string // "processing", "completed", "failed"
-	Error       string // error message if failed
+	Status       string // "processing", "completed", "failed"
+	Error        string // error message if failed
+	HasAudio     bool   // indicates if the video includes audio
 }
 
 // VideoGeneratorAdapter is the interface for video generation models

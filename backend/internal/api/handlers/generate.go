@@ -21,7 +21,7 @@ import (
 // GenerateHandler handles video generation requests with goroutine-based async processing
 type GenerateHandler struct {
 	parserService  *service.ParserService
-	klingAdapter   *adapters.KlingAdapter
+	videoAdapter   adapters.VideoGeneratorAdapter // Generic video adapter (Kling, Veo, etc.)
 	minimaxAdapter *adapters.MinimaxAdapter
 	s3Service      *repository.S3AssetRepository
 	jobRepo        *repository.DynamoDBRepository
@@ -33,7 +33,7 @@ type GenerateHandler struct {
 // NewGenerateHandler creates a new generate handler
 func NewGenerateHandler(
 	parserService *service.ParserService,
-	klingAdapter *adapters.KlingAdapter,
+	videoAdapter adapters.VideoGeneratorAdapter,
 	minimaxAdapter *adapters.MinimaxAdapter,
 	s3Service *repository.S3AssetRepository,
 	jobRepo *repository.DynamoDBRepository,
@@ -42,7 +42,7 @@ func NewGenerateHandler(
 ) *GenerateHandler {
 	return &GenerateHandler{
 		parserService:  parserService,
-		klingAdapter:   klingAdapter,
+		videoAdapter:   videoAdapter,
 		minimaxAdapter: minimaxAdapter,
 		s3Service:      s3Service,
 		jobRepo:        jobRepo,
@@ -111,11 +111,12 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// Validate duration is multiple of 5 (Kling constraint: 5s or 10s clips only)
-	if req.Duration%5 != 0 {
+	// Validate duration is compatible with Veo scene lengths (4s, 6s, 8s)
+	// Valid total durations: any multiple of 4 seconds (4, 8, 12, 16, 20, 24, 28, 32, etc.)
+	if req.Duration%4 != 0 {
 		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
 			Error: errors.ErrInvalidRequest.WithDetails(map[string]interface{}{
-				"error": "duration must be a multiple of 5 seconds (Kling v2.5 supports 5s or 10s clips)",
+				"error": "duration must be a multiple of 4 seconds (Veo supports 4s, 6s, and 8s scenes)",
 			}),
 		})
 		return
@@ -154,9 +155,9 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		ProCinematography: req.ProCinematography,
 		CreativeBoost:     req.CreativeBoost,
 
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		TTL:         time.Now().Add(7 * 24 * time.Hour).Unix(),
+		CreatedAt: now,
+		UpdatedAt: now,
+		TTL:       time.Now().Add(7 * 24 * time.Hour).Unix(),
 	}
 
 	// Set title if provided

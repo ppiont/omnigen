@@ -24,12 +24,12 @@ type ServerConfig struct {
 	JobRepo          *repository.DynamoDBRepository
 	S3Service        *repository.S3AssetRepository // For presigned URLs and video uploads/downloads
 	UsageRepo        *repository.DynamoDBUsageRepository
-	ParserService    *service.ParserService   // Script generation service
-	AssetService     *service.AssetService    // Asset URL generation service
-	KlingAdapter     *adapters.KlingAdapter   // Kling video generation
-	MinimaxAdapter   *adapters.MinimaxAdapter // Minimax audio generation
-	AssetsBucket     string                   // S3 bucket for video assets
-	APIKeys          []string                 // Deprecated: Use JWTValidator instead
+	ParserService    *service.ParserService         // Script generation service
+	AssetService     *service.AssetService          // Asset URL generation service
+	VideoAdapter     adapters.VideoGeneratorAdapter // Video generation (Kling, Veo, etc.)
+	MinimaxAdapter   *adapters.MinimaxAdapter       // Minimax audio generation
+	AssetsBucket     string                         // S3 bucket for video assets
+	APIKeys          []string                       // Deprecated: Use JWTValidator instead
 	JWTValidator     *auth.JWTValidator
 	CookieConfig     auth.CookieConfig // Cookie configuration for httpOnly tokens
 	CloudFrontDomain string            // For CORS in production
@@ -157,7 +157,7 @@ func (s *Server) setupRoutes() {
 		// Initialize handlers with goroutine-based async architecture
 		generateHandler := handlers.NewGenerateHandler(
 			s.config.ParserService,
-			s.config.KlingAdapter,
+			s.config.VideoAdapter,
 			s.config.MinimaxAdapter,
 			s.config.S3Service,
 			s.config.JobRepo,

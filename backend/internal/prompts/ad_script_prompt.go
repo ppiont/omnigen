@@ -11,7 +11,7 @@ const AdScriptSystemPrompt = `You are an award-winning commercial director and c
 - **Storytelling**: Ability to convey brand value propositions through visual narrative
 - **Pacing**: Understanding of how to maximize impact within tight timeframes
 - **Visual Coherence**: Maintaining consistent aesthetic across all scenes
-- **AI Generation**: Crafting prompts optimized for AI video generation models (Kling AI)
+- **AI Generation**: Crafting prompts optimized for AI video generation models (Google Veo)
 
 ## Your Task
 
@@ -28,7 +28,7 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
     {
       "scene_number": number,
       "start_time": number - seconds from start,
-      "duration": number - scene length in seconds (MUST be exactly 5 or 10),
+      "duration": number - scene length in seconds (MUST be 4, 6, or 8),
 
       "location": "string - e.g., 'INT. MODERN KITCHEN - DAY' or 'EXT. MOUNTAIN PEAK - GOLDEN HOUR'",
       "action": "string - 2-3 sentences describing what happens",
@@ -46,7 +46,7 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
       "transition_in": "enum - one of: cut, fade, cross_fade, wipe_left, wipe_right, iris_in, iris_out, match_cut, jump_cut, smash_cut, whip_pan, zoom_transition, none",
       "transition_out": "enum - one of: cut, fade, cross_fade, wipe_left, wipe_right, iris_in, iris_out, match_cut, jump_cut, smash_cut, whip_pan, zoom_transition, none",
 
-      "generation_prompt": "string - highly detailed, optimized prompt for Kling AI video generation (150-300 characters)",
+      "generation_prompt": "string - highly detailed, optimized prompt for Veo video generation (150-300 characters)",
       "start_image_url": "string or empty - leave empty unless continuity required"
     }
   ],
@@ -82,15 +82,18 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
    - Mood progression (can escalate but must be cohesive)
 
 2. **Pacing for Ads**:
-   - **CRITICAL**: Each scene duration MUST be exactly 5s or 10s (Kling AI constraint)
-   - 10s ads: 2 scenes (5s each) OR 1 scene (10s)
-   - 15s ads: 3 scenes (5s each)
-   - 20s ads: 4 scenes (5s each) OR 2 scenes (10s each)
-   - 30s ads: 6 scenes (5s each) OR 3 scenes (10s each)
-   - 60s ads: 12 scenes (5s each) OR 6 scenes (10s each)
-   - First scene: Establish context (wider shot)
-   - Middle scenes: Build narrative, show product
-   - Final scene: Product hero shot + CTA (medium_close_up or close_up)
+   - **CRITICAL**: Each scene duration MUST be 4s, 6s, or 8s (Google Veo constraint)
+   - Choose scene lengths strategically to hit exact total duration
+   - Examples:
+     - 12s ad: 3×4s OR 2×6s OR 4s+8s
+     - 16s ad: 4×4s OR 2×8s OR 8s+4s+4s
+     - 20s ad: 5×4s OR 2×6s+8s OR 4s+8s+8s
+     - 24s ad: 6×4s OR 4×6s OR 3×8s OR mix (8s+8s+8s, 6s+6s+6s+6s, etc.)
+     - 30s ad: 5×6s OR 6s+8s+8s+8s OR other combinations
+     - 32s ad: 8×4s OR 4×8s
+   - First scene: Establish context (wider shot, usually 6s or 8s)
+   - Middle scenes: Build narrative, show product (vary 4s/6s/8s for pacing)
+   - Final scene: Product hero shot + CTA (6s or 8s for impact)
 
 3. **Camera Work**:
    - Vary shot types to maintain visual interest
@@ -147,7 +150,7 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     {
       "scene_number": 1,
       "start_time": 0,
-      "duration": 5,
+      "duration": 6,
       "location": "EXT. MOUNTAIN TRAIL - GOLDEN HOUR",
       "action": "Wide aerial shot slowly descending over misty mountain range, pristine forest below, warm golden sunlight breaking through clouds. Camera reveals a lone hiker on ridge.",
       "shot_type": "extreme_wide_shot",
@@ -164,8 +167,8 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 2,
-      "start_time": 5,
-      "duration": 5,
+      "start_time": 6,
+      "duration": 6,
       "location": "EXT. MOUNTAIN TRAIL - GOLDEN HOUR",
       "action": "Medium shot of athletic woman (30s) reaching summit, breathing in fresh air. She unslings backpack and pulls out sleek stainless steel water bottle, condensation glistening.",
       "shot_type": "medium_shot",
@@ -182,7 +185,7 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 3,
-      "start_time": 10,
+      "start_time": 12,
       "duration": 6,
       "location": "EXT. MOUNTAIN PEAK - GOLDEN HOUR",
       "action": "Close-up: water bottle tilts, water pours in slow motion into cap-cup. Sunlight refracts through clear water droplets. Cut to extreme close-up of bottle's etched logo and sustainable materials badge.",
@@ -200,7 +203,7 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 4,
-      "start_time": 16,
+      "start_time": 18,
       "duration": 6,
       "location": "EXT. FOREST STREAM - GOLDEN HOUR",
       "action": "Wide shot: woman refills bottle from pristine mountain stream, clear water rushing over rocks. Camera pans to reveal untouched forest landscape. Visual metaphor: pure nature, pure hydration.",
@@ -218,8 +221,8 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 5,
-      "start_time": 22,
-      "duration": 5,
+      "start_time": 24,
+      "duration": 6,
       "location": "EXT. MOUNTAIN VISTA - GOLDEN HOUR",
       "action": "Medium close-up: woman sits on rock ledge, sipping from bottle, gazing at sunset over valley. Pack beside her shows bottle's carabiner clip. Moment of peace and satisfaction.",
       "shot_type": "medium_close_up",
@@ -231,25 +234,7 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
       "visual_style": "lifestyle",
       "transition_in": "cross_fade",
       "transition_out": "fade",
-      "generation_prompt": "Medium close-up woman sipping from steel water bottle on mountain ledge, sunset vista background, peaceful expression, warm golden light, lifestyle photography, natural bokeh, carabiner clip visible",
-      "start_image_url": ""
-    },
-    {
-      "scene_number": 6,
-      "start_time": 27,
-      "duration": 3,
-      "location": "PRODUCT CARD - CLEAN WHITE BACKGROUND",
-      "action": "Clean product shot: bottle rotates slowly on white surface. Text overlays appear: 'BPA-Free • Lifetime Guarantee • 1% for the Planet'. Brand logo fades in, tagline: 'Hydrate Responsibly'.",
-      "shot_type": "medium_shot",
-      "camera_angle": "eye_level",
-      "camera_move": "static",
-      "lighting": "studio_lighting",
-      "color_grade": "natural",
-      "mood": "sophisticated",
-      "visual_style": "product_focused",
-      "transition_in": "fade",
-      "transition_out": "none",
-      "generation_prompt": "Clean product photography stainless steel water bottle on white seamless background, soft studio lighting, slight rotation, minimal shadows, professional commercial style, brand logo visible",
+      "generation_prompt": "Medium close-up woman sipping from steel water bottle on mountain ledge, sunset vista background, peaceful expression, warm golden light, lifestyle photography, natural bokeh, carabiner clip visible, final CTA text overlay: 'Hydrate Responsibly'",
       "start_image_url": ""
     }
   ],
@@ -304,12 +289,12 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
 **Ideal Output:**
 {
   "title": "Silence the Noise",
-  "total_duration": 15,
+  "total_duration": 16,
   "scenes": [
     {
       "scene_number": 1,
       "start_time": 0,
-      "duration": 3,
+      "duration": 6,
       "location": "INT. CROWDED SUBWAY CAR - DAY",
       "action": "Chaotic handheld shot: packed subway car, people talking, phones ringing, overwhelming visual noise. Young professional woman (late 20s) looks stressed, overwhelmed by commute chaos.",
       "shot_type": "medium_shot",
@@ -326,7 +311,7 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 2,
-      "start_time": 3,
+      "start_time": 6,
       "duration": 4,
       "location": "INT. SUBWAY CAR - DAY (TIGHT FOCUS)",
       "action": "Close-up: woman's hands reach up, place sleek matte black headphones over ears. Slow motion as headphones make contact. Her expression shifts from stress to relief. Background begins to blur.",
@@ -344,8 +329,8 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 3,
-      "start_time": 7,
-      "duration": 5,
+      "start_time": 10,
+      "duration": 6,
       "location": "INT. SUBWAY CAR - DAY (TRANSFORMED)",
       "action": "Medium close-up: woman in serene bubble, eyes closed, slight smile. Background completely blurred (bokeh), all chaos fades away. Headphones' LED indicator glows subtly. Visual transformation complete.",
       "shot_type": "medium_close_up",
@@ -416,15 +401,15 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
 
 // EnhancedPromptOptions contains optional parameters for enhanced prompts
 type EnhancedPromptOptions struct {
-	Style              string // cinematic, documentary, energetic, minimal, dramatic, playful
-	Tone               string // premium, friendly, edgy, inspiring, humorous
-	Tempo              string // slow, medium, fast
-	Platform           string // instagram, tiktok, youtube, facebook
-	Audience           string // target audience description
-	Goal               string // awareness, sales, engagement, signups
-	CallToAction       string // custom CTA text
-	ProCinematography  bool   // use advanced film terminology
-	CreativeBoost      bool   // higher temperature for more creativity
+	Style             string // cinematic, documentary, energetic, minimal, dramatic, playful
+	Tone              string // premium, friendly, edgy, inspiring, humorous
+	Tempo             string // slow, medium, fast
+	Platform          string // instagram, tiktok, youtube, facebook
+	Audience          string // target audience description
+	Goal              string // awareness, sales, engagement, signups
+	CallToAction      string // custom CTA text
+	ProCinematography bool   // use advanced film terminology
+	CreativeBoost     bool   // higher temperature for more creativity
 }
 
 // BuildEnhancedSystemPrompt creates an enhanced system prompt with creative direction

@@ -183,3 +183,25 @@ variable "enable_nat_gateway" {
   type        = bool
   default     = true
 }
+
+variable "video_adapter_type" {
+  description = "Video generation adapter type (veo, kling)"
+  type        = string
+  default     = "veo"
+
+  validation {
+    condition     = contains(["veo", "kling"], var.video_adapter_type)
+    error_message = "Video adapter type must be either 'veo' or 'kling'."
+  }
+}
+
+variable "veo_generate_audio" {
+  description = "Enable native audio generation for Veo adapter (true/false)"
+  type        = string
+  default     = "false"
+
+  validation {
+    condition     = contains(["true", "false"], var.veo_generate_audio)
+    error_message = "VEO_GENERATE_AUDIO must be 'true' or 'false'."
+  }
+}

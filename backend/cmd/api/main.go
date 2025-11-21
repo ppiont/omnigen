@@ -128,9 +128,12 @@ func main() {
 	zapLogger.Info("Asset service initialized")
 
 	// Initialize video and audio generation adapters
-	klingAdapter := adapters.NewKlingAdapter(replicateAPIKey, zapLogger)
+	adapterFactory := adapters.NewAdapterFactory(replicateAPIKey, zapLogger)
+	videoAdapter := adapterFactory.GetDefaultAdapter()
+	zapLogger.Info("Video generation adapter initialized",
+		zap.String("adapter", videoAdapter.GetModelName()))
 	minimaxAdapter := adapters.NewMinimaxAdapter(replicateAPIKey, zapLogger)
-	zapLogger.Info("Video and audio generation adapters initialized")
+	zapLogger.Info("Audio generation adapter initialized")
 
 	// Initialize JWT validator
 	jwksURL := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
@@ -166,7 +169,7 @@ func main() {
 		UsageRepo:        usageRepo,
 		ParserService:    parserService,
 		AssetService:     assetService,
-		KlingAdapter:     klingAdapter,   // Video generation
+		VideoAdapter:     videoAdapter,   // Video generation (Kling, Veo, etc.)
 		MinimaxAdapter:   minimaxAdapter, // Audio generation
 		AssetsBucket:     cfg.AssetsBucket,
 		APIKeys:          apiKeys,
