@@ -112,14 +112,14 @@ func (h *GenerateHandler) failJob(
 	if internalErr != nil {
 		// Extract meaningful error details
 		errStr := internalErr.Error()
-		
+
 		// Add technical details in a user-friendly way
 		// Check for common error patterns and provide helpful context
 		if strings.Contains(errStr, "Payment required") || strings.Contains(errStr, "status 402") || strings.Contains(errStr, "status 402") {
 			// HTTP 402 - Payment Required (Replicate credits/billing issue)
 			errorMessage = "Script generation failed due to insufficient Replicate API credits. Please check your Replicate account balance and billing settings."
-		} else if strings.Contains(errStr, "API error") || strings.Contains(errStr, "status") {
-			// API errors - include status code if available
+		} else if strings.Contains(errStr, "API error") || (strings.Contains(errStr, "status") && !strings.Contains(errStr, "exit status")) {
+			// API errors - include status code if available (but not ffmpeg/process exit codes)
 			// For 422 errors, try to extract more details from the response
 			if strings.Contains(errStr, "422") {
 				// Try to extract the actual error message from Replicate
@@ -188,7 +188,7 @@ func extractAPIError(errStr string) string {
 			}
 		}
 	}
-	
+
 	// Fallback: return first 100 chars
 	if len(errStr) > 100 {
 		return errStr[:100] + "..."
@@ -277,8 +277,19 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	job.Scenes = script.Scenes
 	job.AudioSpec = script.AudioSpec
 	job.ScriptMetadata = script.Metadata
-	job.SideEffectsText = script.AudioSpec.SideEffectsText
-	job.SideEffectsStartTime = script.AudioSpec.SideEffectsStartTime
+
+	// ALWAYS use the user's original side effects text for FDA compliance
+	// GPT-4o should NOT generate or modify side effects - this is legally required verbatim text
+	job.SideEffectsText = job.SideEffects
+	if job.SideEffectsText != "" {
+		// Default to 80% of duration for side effects start time
+		job.SideEffectsStartTime = float64(job.Duration) * 0.8
+		h.logger.Info("Using user-provided side effects text for FDA compliance",
+			zap.String("job_id", job.JobID),
+			zap.Int("text_length", len(job.SideEffectsText)),
+			zap.Float64("side_effects_start_time", job.SideEffectsStartTime),
+		)
+	}
 
 	// Update job with embedded script
 	job.Stage = "script_complete"
@@ -398,7 +409,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		if i == len(script.Scenes)-1 && strings.TrimSpace(req.StartImage) != "" {
 			// Extract S3 key from the product image URL
 			s3Key := extractS3Key(req.StartImage)
-			
+
 			// Generate presigned URL for video API access (valid for 1 hour)
 			presignedURL, err := h.s3Service.GetPresignedURL(jobCtx, s3Key, 1*time.Hour)
 			if err != nil {
@@ -1061,7 +1072,12 @@ func (h *GenerateHandler) processAudio(ctx context.Context, userID string, jobID
 // detectAvailableFont returns the first available font file path from a prioritized list.
 func detectAvailableFont(logger *zap.Logger) string {
 	fontPaths := []string{
+		// Alpine Linux (Docker container)
+		"/usr/share/fonts/ttf-dejavu/DejaVuSans-Bold.ttf",
+		"/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf",
+		// Debian/Ubuntu
 		"/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+		"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 		"/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
 		"/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
 	}

@@ -55,6 +55,8 @@ definitions:
         maxLength: 2000
         minLength: 10
         type: string
+      side_effects:
+        type: string
       start_image:
         description: 'Image options - TWO separate use cases:'
         type: string
@@ -88,6 +90,9 @@ definitions:
         - edgy
         - inspiring
         - humorous
+        type: string
+      voice:
+        description: Pharmaceutical ad configuration
         type: string
     required:
     - aspect_ratio
@@ -146,6 +151,8 @@ definitions:
         type: string
       job_id:
         type: string
+      narrator_audio_url:
+        type: string
       progress_percent:
         type: integer
       prompt:
@@ -156,6 +163,11 @@ definitions:
         type: array
       scenes_completed:
         type: integer
+      side_effects_start_time:
+        type: number
+      side_effects_text:
+        description: Side effects fields for text overlay
+        type: string
       stage:
         type: string
       status:
@@ -193,6 +205,27 @@ definitions:
     - access_token
     - id_token
     - refresh_token
+    type: object
+  handlers.PresignedURLRequest:
+    properties:
+      content_type:
+        type: string
+      file_size:
+        minimum: 1
+        type: integer
+      filename:
+        type: string
+    required:
+    - content_type
+    - file_size
+    - filename
+    type: object
+  handlers.PresignedURLResponse:
+    properties:
+      asset_url:
+        type: string
+      upload_url:
+        type: string
     type: object
   handlers.RefreshRequest:
     properties:
@@ -506,6 +539,43 @@ paths:
       summary: Stream job progress in real-time
       tags:
       - jobs
+  /api/v1/upload/presigned-url:
+    post:
+      consumes:
+      - application/json
+      description: Generate a presigned URL for uploading a file directly to S3
+      parameters:
+      - description: Asset type (e.g., 'product_image')
+        in: query
+        name: type
+        required: true
+        type: string
+      - description: Upload request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.PresignedURLRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.PresignedURLResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get presigned URL for file upload
+      tags:
+      - upload
   /health:
     get:
       description: Check if the API is healthy and can connect to dependencies
