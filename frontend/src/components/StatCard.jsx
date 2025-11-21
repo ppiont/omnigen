@@ -4,8 +4,6 @@ function StatCard({ label, value, helper, trend, motionDelay = "0s", icon }) {
   return (
     <article
       className="stat-card"
-      data-motion="rise"
-      style={{ "--motion-delay": motionDelay }}
     >
       <div className="stat-card-head">
         <span className="stat-card-label">{label}</span>
