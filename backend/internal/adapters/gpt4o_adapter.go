@@ -43,9 +43,6 @@ type ScriptGenerationRequest struct {
 	AspectRatio string // "16:9", "9:16", or "1:1"
 	StartImage  string // Optional starting image URL for first scene
 
-	// Enhanced prompt options (optional)
-	EnhancedOptions *prompts.EnhancedPromptOptions
-
 	// Style reference image - will be analyzed and converted to text description
 	StyleReferenceImage string
 }
@@ -92,24 +89,12 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 		zap.String("prompt", userPrompt),
 	)
 
-	// Build enhanced system prompt if options provided
-	systemPrompt := prompts.AdScriptSystemPrompt + "\n\n" + prompts.AdScriptFewShotExamples
-	if req.EnhancedOptions != nil {
-		systemPrompt = prompts.BuildEnhancedSystemPrompt(systemPrompt, req.EnhancedOptions)
-		g.logger.Info("Using enhanced system prompt",
-			zap.String("style", req.EnhancedOptions.Style),
-			zap.String("tone", req.EnhancedOptions.Tone),
-			zap.String("platform", req.EnhancedOptions.Platform),
-			zap.Bool("pro_cinematography", req.EnhancedOptions.ProCinematography),
-		)
-	}
+	// Build system prompt with pharmaceutical guidance (always-on)
+	systemPrompt := prompts.AdScriptSystemPrompt + "\n\n" + prompts.AdScriptFewShotExamples + "\n\n" + prompts.PharmaceuticalAdGuidance
+	g.logger.Info("Using pharmaceutical-enhanced system prompt")
 
-	// Determine temperature based on creative boost
-	temperature := 0.7 // Default: creative but not random
-	if req.EnhancedOptions != nil && req.EnhancedOptions.CreativeBoost {
-		temperature = 0.9 // Boosted creativity
-		g.logger.Info("Using creative boost", zap.Float64("temperature", temperature))
-	}
+	// Temperature for pharmaceutical ads (creative but consistent)
+	temperature := 0.9
 
 	// Build Replicate API request
 	gpt4oReq := GPT4oRequest{

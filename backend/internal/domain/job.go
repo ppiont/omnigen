@@ -19,17 +19,6 @@ type Job struct {
 	Duration    int    `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
 	AspectRatio string `dynamodbav:"aspect_ratio,omitempty" json:"aspect_ratio,omitempty"`
 
-	// Enhanced prompt options (Phase 1 - all optional)
-	Style             string `dynamodbav:"style,omitempty" json:"style,omitempty"`
-	Tone              string `dynamodbav:"tone,omitempty" json:"tone,omitempty"`
-	Tempo             string `dynamodbav:"tempo,omitempty" json:"tempo,omitempty"`
-	Platform          string `dynamodbav:"platform,omitempty" json:"platform,omitempty"`
-	Audience          string `dynamodbav:"audience,omitempty" json:"audience,omitempty"`
-	Goal              string `dynamodbav:"goal,omitempty" json:"goal,omitempty"`
-	CallToAction      string `dynamodbav:"call_to_action,omitempty" json:"call_to_action,omitempty"`
-	ProCinematography bool   `dynamodbav:"pro_cinematography,omitempty" json:"pro_cinematography,omitempty"`
-	CreativeBoost     bool   `dynamodbav:"creative_boost,omitempty" json:"creative_boost,omitempty"`
-
 	// Embedded script data
 	Scenes         []Scene   `dynamodbav:"scenes,omitempty" json:"scenes,omitempty"`
 	AudioSpec      AudioSpec `dynamodbav:"audio_spec,omitempty" json:"audio_spec,omitempty"`
