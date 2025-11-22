@@ -857,9 +857,10 @@ func (h *GenerateHandler) extractJobThumbnail(
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Download video
+	// Download video using S3 SDK (videoURL is a raw S3 URL, not presigned)
 	videoPath := filepath.Join(tmpDir, "video.mp4")
-	if err := h.downloadFile(ctx, videoURL, videoPath); err != nil {
+	videoS3Key := extractS3Key(videoURL)
+	if err := h.s3Service.DownloadFile(ctx, h.assetsBucket, videoS3Key, videoPath); err != nil {
 		return "", fmt.Errorf("failed to download video: %w", err)
 	}
 
