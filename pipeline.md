@@ -20,25 +20,25 @@ POST /api/v1/generate
         ▼
 ┌───────────────────┐     ┌─────────────────────────────────────┐
 │ 1. SCRIPT GEN     │     │  GPT-4o via Replicate               │
-│    (5 min)        │────▶│  Generates structured scene scripts │
+│                   │────▶│  Generates structured scene scripts │
 └───────────────────┘     └─────────────────────────────────────┘
         │
         ▼
 ┌───────────────────┐     ┌─────────────────────────────────────┐
-│ 2. NARRATOR TTS   │     │  OpenAI tts-1 (pharma ads only)     │
+│ 2. NARRATOR TTS   │     │  OpenAI tts-1                       │
 │    (optional)     │────▶│  Variable speed for side effects    │
 └───────────────────┘     └─────────────────────────────────────┘
         │
         ▼
 ┌───────────────────┐     ┌─────────────────────────────────────┐
 │ 3. VIDEO CLIPS    │     │  Veo 3.1 via Replicate              │
-│    (10 min/clip)  │────▶│  Sequential: last frame → next clip │
+│                   │────▶│  Sequential: last frame → next clip │
 └───────────────────┘     └─────────────────────────────────────┘
         │
         ▼
 ┌───────────────────┐     ┌─────────────────────────────────────┐
 │ 4. AUDIO GEN      │     │  Minimax via Replicate              │
-│    (5 min)        │────▶│  Background music                   │
+│                   │────▶│  Background music                   │
 └───────────────────┘     └─────────────────────────────────────┘
         │
         ▼
