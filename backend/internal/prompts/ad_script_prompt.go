@@ -28,7 +28,7 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
     {
       "scene_number": number,
       "start_time": number - seconds from start,
-      "duration": number - scene length in seconds (will be generated as 8-second clips by Veo 3.1),
+      "duration": number - scene length in seconds (MUST be exactly 4, 6, or 8 - Veo 3.1 constraint),
 
       "location": "string - e.g., 'INT. MODERN KITCHEN - DAY' or 'EXT. MOUNTAIN PEAK - GOLDEN HOUR'",
       "action": "string - 2-3 sentences describing what happens",
@@ -85,13 +85,17 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
    - Mood progression (can escalate but must be cohesive)
 
 2. **Pacing for Ads**:
-   - **CRITICAL**: Each scene duration MUST be exactly 8 seconds (Veo 3.1 constraint)
-   - Scenes are generated as 8-second clips and concatenated
-   - 10s ads: 1 scene (8s) - will be trimmed to 10s
-   - 15s ads: 2 scenes (8s each = 16s, trimmed to 15s)
-   - 20s ads: 2 scenes (8s each = 16s) OR 3 scenes (8s each = 24s, trimmed to 20s)
-   - 30s ads: 4 scenes (8s each = 32s, trimmed to 30s)
-   - 60s ads: 8 scenes (8s each = 64s, trimmed to 60s)
+   - **CRITICAL**: Each scene duration MUST be exactly 4, 6, or 8 seconds (Veo 3.1 constraint)
+   - These are the ONLY valid durations - no other values allowed
+   - Plan scene count so total equals requested duration:
+     * 10s = 4+6 (2 scenes) or 4+4 trimmed (less ideal)
+     * 12s = 4+8 or 6+6 (2 scenes)
+     * 16s = 8+8 or 4+6+6 (2-3 scenes)
+     * 20s = 4+8+8 or 6+6+8 (3 scenes)
+     * 24s = 8+8+8 or 6+6+6+6 (3-4 scenes)
+     * 30s = 6+8+8+8 or 6+6+6+6+6 (4-5 scenes)
+     * 40s = 8+8+8+8+8 (5 scenes)
+     * 60s = 8+8+8+8+8+8+8+4 or similar (7-8 scenes)
    - First scene: Establish context (wider shot)
    - Middle scenes: Build narrative, show product
    - Final scene: Product hero shot + CTA (medium_close_up or close_up)
@@ -160,7 +164,7 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     {
       "scene_number": 1,
       "start_time": 0,
-      "duration": 5,
+      "duration": 6,
       "location": "EXT. MOUNTAIN TRAIL - GOLDEN HOUR",
       "action": "Wide aerial shot slowly descending over misty mountain range, pristine forest below, warm golden sunlight breaking through clouds. Camera reveals a lone hiker on ridge.",
       "shot_type": "extreme_wide_shot",
@@ -177,8 +181,8 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 2,
-      "start_time": 5,
-      "duration": 5,
+      "start_time": 6,
+      "duration": 6,
       "location": "EXT. MOUNTAIN TRAIL - GOLDEN HOUR",
       "action": "Medium shot of athletic woman (30s) reaching summit, breathing in fresh air. She unslings backpack and pulls out sleek stainless steel water bottle, condensation glistening.",
       "shot_type": "medium_shot",
@@ -195,7 +199,7 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 3,
-      "start_time": 10,
+      "start_time": 12,
       "duration": 6,
       "location": "EXT. MOUNTAIN PEAK - GOLDEN HOUR",
       "action": "Close-up: water bottle tilts, water pours in slow motion into cap-cup. Sunlight refracts through clear water droplets. Cut to extreme close-up of bottle's etched logo and sustainable materials badge.",
@@ -213,7 +217,7 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 4,
-      "start_time": 16,
+      "start_time": 18,
       "duration": 6,
       "location": "EXT. FOREST STREAM - GOLDEN HOUR",
       "action": "Wide shot: woman refills bottle from pristine mountain stream, clear water rushing over rocks. Camera pans to reveal untouched forest landscape. Visual metaphor: pure nature, pure hydration.",
@@ -231,10 +235,10 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 5,
-      "start_time": 22,
-      "duration": 5,
+      "start_time": 24,
+      "duration": 6,
       "location": "EXT. MOUNTAIN VISTA - GOLDEN HOUR",
-      "action": "Medium close-up: woman sits on rock ledge, sipping from bottle, gazing at sunset over valley. Pack beside her shows bottle's carabiner clip. Moment of peace and satisfaction.",
+      "action": "Medium close-up: woman sits on rock ledge, sipping from bottle, gazing at sunset over valley. Pack beside her shows bottle's carabiner clip. Moment of peace and satisfaction. Text overlay: 'Hydrate Responsibly' with brand logo.",
       "shot_type": "medium_close_up",
       "camera_angle": "shoulder_level",
       "camera_move": "static",
@@ -243,26 +247,8 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
       "mood": "calm",
       "visual_style": "lifestyle",
       "transition_in": "cross_fade",
-      "transition_out": "fade",
-      "generation_prompt": "Medium close-up woman sipping from steel water bottle on mountain ledge, sunset vista background, peaceful expression, warm golden light, lifestyle photography, natural bokeh, carabiner clip visible",
-      "start_image_url": ""
-    },
-    {
-      "scene_number": 6,
-      "start_time": 27,
-      "duration": 3,
-      "location": "PRODUCT CARD - CLEAN WHITE BACKGROUND",
-      "action": "Clean product shot: bottle rotates slowly on white surface. Text overlays appear: 'BPA-Free • Lifetime Guarantee • 1% for the Planet'. Brand logo fades in, tagline: 'Hydrate Responsibly'.",
-      "shot_type": "medium_shot",
-      "camera_angle": "eye_level",
-      "camera_move": "static",
-      "lighting": "studio_lighting",
-      "color_grade": "natural",
-      "mood": "sophisticated",
-      "visual_style": "product_focused",
-      "transition_in": "fade",
       "transition_out": "none",
-      "generation_prompt": "Clean product photography stainless steel water bottle on white seamless background, soft studio lighting, slight rotation, minimal shadows, professional commercial style, brand logo visible",
+      "generation_prompt": "Medium close-up woman sipping from steel water bottle on mountain ledge, sunset vista background, peaceful expression, warm golden light, lifestyle photography, natural bokeh, carabiner clip visible",
       "start_image_url": ""
     }
   ],
@@ -279,21 +265,21 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
         "description": "Music starts - gentle acoustic guitar"
       },
       {
-        "timestamp": 10,
+        "timestamp": 12,
         "type": "sfx",
         "scene_number": 3,
         "description": "Water pouring sound"
       },
       {
-        "timestamp": 16,
+        "timestamp": 18,
         "type": "sfx",
         "scene_number": 4,
         "description": "Stream ambience"
       },
       {
-        "timestamp": 27,
+        "timestamp": 24,
         "type": "transition",
-        "scene_number": 6,
+        "scene_number": 5,
         "description": "Music resolves, logo appearance"
       }
     ]
@@ -309,20 +295,20 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
 
 ---
 
-## Example 2: Premium Wireless Headphones (15s - Social Media)
+## Example 2: Premium Wireless Headphones (16s - Social Media)
 
 **User Input:**
-"15-second Instagram ad for noise-canceling headphones. Target: young professionals, commuters. Premium tech product. Show transformation from chaos to calm."
+"16-second Instagram ad for noise-canceling headphones. Target: young professionals, commuters. Premium tech product. Show transformation from chaos to calm."
 
 **Ideal Output:**
 {
   "title": "Silence the Noise",
-  "total_duration": 15,
+  "total_duration": 16,
   "scenes": [
     {
       "scene_number": 1,
       "start_time": 0,
-      "duration": 3,
+      "duration": 4,
       "location": "INT. CROWDED SUBWAY CAR - DAY",
       "action": "Chaotic handheld shot: packed subway car, people talking, phones ringing, overwhelming visual noise. Young professional woman (late 20s) looks stressed, overwhelmed by commute chaos.",
       "shot_type": "medium_shot",
@@ -339,7 +325,7 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 2,
-      "start_time": 3,
+      "start_time": 4,
       "duration": 4,
       "location": "INT. SUBWAY CAR - DAY (TIGHT FOCUS)",
       "action": "Close-up: woman's hands reach up, place sleek matte black headphones over ears. Slow motion as headphones make contact. Her expression shifts from stress to relief. Background begins to blur.",
@@ -357,8 +343,8 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     },
     {
       "scene_number": 3,
-      "start_time": 7,
-      "duration": 5,
+      "start_time": 8,
+      "duration": 4,
       "location": "INT. SUBWAY CAR - DAY (TRANSFORMED)",
       "action": "Medium close-up: woman in serene bubble, eyes closed, slight smile. Background completely blurred (bokeh), all chaos fades away. Headphones' LED indicator glows subtly. Visual transformation complete.",
       "shot_type": "medium_close_up",
@@ -376,7 +362,7 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
     {
       "scene_number": 4,
       "start_time": 12,
-      "duration": 3,
+      "duration": 4,
       "location": "PRODUCT CARD - MINIMAL TECH BACKGROUND",
       "action": "Product shot: headphones floating on gradient tech background (deep blue to black). Text: 'Active Noise Cancellation'. Logo and CTA: 'Find Your Silence'.",
       "shot_type": "medium_shot",
@@ -405,13 +391,13 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
         "description": "Chaotic subway sounds - loud, overwhelming"
       },
       {
-        "timestamp": 3,
+        "timestamp": 4,
         "type": "transition",
         "scene_number": 2,
         "description": "Sound cuts to silence (headphones activate)"
       },
       {
-        "timestamp": 7,
+        "timestamp": 8,
         "type": "beat",
         "scene_number": 3,
         "description": "Calm ambient electronic music begins"
@@ -429,15 +415,15 @@ const AdScriptFewShotExamples = `## Example 1: Eco-Friendly Water Bottle (30s)
 
 // EnhancedPromptOptions contains optional parameters for enhanced prompts
 type EnhancedPromptOptions struct {
-	Style              string // cinematic, documentary, energetic, minimal, dramatic, playful
-	Tone               string // premium, friendly, edgy, inspiring, humorous
-	Tempo              string // slow, medium, fast
-	Platform           string // instagram, tiktok, youtube, facebook
-	Audience           string // target audience description
-	Goal               string // awareness, sales, engagement, signups
-	CallToAction       string // custom CTA text
-	ProCinematography  bool   // use advanced film terminology
-	CreativeBoost      bool   // higher temperature for more creativity
+	Style             string // cinematic, documentary, energetic, minimal, dramatic, playful
+	Tone              string // premium, friendly, edgy, inspiring, humorous
+	Tempo             string // slow, medium, fast
+	Platform          string // instagram, tiktok, youtube, facebook
+	Audience          string // target audience description
+	Goal              string // awareness, sales, engagement, signups
+	CallToAction      string // custom CTA text
+	ProCinematography bool   // use advanced film terminology
+	CreativeBoost     bool   // higher temperature for more creativity
 }
 
 // BuildEnhancedSystemPrompt creates an enhanced system prompt with creative direction
