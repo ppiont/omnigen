@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+
+	"github.com/omnigen/backend/pkg/retry"
 )
 
 // VeoAdapter implements VideoGeneratorAdapter for Google Veo 3.1
@@ -130,72 +132,86 @@ func (v *VeoAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRequ
 		zap.Any("input", input),
 	)
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(
-		ctx,
-		"POST",
-		"https://api.replicate.com/v1/predictions",
-		strings.NewReader(string(jsonData)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", v.apiToken))
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Prefer", "wait=0") // Don't wait for completion
-
-	// Execute request
-	resp, err := v.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		// Log full error details for debugging
-		errorBody := string(body)
-		v.logger.Error("Veo API error",
-			zap.Int("status_code", resp.StatusCode),
-			zap.String("response_body", errorBody),
-			zap.String("request_url", httpReq.URL.String()),
-			zap.String("model_version", v.modelVersion),
-		)
-
-		// Log the request payload for debugging 422 errors
-		if resp.StatusCode == 422 {
-			v.logger.Error("Veo API validation error - request payload",
-				zap.Any("request_input", veoReq.Input),
-				zap.String("full_request", string(jsonData)),
-			)
-		}
-
-		// Provide specific error messages for common status codes
-		if resp.StatusCode == 422 {
-			// HTTP 422 - Unprocessable Entity (validation error)
-			// This usually means invalid model version or parameter mismatch
-			return nil, fmt.Errorf("API error (status %d): Invalid request parameters or model version. Check that model version '%s' is correct and parameters match Veo 3.1 schema. Response: %s", resp.StatusCode, v.modelVersion, errorBody)
-		}
-		if resp.StatusCode == 402 {
-			return nil, fmt.Errorf("API error (status %d): Payment required - Replicate account has insufficient credits. Response: %s", resp.StatusCode, errorBody)
-		}
-		if resp.StatusCode == 404 {
-			return nil, fmt.Errorf("API error (status %d): Model not found. Check that model version '%s' exists on Replicate. Response: %s", resp.StatusCode, v.modelVersion, errorBody)
-		}
-
-		return nil, fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, errorBody)
-	}
-
-	// Parse response
+	// Execute request with retry logic
 	var veoResp VeoResponse
-	if err := json.Unmarshal(body, &veoResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	err = retry.Do(ctx, retry.APIConfig(), func() error {
+		// Create HTTP request (must be created fresh for each attempt)
+		httpReq, err := http.NewRequestWithContext(
+			ctx,
+			"POST",
+			"https://api.replicate.com/v1/predictions",
+			strings.NewReader(string(jsonData)),
+		)
+		if err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
+		}
+
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", v.apiToken))
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Prefer", "wait=0") // Don't wait for completion
+
+		// Execute request
+		resp, err := v.httpClient.Do(httpReq)
+		if err != nil {
+			// Network errors are retryable
+			return fmt.Errorf("failed to execute request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		// Read response
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			// Log full error details for debugging
+			errorBody := string(body)
+			v.logger.Error("Veo API error",
+				zap.Int("status_code", resp.StatusCode),
+				zap.String("response_body", errorBody),
+				zap.String("request_url", httpReq.URL.String()),
+				zap.String("model_version", v.modelVersion),
+			)
+
+			// Log the request payload for debugging 422 errors
+			if resp.StatusCode == 422 {
+				v.logger.Error("Veo API validation error - request payload",
+					zap.Any("request_input", veoReq.Input),
+					zap.String("full_request", string(jsonData)),
+				)
+			}
+
+			// 4xx errors are non-retryable (client errors)
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				var errMsg string
+				switch resp.StatusCode {
+				case 422:
+					errMsg = fmt.Sprintf("API error (status %d): Invalid request parameters or model version. Check that model version '%s' is correct and parameters match Veo 3.1 schema. Response: %s", resp.StatusCode, v.modelVersion, errorBody)
+				case 402:
+					errMsg = fmt.Sprintf("API error (status %d): Payment required - Replicate account has insufficient credits. Response: %s", resp.StatusCode, errorBody)
+				case 404:
+					errMsg = fmt.Sprintf("API error (status %d): Model not found. Check that model version '%s' exists on Replicate. Response: %s", resp.StatusCode, v.modelVersion, errorBody)
+				default:
+					errMsg = fmt.Sprintf("API error: status %d, body: %s", resp.StatusCode, errorBody)
+				}
+				return retry.NewNonRetryableError(fmt.Errorf("%s", errMsg))
+			}
+
+			// 5xx errors are retryable (server errors)
+			return fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, errorBody)
+		}
+
+		// Parse response
+		if err := json.Unmarshal(body, &veoResp); err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to parse response: %w", err))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	v.logger.Info("Veo prediction created successfully",
@@ -228,37 +244,52 @@ func (v *VeoAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRequ
 
 // GetStatus checks the status of a video generation job
 func (v *VeoAdapter) GetStatus(ctx context.Context, predictionID string) (*VideoGenerationResult, error) {
-	// Create HTTP request
 	url := fmt.Sprintf("https://api.replicate.com/v1/predictions/%s", predictionID)
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
 
-	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", v.apiToken))
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	// Execute request
-	resp, err := v.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse response
 	var veoResp VeoResponse
-	if err := json.Unmarshal(body, &veoResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	err := retry.Do(ctx, retry.APIConfig(), func() error {
+		// Create HTTP request
+		httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
+		}
+
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", v.apiToken))
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		// Execute request
+		resp, err := v.httpClient.Do(httpReq)
+		if err != nil {
+			// Network errors are retryable
+			return fmt.Errorf("failed to execute request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		// Read response
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			// 4xx errors are non-retryable
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				return retry.NewNonRetryableError(fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(body)))
+			}
+			// 5xx errors are retryable
+			return fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(body))
+		}
+
+		// Parse response
+		if err := json.Unmarshal(body, &veoResp); err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to parse response: %w", err))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	// Map to our result format

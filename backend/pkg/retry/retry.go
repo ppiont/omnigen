@@ -2,10 +2,30 @@ package retry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
 )
+
+// NonRetryableError wraps errors that should not be retried (e.g., 4xx client errors)
+type NonRetryableError struct {
+	Err error
+}
+
+func (e *NonRetryableError) Error() string { return e.Err.Error() }
+func (e *NonRetryableError) Unwrap() error { return e.Err }
+
+// NewNonRetryableError creates a new non-retryable error
+func NewNonRetryableError(err error) *NonRetryableError {
+	return &NonRetryableError{Err: err}
+}
+
+// IsNonRetryable checks if an error should not be retried
+func IsNonRetryable(err error) bool {
+	var nre *NonRetryableError
+	return errors.As(err, &nre)
+}
 
 // Config holds retry configuration
 type Config struct {
@@ -25,6 +45,17 @@ func DefaultConfig() Config {
 	}
 }
 
+// APIConfig returns a retry configuration suitable for external API calls
+// Uses longer delays to handle rate limiting and transient failures
+func APIConfig() Config {
+	return Config{
+		MaxAttempts:  3,
+		InitialDelay: 1 * time.Second,
+		MaxDelay:     10 * time.Second,
+		Multiplier:   2.0,
+	}
+}
+
 // Do executes the given function with exponential backoff retry logic
 func Do(ctx context.Context, cfg Config, fn func() error) error {
 	var lastErr error
@@ -37,6 +68,11 @@ func Do(ctx context.Context, cfg Config, fn func() error) error {
 		}
 
 		lastErr = err
+
+		// Don't retry non-retryable errors (e.g., 4xx client errors)
+		if IsNonRetryable(err) {
+			return errors.Unwrap(err)
+		}
 
 		// Don't sleep after the last attempt
 		if attempt == cfg.MaxAttempts-1 {

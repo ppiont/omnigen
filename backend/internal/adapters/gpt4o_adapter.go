@@ -14,6 +14,7 @@ import (
 
 	"github.com/omnigen/backend/internal/domain"
 	"github.com/omnigen/backend/internal/prompts"
+	"github.com/omnigen/backend/pkg/retry"
 )
 
 // GPT4oAdapter implements script generation via OpenAI GPT-4o on Replicate
@@ -162,57 +163,69 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Submit prediction to Replicate
-	httpReq, err := http.NewRequestWithContext(ctx, "POST",
-		"https://api.replicate.com/v1/predictions",
-		bytes.NewReader(payload))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+g.apiToken)
-	httpReq.Header.Set("Content-Type", "application/json")
-	// Don't use Prefer: wait to avoid 60-second timeout - we'll poll instead
-	// httpReq.Header.Set("Prefer", "wait")
-
-	resp, err := g.httpClient.Do(httpReq)
-	if err != nil {
-		g.logger.Error("Failed to send request to Replicate API",
-			zap.Error(err),
-			zap.String("url", "https://api.replicate.com/v1/predictions"),
-		)
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
-		errorMsg := fmt.Sprintf("API error (status %d): %s", resp.StatusCode, string(body))
-		g.logger.Error("Replicate API returned error",
-			zap.Int("status_code", resp.StatusCode),
-			zap.String("response_body", string(body)),
-			zap.String("error_message", errorMsg),
-		)
-		
-		// Provide specific error messages for common status codes
-		if resp.StatusCode == 402 { // Payment Required
-			return nil, fmt.Errorf("API error (status %d): Payment required - Replicate account has insufficient credits or billing issue. Please check your Replicate account balance. Response: %s", resp.StatusCode, string(body))
-		}
-		
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
-	}
-
+	// Submit prediction to Replicate with retry logic
 	var gpt4oResp GPT4oResponse
-	if err := json.Unmarshal(body, &gpt4oResp); err != nil {
-		g.logger.Error("Failed to unmarshal initial response",
-			zap.Error(err),
-			zap.String("body_preview", string(body)[:min(1000, len(body))]),
-		)
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	err = retry.Do(ctx, retry.APIConfig(), func() error {
+		httpReq, err := http.NewRequestWithContext(ctx, "POST",
+			"https://api.replicate.com/v1/predictions",
+			bytes.NewReader(payload))
+		if err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
+		}
+
+		httpReq.Header.Set("Authorization", "Bearer "+g.apiToken)
+		httpReq.Header.Set("Content-Type", "application/json")
+		// Don't use Prefer: wait to avoid 60-second timeout - we'll poll instead
+
+		resp, err := g.httpClient.Do(httpReq)
+		if err != nil {
+			g.logger.Error("Failed to send request to Replicate API",
+				zap.Error(err),
+				zap.String("url", "https://api.replicate.com/v1/predictions"),
+			)
+			// Network errors are retryable
+			return fmt.Errorf("request failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
+			errorMsg := fmt.Sprintf("API error (status %d): %s", resp.StatusCode, string(body))
+			g.logger.Error("Replicate API returned error",
+				zap.Int("status_code", resp.StatusCode),
+				zap.String("response_body", string(body)),
+				zap.String("error_message", errorMsg),
+			)
+
+			// 4xx errors are non-retryable
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				if resp.StatusCode == 402 { // Payment Required
+					return retry.NewNonRetryableError(fmt.Errorf("API error (status %d): Payment required - Replicate account has insufficient credits or billing issue. Please check your Replicate account balance. Response: %s", resp.StatusCode, string(body)))
+				}
+				return retry.NewNonRetryableError(fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body)))
+			}
+
+			// 5xx errors are retryable
+			return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+		}
+
+		if err := json.Unmarshal(body, &gpt4oResp); err != nil {
+			g.logger.Error("Failed to unmarshal initial response",
+				zap.Error(err),
+				zap.String("body_preview", string(body)[:min(1000, len(body))]),
+			)
+			return retry.NewNonRetryableError(fmt.Errorf("failed to parse response: %w", err))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	// Check initial output
@@ -468,41 +481,53 @@ Provide a concise 2-3 sentence description that captures the essence of this vis
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Submit prediction to Replicate
-	httpReq, err := http.NewRequestWithContext(ctx, "POST",
-		"https://api.replicate.com/v1/predictions",
-		bytes.NewReader(payload))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+g.apiToken)
-	httpReq.Header.Set("Content-Type", "application/json")
-	// Don't use Prefer: wait to avoid 60-second timeout - we'll poll instead
-	// httpReq.Header.Set("Prefer", "wait")
-
-	resp, err := g.httpClient.Do(httpReq)
-	if err != nil {
-		return "", fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
-		// Provide specific error messages for common status codes
-		if resp.StatusCode == 402 { // Payment Required
-			return "", fmt.Errorf("API error (status %d): Payment required - Replicate account has insufficient credits or billing issue. Please check your Replicate account balance. Response: %s", resp.StatusCode, string(body))
-		}
-		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
-	}
-
+	// Submit prediction to Replicate with retry logic
 	var gpt4oResp GPT4oResponse
-	if err := json.Unmarshal(body, &gpt4oResp); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+	err = retry.Do(ctx, retry.APIConfig(), func() error {
+		httpReq, err := http.NewRequestWithContext(ctx, "POST",
+			"https://api.replicate.com/v1/predictions",
+			bytes.NewReader(payload))
+		if err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
+		}
+
+		httpReq.Header.Set("Authorization", "Bearer "+g.apiToken)
+		httpReq.Header.Set("Content-Type", "application/json")
+		// Don't use Prefer: wait to avoid 60-second timeout - we'll poll instead
+
+		resp, err := g.httpClient.Do(httpReq)
+		if err != nil {
+			// Network errors are retryable
+			return fmt.Errorf("request failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
+			// 4xx errors are non-retryable
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				if resp.StatusCode == 402 { // Payment Required
+					return retry.NewNonRetryableError(fmt.Errorf("API error (status %d): Payment required - Replicate account has insufficient credits or billing issue. Please check your Replicate account balance. Response: %s", resp.StatusCode, string(body)))
+				}
+				return retry.NewNonRetryableError(fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body)))
+			}
+			// 5xx errors are retryable
+			return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+		}
+
+		if err := json.Unmarshal(body, &gpt4oResp); err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to parse response: %w", err))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return "", err
 	}
 
 	// If output not ready, poll for completion
@@ -597,7 +622,7 @@ func buildUserPrompt(req *ScriptGenerationRequest) string {
 	isPharmaceuticalAd := req.Voice != "" && req.SideEffects != ""
 	if isPharmaceuticalAd {
 		sideEffectsStartTime := float64(req.Duration) * 0.8 // 80% of duration
-		wordCount := int(float64(req.Duration) * 2.5)      // ~2.5 words per second
+		wordCount := int(float64(req.Duration) * 2.5)       // ~2.5 words per second
 
 		prompt += fmt.Sprintf(`
 

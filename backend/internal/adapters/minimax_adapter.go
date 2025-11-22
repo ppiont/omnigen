@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+
+	"github.com/omnigen/backend/pkg/retry"
 )
 
 // MinimaxAdapter implements music generation via Minimax music-1.5
@@ -109,36 +111,50 @@ func (m *MinimaxAdapter) GenerateMusic(ctx context.Context, req *MusicGeneration
 		zap.String("payload", string(payload)),
 	)
 
-	// Submit prediction to Replicate
-	httpReq, err := http.NewRequestWithContext(ctx, "POST",
-		"https://api.replicate.com/v1/predictions",
-		bytes.NewReader(payload))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+m.apiToken)
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Prefer", "wait=0") // Don't wait for completion (async)
-
-	resp, err := m.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
-	}
-
+	// Submit prediction to Replicate with retry logic
 	var minimaxResp MinimaxResponse
-	if err := json.Unmarshal(body, &minimaxResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	err = retry.Do(ctx, retry.APIConfig(), func() error {
+		httpReq, err := http.NewRequestWithContext(ctx, "POST",
+			"https://api.replicate.com/v1/predictions",
+			bytes.NewReader(payload))
+		if err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
+		}
+
+		httpReq.Header.Set("Authorization", "Bearer "+m.apiToken)
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Prefer", "wait=0") // Don't wait for completion (async)
+
+		resp, err := m.httpClient.Do(httpReq)
+		if err != nil {
+			// Network errors are retryable
+			return fmt.Errorf("request failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			// 4xx errors are non-retryable
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				return retry.NewNonRetryableError(fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body)))
+			}
+			// 5xx errors are retryable
+			return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+		}
+
+		if err := json.Unmarshal(body, &minimaxResp); err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to parse response: %w", err))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	result := &MusicGenerationResult{
@@ -167,31 +183,45 @@ func (m *MinimaxAdapter) GenerateMusic(ctx context.Context, req *MusicGeneration
 func (m *MinimaxAdapter) GetStatus(ctx context.Context, predictionID string) (*MusicGenerationResult, error) {
 	url := fmt.Sprintf("https://api.replicate.com/v1/predictions/%s", predictionID)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+m.apiToken)
-
-	resp, err := m.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
-	}
-
 	var minimaxResp MinimaxResponse
-	if err := json.Unmarshal(body, &minimaxResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	err := retry.Do(ctx, retry.APIConfig(), func() error {
+		httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
+		}
+
+		httpReq.Header.Set("Authorization", "Bearer "+m.apiToken)
+
+		resp, err := m.httpClient.Do(httpReq)
+		if err != nil {
+			// Network errors are retryable
+			return fmt.Errorf("request failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			// 4xx errors are non-retryable
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				return retry.NewNonRetryableError(fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body)))
+			}
+			// 5xx errors are retryable
+			return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+		}
+
+		if err := json.Unmarshal(body, &minimaxResp); err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to parse response: %w", err))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	result := &MusicGenerationResult{
