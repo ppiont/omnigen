@@ -326,6 +326,20 @@ export const jobs = {
     apiRequest(`/api/v1/jobs/${id}`, {
       method: "DELETE",
     }),
+
+  /**
+   * Regenerate a specific scene
+   * @param {string} jobId - Job ID
+   * @param {number} sceneNumber - Scene number (1-indexed)
+   * @param {Object} options - Optional regeneration options
+   * @param {boolean} options.cascade - If true, regenerate all subsequent scenes
+   * @returns {Promise<{job_id: string, scene_number: number, new_version: number, clip_url: string, cascade_count?: number}>}
+   */
+  regenerateScene: (jobId, sceneNumber, options = {}) =>
+    apiRequest(`/api/v1/jobs/${jobId}/scenes/${sceneNumber}/regenerate`, {
+      method: "POST",
+      body: JSON.stringify(options),
+    }),
 };
 
 /**

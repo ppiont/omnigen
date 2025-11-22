@@ -44,13 +44,20 @@ type Job struct {
 	SideEffectsText      string  `dynamodbav:"side_effects_text,omitempty" json:"side_effects_text,omitempty"`
 	SideEffectsStartTime float64 `dynamodbav:"side_effects_start_time,omitempty" json:"side_effects_start_time,omitempty"`
 
-	VideoKey     string  `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"` // S3 key
-	Model        string  `dynamodbav:"model,omitempty" json:"model,omitempty"`         // Video generation model (e.g., "Veo 3.1")
-	CreatedAt    int64   `dynamodbav:"created_at" json:"created_at"`
-	UpdatedAt    int64   `dynamodbav:"updated_at" json:"updated_at"`
-	CompletedAt  *int64  `dynamodbav:"completed_at,omitempty" json:"completed_at,omitempty"`
-	ErrorMessage *string `dynamodbav:"error_message,omitempty" json:"error_message,omitempty"`
-	TTL          int64   `dynamodbav:"ttl" json:"ttl"` // Unix timestamp for auto-deletion
+	VideoKey     string `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"`           // S3 key (MP4)
+	WebMVideoKey string `dynamodbav:"webm_video_key,omitempty" json:"webm_video_key,omitempty"` // S3 key (WebM)
+	Model        string `dynamodbav:"model,omitempty" json:"model,omitempty"`                   // Video generation model (e.g., "Veo 3.1")
+
+	// Scene versioning: maps scene number (1-indexed) to current version
+	SceneVersions map[int]int `dynamodbav:"scene_versions,omitempty" json:"scene_versions,omitempty"`
+
+	// All clip versions: maps "scene-{N}-v{V}" to S3 URL
+	ClipVersions map[string]string `dynamodbav:"clip_versions,omitempty" json:"clip_versions,omitempty"`
+	CreatedAt    int64             `dynamodbav:"created_at" json:"created_at"`
+	UpdatedAt    int64             `dynamodbav:"updated_at" json:"updated_at"`
+	CompletedAt  *int64            `dynamodbav:"completed_at,omitempty" json:"completed_at,omitempty"`
+	ErrorMessage *string           `dynamodbav:"error_message,omitempty" json:"error_message,omitempty"`
+	TTL          int64             `dynamodbav:"ttl" json:"ttl"` // Unix timestamp for auto-deletion
 }
 
 // GenerateRequest represents a video generation request

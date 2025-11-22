@@ -2529,3 +2529,257 @@
     width: 100px;
   }
 }
+
+/* ==========================================
+   Scene Panel Styles
+   ========================================== */
+
+.scene-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-16);
+  overflow: hidden;
+}
+
+.scene-panel-empty {
+  padding: var(--space-24);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.scene-panel-header {
+  padding: var(--space-16) var(--space-20);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-elevated);
+}
+
+.scene-panel-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.scene-panel-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.scene-card {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.scene-card:last-child {
+  border-bottom: none;
+}
+
+.scene-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-12) var(--space-20);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.scene-card-header:hover {
+  background: var(--bg-hover);
+}
+
+.scene-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.scene-number {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.scene-version {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  background: var(--accent-muted);
+  color: var(--accent-primary);
+  border-radius: var(--radius-4);
+}
+
+.scene-card-actions {
+  color: var(--text-secondary);
+}
+
+.scene-card-content {
+  padding: var(--space-16) var(--space-20);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.scene-video-container {
+  margin-bottom: var(--space-16);
+  border-radius: var(--radius-8);
+  overflow: hidden;
+  background: #000;
+}
+
+.scene-video {
+  width: 100%;
+  display: block;
+}
+
+.scene-video-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-32);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: color 0.15s ease;
+}
+
+.scene-video-placeholder:hover {
+  color: var(--accent-primary);
+}
+
+.scene-info {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-8);
+}
+
+.scene-info strong {
+  color: var(--text-primary);
+}
+
+.scene-actions {
+  display: flex;
+  gap: var(--space-12);
+  margin-top: var(--space-16);
+}
+
+.scene-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border: none;
+  border-radius: var(--radius-8);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.scene-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.scene-btn-regenerate {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.scene-btn-regenerate:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.scene-btn-cascade {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.scene-btn-cascade:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==========================================
+   Download Format Dropdown Styles
+   ========================================== */
+
+.download-button-wrapper {
+  position: relative;
+}
+
+.action-btn .dropdown-icon {
+  margin-left: var(--space-4);
+  transition: transform 0.15s ease;
+}
+
+.action-btn[aria-expanded="true"] .dropdown-icon {
+  transform: rotate(180deg);
+}
+
+.format-dropdown {
+  position: absolute;
+  top: calc(100% + var(--space-8));
+  left: 0;
+  min-width: 180px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  z-index: 100;
+  animation: dropdownFadeIn 0.15s ease;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.format-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-12) var(--space-16);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  text-align: left;
+}
+
+.format-option:hover {
+  background: var(--bg-hover);
+}
+
+.format-option:first-child {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.format-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.format-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}

@@ -128,30 +128,42 @@ func (r *DynamoDBRepository) UpdateJobStageWithMetadata(
 	return nil
 }
 
-// MarkJobComplete marks a job as completed with video URL
-func (r *DynamoDBRepository) MarkJobComplete(ctx context.Context, jobID string, videoKey string) error {
+// MarkJobComplete marks a job as completed with video URLs (MP4 and optionally WebM)
+func (r *DynamoDBRepository) MarkJobComplete(ctx context.Context, jobID string, videoKey string, webmVideoKey ...string) error {
 	now := getCurrentTimestamp()
+
+	// Build update expression - always include video_key, conditionally include webm_video_key
+	updateExpr := "SET #status = :status, #stage = :stage, #video_key = :video_key, #completed_at = :completed_at, #updated_at = :updated_at"
+	attrNames := map[string]string{
+		"#status":       "status",
+		"#stage":        "stage",
+		"#video_key":    "video_key",
+		"#completed_at": "completed_at",
+		"#updated_at":   "updated_at",
+	}
+	attrValues := map[string]types.AttributeValue{
+		":status":       &types.AttributeValueMemberS{Value: domain.StatusCompleted},
+		":stage":        &types.AttributeValueMemberS{Value: "complete"},
+		":video_key":    &types.AttributeValueMemberS{Value: videoKey},
+		":completed_at": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", now)},
+		":updated_at":   &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", now)},
+	}
+
+	// Add WebM key if provided and non-empty
+	if len(webmVideoKey) > 0 && webmVideoKey[0] != "" {
+		updateExpr += ", #webm_video_key = :webm_video_key"
+		attrNames["#webm_video_key"] = "webm_video_key"
+		attrValues[":webm_video_key"] = &types.AttributeValueMemberS{Value: webmVideoKey[0]}
+	}
 
 	_, err := r.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(r.tableName),
 		Key: map[string]types.AttributeValue{
 			"job_id": &types.AttributeValueMemberS{Value: jobID},
 		},
-		UpdateExpression: aws.String("SET #status = :status, #stage = :stage, #video_key = :video_key, #completed_at = :completed_at, #updated_at = :updated_at"),
-		ExpressionAttributeNames: map[string]string{
-			"#status":       "status",
-			"#stage":        "stage",
-			"#video_key":    "video_key",
-			"#completed_at": "completed_at",
-			"#updated_at":   "updated_at",
-		},
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":status":       &types.AttributeValueMemberS{Value: domain.StatusCompleted},
-			":stage":        &types.AttributeValueMemberS{Value: "complete"},
-			":video_key":    &types.AttributeValueMemberS{Value: videoKey},
-			":completed_at": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", now)},
-			":updated_at":   &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", now)},
-		},
+		UpdateExpression:          aws.String(updateExpr),
+		ExpressionAttributeNames:  attrNames,
+		ExpressionAttributeValues: attrValues,
 	})
 	if err != nil {
 		r.logger.Error("Failed to mark job complete",

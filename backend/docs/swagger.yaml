@@ -180,6 +180,10 @@ definitions:
       updated_at:
         type: integer
       video_url:
+        description: MP4 format
+        type: string
+      webm_video_url:
+        description: WebM format (VP9)
         type: string
     type: object
   handlers.ListJobsResponse:
@@ -241,6 +245,26 @@ definitions:
     - access_token
     - id_token
     - refresh_token
+    type: object
+  handlers.RegenerateRequest:
+    properties:
+      cascade:
+        description: Regenerate subsequent scenes too
+        type: boolean
+    type: object
+  handlers.RegenerateResponse:
+    properties:
+      cascade_count:
+        description: How many subsequent scenes regenerated
+        type: integer
+      clip_url:
+        type: string
+      job_id:
+        type: string
+      new_version:
+        type: integer
+      scene_number:
+        type: integer
     type: object
   handlers.UserResponse:
     properties:
@@ -475,8 +499,11 @@ paths:
         required: true
         type: string
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
         "404":
           description: Not Found
           schema:
@@ -539,6 +566,51 @@ paths:
       security:
       - BearerAuth: []
       summary: Stream job progress in real-time
+      tags:
+      - jobs
+  /api/v1/jobs/{id}/scenes/{scene_number}/regenerate:
+    post:
+      consumes:
+      - application/json
+      description: Regenerates a single scene of a completed job with versioning support
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Scene number (1-indexed)
+        in: path
+        name: scene_number
+        required: true
+        type: integer
+      - description: Regeneration options
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handlers.RegenerateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.RegenerateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Regenerate a specific scene
       tags:
       - jobs
   /api/v1/upload/presigned-url:
