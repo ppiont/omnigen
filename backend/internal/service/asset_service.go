@@ -123,9 +123,10 @@ func (s *AssetService) GetJobAssets(ctx context.Context, job *domain.Job, durati
 // Input: https://bucket.s3.amazonaws.com/users/user123/jobs/job456/clips/scene-001.mp4
 // Output: users/user123/jobs/job456/clips/scene-001.mp4
 func extractS3Key(s3URL string) string {
-	// This function already exists in generate_async.go (line 636)
-	// We're duplicating it here for the service layer
-	// Could be refactored to a shared utility package later
+	// Strip query parameters first (handles presigned URLs stored in DB)
+	if idx := findSubstring(s3URL, "?"); idx != -1 {
+		s3URL = s3URL[:idx]
+	}
 
 	// Simple implementation: find ".amazonaws.com/" and return everything after it
 	const marker = ".amazonaws.com/"
