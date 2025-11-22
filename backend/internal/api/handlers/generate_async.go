@@ -326,91 +326,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		)
 	}
 
-	// STEP 2: Generate narrator voiceover (if configured)
-	if job.Voice != "" && job.AudioSpec.NarratorScript != "" {
-		job.Stage = "narrator_generating"
-		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
-			h.logger.Error("Failed to update job stage",
-				zap.String("job_id", job.JobID),
-				zap.String("stage", "narrator_generating"),
-				zap.Error(err),
-			)
-		}
-
-		narratorAudioURL, err := h.generateNarratorVoiceover(
-			jobCtx,
-			job.UserID,
-			job.JobID,
-			job.Voice,
-			job.AudioSpec.NarratorScript,
-			job.AudioSpec.SideEffectsStartTime,
-			job.Duration,
-		)
-		if err != nil {
-			h.failJob(jobCtx, job, narratorFailureMessage, err, zap.String("stage", "narrator_generating"))
-			return
-		}
-
-		job.Stage = "narrator_complete"
-		job.NarratorAudioURL = narratorAudioURL
-
-		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
-			h.logger.Error("Failed to update job with narrator audio URL",
-				zap.String("job_id", job.JobID),
-				zap.Error(err),
-			)
-		}
-
-		h.logger.Info("Narrator voiceover generation complete",
-			zap.String("job_id", job.JobID),
-			zap.String("narrator_audio_url", narratorAudioURL),
-		)
-	} else {
-		if job.Voice == "" {
-			h.logger.Info("Skipping narrator voiceover generation (voice not configured)",
-				zap.String("job_id", job.JobID),
-			)
-		} else {
-			h.logger.Warn("Skipping narrator voiceover generation (narrator script missing)",
-				zap.String("job_id", job.JobID),
-				zap.Int("script_length", len(job.AudioSpec.NarratorScript)),
-			)
-		}
-	}
-
-	// STEP 3: Start audio generation in parallel with video generation
-	type audioResult struct {
-		audioURL string
-		err      error
-	}
-
-	audioChan := make(chan audioResult, 1)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				h.logger.Error("Panic in audio generation",
-					zap.String("job_id", job.JobID),
-					zap.Any("panic", r),
-				)
-				audioChan <- audioResult{err: fmt.Errorf("audio generation panic: %v", r)}
-			}
-		}()
-
-		job.Stage = "audio_generating"
-		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
-			h.logger.Error("Failed to update job stage",
-				zap.String("job_id", job.JobID),
-				zap.String("stage", "audio_generating"),
-				zap.Error(err),
-			)
-		}
-		h.logger.Info("Generating audio (parallel with video)", zap.String("job_id", job.JobID))
-
-		audioURL, err := h.generateAudio(jobCtx, job.UserID, job.JobID, script)
-		audioChan <- audioResult{audioURL: audioURL, err: err}
-	}()
-
-	// STEP 4: Generate video clips sequentially
+	// STEP 2: Generate video clips sequentially (must be first to get actual duration)
 	var clipVideos []ClipVideo
 	// Start with empty lastFrameURL so the first scene is pure AI generation
 	var lastFrameURL string
@@ -546,30 +462,145 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		)
 	}
 
-	// STEP 5: Wait for audio generation to complete
-	h.logger.Info("Waiting for audio generation to complete", zap.String("job_id", job.JobID))
-	audioRes := <-audioChan
-	if audioRes.err != nil {
-		h.failJob(jobCtx, job, audioFailureMessage, audioRes.err, zap.String("stage", "audio_generating"))
-		return
+	// STEP 3: Calculate actual video duration from generated clips
+	var actualVideoDuration float64
+	for _, clip := range clipVideos {
+		actualVideoDuration += clip.Duration
 	}
 
-	job.Stage = "audio_complete"
-	job.AudioURL = audioRes.audioURL
+	h.logger.Info("Video clips generation complete",
+		zap.String("job_id", job.JobID),
+		zap.Int("num_clips", len(clipVideos)),
+		zap.Float64("actual_video_duration", actualVideoDuration),
+		zap.Int("requested_duration", job.Duration),
+	)
 
+	// Update side effects start time based on actual video duration
+	if job.SideEffectsText != "" {
+		job.SideEffectsStartTime = actualVideoDuration * 0.8
+		h.logger.Info("Updated side effects start time for actual video duration",
+			zap.String("job_id", job.JobID),
+			zap.Float64("side_effects_start_time", job.SideEffectsStartTime),
+		)
+	}
+
+	// STEP 4: Generate narrator voiceover AND background audio in parallel
+	// Both use the actual video duration for proper timing
+	type audioResult struct {
+		url string
+		err error
+	}
+
+	narratorChan := make(chan audioResult, 1)
+	musicChan := make(chan audioResult, 1)
+
+	// Start narrator voiceover generation (if configured)
+	needsNarrator := job.Voice != "" && job.AudioSpec.NarratorScript != ""
+	if needsNarrator {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					h.logger.Error("Panic in narrator generation",
+						zap.String("job_id", job.JobID),
+						zap.Any("panic", r),
+					)
+					narratorChan <- audioResult{err: fmt.Errorf("narrator generation panic: %v", r)}
+				}
+			}()
+
+			h.logger.Info("Generating narrator voiceover (parallel with music)",
+				zap.String("job_id", job.JobID),
+				zap.Float64("target_duration", actualVideoDuration),
+			)
+
+			narratorURL, err := h.generateNarratorVoiceover(
+				jobCtx,
+				job.UserID,
+				job.JobID,
+				job.Voice,
+				job.AudioSpec.NarratorScript,
+				job.SideEffectsStartTime,
+				int(actualVideoDuration),
+			)
+			narratorChan <- audioResult{url: narratorURL, err: err}
+		}()
+	} else {
+		// No narrator needed - send empty result
+		if job.Voice == "" {
+			h.logger.Info("Skipping narrator voiceover (voice not configured)", zap.String("job_id", job.JobID))
+		} else {
+			h.logger.Warn("Skipping narrator voiceover (narrator script missing)", zap.String("job_id", job.JobID))
+		}
+		narratorChan <- audioResult{url: "", err: nil}
+	}
+
+	// Start background music generation
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				h.logger.Error("Panic in music generation",
+					zap.String("job_id", job.JobID),
+					zap.Any("panic", r),
+				)
+				musicChan <- audioResult{err: fmt.Errorf("music generation panic: %v", r)}
+			}
+		}()
+
+		h.logger.Info("Generating background music (parallel with narrator)",
+			zap.String("job_id", job.JobID),
+			zap.Float64("target_duration", actualVideoDuration),
+		)
+
+		audioURL, err := h.generateAudio(jobCtx, job.UserID, job.JobID, script)
+		musicChan <- audioResult{url: audioURL, err: err}
+	}()
+
+	// Update job stage
+	job.Stage = "audio_generating"
 	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
-		h.logger.Error("Failed to update job with audio URL",
+		h.logger.Error("Failed to update job stage",
+			zap.String("job_id", job.JobID),
+			zap.String("stage", "audio_generating"),
+			zap.Error(err),
+		)
+	}
+
+	// Wait for both audio tracks to complete
+	h.logger.Info("Waiting for audio generation to complete", zap.String("job_id", job.JobID))
+
+	narratorRes := <-narratorChan
+	if narratorRes.err != nil {
+		h.failJob(jobCtx, job, narratorFailureMessage, narratorRes.err, zap.String("stage", "narrator_generating"))
+		return
+	}
+	if narratorRes.url != "" {
+		job.NarratorAudioURL = narratorRes.url
+		h.logger.Info("Narrator voiceover complete",
+			zap.String("job_id", job.JobID),
+			zap.String("narrator_url", narratorRes.url),
+		)
+	}
+
+	musicRes := <-musicChan
+	if musicRes.err != nil {
+		h.failJob(jobCtx, job, audioFailureMessage, musicRes.err, zap.String("stage", "audio_generating"))
+		return
+	}
+	job.AudioURL = musicRes.url
+	h.logger.Info("Background music complete",
+		zap.String("job_id", job.JobID),
+		zap.String("audio_url", musicRes.url),
+	)
+
+	job.Stage = "audio_complete"
+	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+		h.logger.Error("Failed to update job with audio URLs",
 			zap.String("job_id", job.JobID),
 			zap.Error(err),
 		)
 	}
 
-	h.logger.Info("Audio generation complete",
-		zap.String("job_id", job.JobID),
-		zap.String("audio_url", audioRes.audioURL),
-	)
-
-	// STEP 6: Compose final video
+	// STEP 5: Compose final video
 	job.Stage = "composing"
 	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
 		h.logger.Error("Failed to update job stage",
@@ -593,7 +624,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		return
 	}
 
-	// STEP 6: Mark job complete with video URL
+	// STEP 6: Mark job complete
 	err = h.jobRepo.MarkJobComplete(jobCtx, job.JobID, finalVideoKey)
 	if err != nil {
 		h.logger.Error("Failed to mark job complete", zap.String("job_id", job.JobID), zap.Error(err))
