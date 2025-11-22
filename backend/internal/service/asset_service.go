@@ -124,7 +124,14 @@ func (s *AssetService) GetJobAssets(ctx context.Context, job *domain.Job, durati
 // Output: users/user123/jobs/job456/clips/scene-001.mp4
 func extractS3Key(s3URL string) string {
 	// Strip query parameters first (handles presigned URLs stored in DB)
+	// Check for both literal "?" and URL-encoded "%3F"
 	if idx := findSubstring(s3URL, "?"); idx != -1 {
+		s3URL = s3URL[:idx]
+	}
+	if idx := findSubstring(s3URL, "%3F"); idx != -1 {
+		s3URL = s3URL[:idx]
+	}
+	if idx := findSubstring(s3URL, "%3f"); idx != -1 {
 		s3URL = s3URL[:idx]
 	}
 
