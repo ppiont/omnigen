@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -134,7 +135,7 @@ func (h *GenerateHandler) failJob(
 						}
 						errorMessage = fmt.Sprintf("%s (API Error: HTTP 422 - %s)", userMessage, responseBody)
 					} else {
-			errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
+						errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
 					}
 				} else {
 					errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
@@ -452,14 +453,14 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 					zap.Error(err),
 				)
 				// Fall back to direct URL if presigning fails (shouldn't happen, but be safe)
-			scene.StartImageURL = req.StartImage
+				scene.StartImageURL = req.StartImage
 			} else {
 				scene.StartImageURL = presignedURL
-			h.logger.Info("Using product image for last scene (side effects segment)",
-				zap.String("job_id", job.JobID),
-				zap.Int("scene", i+1),
+				h.logger.Info("Using product image for last scene (side effects segment)",
+					zap.String("job_id", job.JobID),
+					zap.Int("scene", i+1),
 					zap.String("product_image_url", presignedURL),
-			)
+				)
 			}
 		} else {
 			scene.StartImageURL = lastFrameURL
@@ -692,7 +693,7 @@ func (h *GenerateHandler) generateClip(
 				zap.String("prediction_id", result.PredictionID),
 			)
 		}
-		
+
 		// Log every 60th attempt (every 5 minutes) with more detail
 		if attempt > 0 && attempt%60 == 0 {
 			h.logger.Warn("Veo generation taking longer than expected",
@@ -834,11 +835,11 @@ func (h *GenerateHandler) extractJobThumbnail(
 	// Extract the very first frame of the video for the thumbnail
 	thumbnailPath := filepath.Join(tmpDir, "thumbnail.jpg")
 	cmd := exec.CommandContext(ctx, "ffmpeg",
-		"-ss", "0",           // Seek to the very beginning
+		"-ss", "0", // Seek to the very beginning
 		"-i", videoPath,
-		"-frames:v", "1",     // Extract exactly 1 frame
+		"-frames:v", "1", // Extract exactly 1 frame
 		"-vf", "scale=1280:-1", // Scale to 1280px width, maintain aspect ratio
-		"-q:v", "2",          // High quality
+		"-q:v", "2", // High quality
 		"-y", thumbnailPath,
 	)
 
@@ -974,12 +975,39 @@ func (h *GenerateHandler) generateNarratorVoiceover(
 	}
 
 	processedAudioPath := filepath.Join(tmpDir, "narrator-processed.mp3")
-	durationSeconds := float64(duration)
 
-	if sideEffectsStartTime > 0 && durationSeconds > 0 && sideEffectsStartTime < durationSeconds {
+	// Get actual audio duration using ffprobe
+	audioDuration, err := getAudioDuration(ctx, rawAudioPath)
+	if err != nil {
+		h.logger.Warn("Failed to get audio duration, skipping variable speed",
+			zap.String("job_id", jobID),
+			zap.Error(err),
+		)
+		audioDuration = 0
+	}
+
+	h.logger.Info("TTS audio generated",
+		zap.String("job_id", jobID),
+		zap.Float64("audio_duration", audioDuration),
+		zap.Float64("video_duration", float64(duration)),
+		zap.Float64("requested_split_time", sideEffectsStartTime),
+	)
+
+	// Calculate proportional split point based on actual audio duration
+	// sideEffectsStartTime is 80% of video duration, we want 80% of audio duration
+	var actualSplitTime float64
+	if sideEffectsStartTime > 0 && float64(duration) > 0 {
+		// Use same ratio for audio: if side effects start at 80% of video, start at 80% of audio
+		ratio := sideEffectsStartTime / float64(duration)
+		actualSplitTime = audioDuration * ratio
+	}
+
+	// Only apply variable speed if we have valid audio and split point
+	if actualSplitTime > 0 && audioDuration > 0 && actualSplitTime < audioDuration-0.5 {
 		h.logger.Info("Applying variable speed to narrator audio",
 			zap.String("job_id", jobID),
-			zap.Float64("split_time", sideEffectsStartTime),
+			zap.Float64("audio_duration", audioDuration),
+			zap.Float64("split_time", actualSplitTime),
 		)
 
 		mainSegmentPath := filepath.Join(tmpDir, "main-segment.mp3")
@@ -989,7 +1017,7 @@ func (h *GenerateHandler) generateNarratorVoiceover(
 		cmd := exec.CommandContext(ctx, "ffmpeg",
 			"-i", rawAudioPath,
 			"-ss", "0",
-			"-to", fmt.Sprintf("%.2f", sideEffectsStartTime),
+			"-to", fmt.Sprintf("%.2f", actualSplitTime),
 			"-c", "copy",
 			"-y", mainSegmentPath,
 		)
@@ -999,7 +1027,7 @@ func (h *GenerateHandler) generateNarratorVoiceover(
 
 		cmd = exec.CommandContext(ctx, "ffmpeg",
 			"-i", rawAudioPath,
-			"-ss", fmt.Sprintf("%.2f", sideEffectsStartTime),
+			"-ss", fmt.Sprintf("%.2f", actualSplitTime),
 			"-c", "copy",
 			"-y", sideEffectsSegmentPath,
 		)
@@ -1036,7 +1064,8 @@ func (h *GenerateHandler) generateNarratorVoiceover(
 		h.logger.Info("Skipping variable speed for narrator audio",
 			zap.String("job_id", jobID),
 			zap.Float64("side_effects_start_time", sideEffectsStartTime),
-			zap.Float64("duration_seconds", durationSeconds),
+			zap.Float64("audio_duration", audioDuration),
+			zap.Float64("actual_split_time", actualSplitTime),
 		)
 
 		if err := os.Rename(rawAudioPath, processedAudioPath); err != nil {
@@ -1090,6 +1119,28 @@ func (h *GenerateHandler) processAudio(ctx context.Context, userID string, jobID
 
 	h.logger.Info("Audio processed and uploaded", zap.String("job_id", jobID), zap.String("s3_url", audioS3URL))
 	return audioS3URL, nil
+}
+
+// getAudioDuration returns the duration of an audio file in seconds using ffprobe
+func getAudioDuration(ctx context.Context, audioPath string) (float64, error) {
+	cmd := exec.CommandContext(ctx, "ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		audioPath,
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe failed: %w", err)
+	}
+
+	durationStr := strings.TrimSpace(string(output))
+	duration, err := strconv.ParseFloat(durationStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse duration '%s': %w", durationStr, err)
+	}
+
+	return duration, nil
 }
 
 // detectAvailableFont returns the first available font file path from a prioritized list.
