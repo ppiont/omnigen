@@ -21,7 +21,9 @@ const categories = [
   "Tutorial",
 ];
 const styles = ["Clinical", "Professional", "Documentary", "Informative", "Trustworthy"];
-const durations = ["10s", "20s", "30s", "40s", "50s", "60s"]; // Must be multiple of 10
+// Valid durations must be achievable with Veo 3.1 clips (4s, 6s, or 8s each)
+// 10=4+6, 16=8+8, 20=4+8+8, 24=8+8+8, 30=6+6+6+6+6, 40=8+8+8+8+8, 60=many combos
+const durations = ["10s", "16s", "20s", "24s", "30s", "40s", "60s"];
 const aspects = ["16:9", "9:16", "1:1"]; // Backend only supports these
 
 const SIDE_EFFECTS_MIN = 10;
@@ -97,7 +99,7 @@ function Create() {
     },
     onFailed: (finalProgress) => {
       console.error("[CREATE] ❌ Job failed:", finalProgress);
-      
+
       // Extract detailed error message from job if available
       let errorMessage = "Video generation failed. Please try again.";
       if (finalProgress?.error_message) {
@@ -106,7 +108,7 @@ function Create() {
       } else if (finalProgress?.message) {
         errorMessage = finalProgress.message;
       }
-      
+
       setGenerationState("error");
       setGenerationError(errorMessage);
       setIsGenerating(false);
@@ -332,13 +334,14 @@ function Create() {
       return;
     }
 
-    // Validate duration is multiple of 10
+    // Validate duration is achievable with Veo 3.1 clips (4s, 6s, or 8s)
     const durationNum = parseInt(selectedDuration);
-    if (durationNum % 10 !== 0) {
+    const validDurations = [10, 16, 20, 24, 30, 40, 60];
+    if (!validDurations.includes(durationNum)) {
       console.warn(
-        "[CREATE] ⚠️ Validation failed: Duration must be multiple of 10"
+        "[CREATE] ⚠️ Validation failed: Duration must be valid for Veo 3.1"
       );
-      setValidationError("Duration must be 10, 20, 30, 40, 50, or 60 seconds");
+      setValidationError("Duration must be 10, 16, 20, 24, 30, 40, or 60 seconds");
       return;
     }
 
