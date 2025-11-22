@@ -19,7 +19,7 @@
 **Output Quality:**
 
 - [x] Minimum 1080p resolution
-- [ ] 30+ FPS <-- FFmpeg?   (Veo generates 24 fps)
+- [x] 30+ FPS <-- FFmpeg?
 - [ ] Clean audio (no distortion or clipping)
 - [x] Proper compression (reasonable file size)
 
