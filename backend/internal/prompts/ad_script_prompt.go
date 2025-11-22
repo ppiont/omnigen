@@ -621,19 +621,6 @@ Optimize your generation_prompts for Minimax by:
 // DefaultVideoModel is used when no specific model is requested
 const DefaultVideoModel = "veo"
 
-// EnhancedPromptOptions contains optional enhancement parameters for prompt generation
-type EnhancedPromptOptions struct {
-	Style             string // cinematic, documentary, energetic, minimal, dramatic, playful
-	Tone              string // premium, friendly, edgy, inspiring, humorous
-	Tempo             string // slow, medium, fast
-	Platform          string // instagram, tiktok, youtube, facebook
-	Audience          string // target audience description
-	Goal              string // awareness, sales, engagement, signups
-	CallToAction      string // CTA text
-	ProCinematography bool   // use advanced film terminology
-	CreativeBoost     bool   // higher temperature for more creative outputs
-}
-
 // BuildEnhancedSystemPrompt adds style, tone, and platform-specific guidance to the system prompt
 func BuildEnhancedSystemPrompt(basePrompt string, options *EnhancedPromptOptions) string {
 	if options == nil {
