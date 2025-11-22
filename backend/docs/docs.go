@@ -745,6 +745,9 @@ const docTemplate = `{
                 "job_id": {
                     "type": "string"
                 },
+                "model": {
+                    "type": "string"
+                },
                 "narrator_audio_url": {
                     "type": "string"
                 },

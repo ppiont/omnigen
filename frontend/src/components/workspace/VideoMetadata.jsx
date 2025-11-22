@@ -4,7 +4,7 @@ import { formatDistanceToNow } from "date-fns";
 
 const COST_PER_SECOND = 0.07;
 const DEFAULT_TITLE = "Untitled Video";
-const MODEL_NAME = "Kling v2.5 Turbo Pro";
+const DEFAULT_MODEL_NAME = "Veo 3.1";
 const DEFAULT_RESOLUTION = "1080p";
 const TITLE_STORAGE_PREFIX = "video-title-";
 
@@ -153,7 +153,7 @@ function VideoMetadata({ jobData }) {
   ];
 
   const derivedFields = [
-    { label: "Model", value: MODEL_NAME },
+    { label: "Model", value: jobData.model || DEFAULT_MODEL_NAME },
     { label: "Resolution", value: DEFAULT_RESOLUTION },
   ];
 
@@ -177,9 +177,8 @@ function VideoMetadata({ jobData }) {
         >
           <span>Video details</span>
           <svg
-            className={`metadata-collapse-icon ${
-              isDetailsOpen ? "is-open" : ""
-            }`}
+            className={`metadata-collapse-icon ${isDetailsOpen ? "is-open" : ""
+              }`}
             width="18"
             height="18"
             viewBox="0 0 24 24"
@@ -255,6 +254,7 @@ VideoMetadata.propTypes = {
     status: PropTypes.string.isRequired,
     prompt: PropTypes.string,
     duration: PropTypes.number,
+    model: PropTypes.string,
     style: PropTypes.string,
     aspect_ratio: PropTypes.string,
     created_at: PropTypes.number,

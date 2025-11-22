@@ -151,6 +151,8 @@ definitions:
         type: string
       job_id:
         type: string
+      model:
+        type: string
       narrator_audio_url:
         type: string
       progress_percent:

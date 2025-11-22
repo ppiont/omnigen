@@ -45,6 +45,7 @@ type Job struct {
 	SideEffectsStartTime float64 `dynamodbav:"side_effects_start_time,omitempty" json:"side_effects_start_time,omitempty"`
 
 	VideoKey     string  `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"` // S3 key
+	Model        string  `dynamodbav:"model,omitempty" json:"model,omitempty"`         // Video generation model (e.g., "Veo 3.1")
 	CreatedAt    int64   `dynamodbav:"created_at" json:"created_at"`
 	UpdatedAt    int64   `dynamodbav:"updated_at" json:"updated_at"`
 	CompletedAt  *int64  `dynamodbav:"completed_at,omitempty" json:"completed_at,omitempty"`

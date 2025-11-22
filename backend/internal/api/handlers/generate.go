@@ -211,6 +211,7 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		Prompt:      req.Prompt,
 		Duration:    req.Duration,
 		AspectRatio: req.AspectRatio,
+		Model:       h.veoAdapter.GetModelName(),
 
 		Voice:       req.Voice,
 		SideEffects: req.SideEffects,

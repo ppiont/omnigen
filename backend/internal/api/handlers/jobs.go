@@ -50,18 +50,19 @@ type JobResponse struct {
 	Prompt          string  `json:"prompt"`
 	Duration        int     `json:"duration"`
 	VideoURL        *string `json:"video_url,omitempty"`
+	Model           string  `json:"model,omitempty"`
 	CreatedAt       int64   `json:"created_at"`
 	UpdatedAt       int64   `json:"updated_at"`
 	CompletedAt     *int64  `json:"completed_at,omitempty"`
 	ErrorMessage    *string `json:"error_message,omitempty"`
 
 	// Progress fields
-	ThumbnailURL    string   `json:"thumbnail_url,omitempty"`
-	AudioURL        string   `json:"audio_url,omitempty"`
-	NarratorAudioURL string  `json:"narrator_audio_url,omitempty"`
-	ScenesCompleted int      `json:"scenes_completed,omitempty"`
-	SceneVideoURLs  []string `json:"scene_video_urls,omitempty"`
-	
+	ThumbnailURL     string   `json:"thumbnail_url,omitempty"`
+	AudioURL         string   `json:"audio_url,omitempty"`
+	NarratorAudioURL string   `json:"narrator_audio_url,omitempty"`
+	ScenesCompleted  int      `json:"scenes_completed,omitempty"`
+	SceneVideoURLs   []string `json:"scene_video_urls,omitempty"`
+
 	// Side effects fields for text overlay
 	SideEffectsText      string   `json:"side_effects_text,omitempty"`
 	SideEffectsStartTime *float64 `json:"side_effects_start_time,omitempty"`
@@ -183,23 +184,24 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 	}
 
 	response := JobResponse{
-		JobID:               job.JobID,
-		Status:              job.Status,
-		Stage:               job.Stage,
-		ProgressPercent:     calculateDynamicProgress(job.Stage, len(job.Scenes)),
-		Prompt:              job.Prompt,
-		Duration:            job.Duration,
-		VideoURL:            videoURL,
-		CreatedAt:           job.CreatedAt,
-		UpdatedAt:           job.UpdatedAt,
-		CompletedAt:         job.CompletedAt,
-		ErrorMessage:        job.ErrorMessage,
-		ThumbnailURL:        thumbnailURL,
-		AudioURL:            audioURL,
-		NarratorAudioURL:    narratorAudioURL,
-		ScenesCompleted:     job.ScenesCompleted,
-		SceneVideoURLs:      job.SceneVideoURLs,
-		SideEffectsText:     job.SideEffectsText,
+		JobID:                job.JobID,
+		Status:               job.Status,
+		Stage:                job.Stage,
+		ProgressPercent:      calculateDynamicProgress(job.Stage, len(job.Scenes)),
+		Prompt:               job.Prompt,
+		Duration:             job.Duration,
+		VideoURL:             videoURL,
+		Model:                job.Model,
+		CreatedAt:            job.CreatedAt,
+		UpdatedAt:            job.UpdatedAt,
+		CompletedAt:          job.CompletedAt,
+		ErrorMessage:         job.ErrorMessage,
+		ThumbnailURL:         thumbnailURL,
+		AudioURL:             audioURL,
+		NarratorAudioURL:     narratorAudioURL,
+		ScenesCompleted:      job.ScenesCompleted,
+		SceneVideoURLs:       job.SceneVideoURLs,
+		SideEffectsText:      job.SideEffectsText,
 		SideEffectsStartTime: sideEffectsStartTime,
 	}
 
@@ -317,23 +319,24 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 		}
 
 		jobResponses[i] = JobResponse{
-			JobID:               job.JobID,
-			Status:              job.Status,
-			Stage:               job.Stage,
-			ProgressPercent:     calculateDynamicProgress(job.Stage, len(job.Scenes)),
-			VideoURL:            videoURL,
-			ErrorMessage:        job.ErrorMessage,
-			Prompt:              job.Prompt,
-			Duration:            job.Duration,
-			CreatedAt:           job.CreatedAt,
-			UpdatedAt:           job.UpdatedAt,
-			CompletedAt:         job.CompletedAt,
-			ThumbnailURL:        thumbnailURL,
-			AudioURL:            audioURL,
-			NarratorAudioURL:    narratorAudioURL,
-			ScenesCompleted:     job.ScenesCompleted,
-			SceneVideoURLs:      job.SceneVideoURLs,
-			SideEffectsText:     job.SideEffectsText,
+			JobID:                job.JobID,
+			Status:               job.Status,
+			Stage:                job.Stage,
+			ProgressPercent:      calculateDynamicProgress(job.Stage, len(job.Scenes)),
+			VideoURL:             videoURL,
+			ErrorMessage:         job.ErrorMessage,
+			Prompt:               job.Prompt,
+			Duration:             job.Duration,
+			Model:                job.Model,
+			CreatedAt:            job.CreatedAt,
+			UpdatedAt:            job.UpdatedAt,
+			CompletedAt:          job.CompletedAt,
+			ThumbnailURL:         thumbnailURL,
+			AudioURL:             audioURL,
+			NarratorAudioURL:     narratorAudioURL,
+			ScenesCompleted:      job.ScenesCompleted,
+			SceneVideoURLs:       job.SceneVideoURLs,
+			SideEffectsText:      job.SideEffectsText,
 			SideEffectsStartTime: sideEffectsStartTime,
 		}
 	}
