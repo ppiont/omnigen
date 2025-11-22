@@ -75,8 +75,22 @@ func buildFinalVideoKey(userID, jobID string) string {
 	return fmt.Sprintf("users/%s/jobs/%s/final/video.mp4", userID, jobID)
 }
 
+func buildFinalWebMKey(userID, jobID string) string {
+	return fmt.Sprintf("users/%s/jobs/%s/final/video.webm", userID, jobID)
+}
+
 func buildJobThumbnailKey(userID, jobID string) string {
 	return fmt.Sprintf("users/%s/jobs/%s/thumbnails/job-thumbnail.jpg", userID, jobID)
+}
+
+// buildVersionedSceneClipKey returns S3 key for a specific clip version
+func buildVersionedSceneClipKey(userID, jobID string, sceneNumber, version int) string {
+	return fmt.Sprintf("users/%s/jobs/%s/clips/scene-%03d-v%d.mp4", userID, jobID, sceneNumber, version)
+}
+
+// buildVersionedSceneThumbnailKey returns S3 key for a specific scene thumbnail version
+func buildVersionedSceneThumbnailKey(userID, jobID string, sceneNumber, version int) string {
+	return fmt.Sprintf("users/%s/jobs/%s/thumbnails/scene-%03d-v%d.jpg", userID, jobID, sceneNumber, version)
 }
 
 const (
@@ -434,6 +448,17 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 			}
 		}
 
+		// Initialize versioning for this scene (version 1)
+		if job.SceneVersions == nil {
+			job.SceneVersions = make(map[int]int)
+		}
+		if job.ClipVersions == nil {
+			job.ClipVersions = make(map[string]string)
+		}
+		sceneNum := i + 1
+		job.SceneVersions[sceneNum] = 1
+		job.ClipVersions[fmt.Sprintf("scene-%d-v1", sceneNum)] = clipResult.VideoURL
+
 		// Update job with accumulated data
 		job.Stage = fmt.Sprintf("scene_%d_complete", i+1)
 		job.ScenesCompleted = i + 1
@@ -611,7 +636,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	}
 	h.logger.Info("Composing final video (video track only)", zap.String("job_id", job.JobID))
 
-	finalVideoKey, err := h.composeVideo(
+	mp4Key, webmKey, err := h.composeVideo(
 		jobCtx,
 		job.UserID,
 		job.JobID,
@@ -624,8 +649,8 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		return
 	}
 
-	// STEP 6: Mark job complete
-	err = h.jobRepo.MarkJobComplete(jobCtx, job.JobID, finalVideoKey)
+	// STEP 6: Mark job complete (with both MP4 and WebM keys)
+	err = h.jobRepo.MarkJobComplete(jobCtx, job.JobID, mp4Key, webmKey)
 	if err != nil {
 		h.logger.Error("Failed to mark job complete", zap.String("job_id", job.JobID), zap.Error(err))
 		return
@@ -633,7 +658,8 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 
 	h.logger.Info("Video generation complete",
 		zap.String("job_id", job.JobID),
-		zap.String("video_key", finalVideoKey),
+		zap.String("mp4_key", mp4Key),
+		zap.String("webm_key", webmKey),
 	)
 }
 
@@ -1380,12 +1406,13 @@ func wrapText(text string, videoWidth int, fontSize float64) (string, int) {
 
 // composeVideo concatenates video clips and prepares the final video track (no audio mixing).
 // 4-Track Architecture:
-//   - Video Track: final/video.mp4 (output of this function)
+//   - Video Track: final/video.mp4 and final/video.webm (output of this function)
 //   - Music Track: audio/background-music.mp3 (generated separately)
 //   - Narrator Track: audio/narrator-voiceover.mp3 (generated separately)
 //   - Text Track: side_effects_text metadata (rendered by the frontend)
 //
 // All audio playback, mixing, and synchronization happens in the frontend.
+// Returns: (mp4Key, webmKey, error) - webmKey may be empty if WebM encoding fails
 func (h *GenerateHandler) composeVideo(
 	ctx context.Context,
 	userID string,
@@ -1393,7 +1420,7 @@ func (h *GenerateHandler) composeVideo(
 	clips []ClipVideo,
 	sideEffectsText string,
 	sideEffectsStartTime float64,
-) (string, error) {
+) (string, string, error) {
 	trimmedText := strings.TrimSpace(sideEffectsText)
 	var totalDuration float64
 	for _, clip := range clips {
@@ -1409,12 +1436,12 @@ func (h *GenerateHandler) composeVideo(
 	)
 
 	if sideEffectsStartTime > 0 && trimmedText == "" {
-		return "", fmt.Errorf("side effects text is required when sideEffectsStartTime is provided")
+		return "", "", fmt.Errorf("side effects text is required when sideEffectsStartTime is provided")
 	}
 
 	tmpDir := filepath.Join("/tmp", jobID, "composition")
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create temp dir: %w", err)
+		return "", "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -1427,7 +1454,7 @@ func (h *GenerateHandler) composeVideo(
 	for i, clip := range clips {
 		clipPath := filepath.Join(tmpDir, fmt.Sprintf("clip-%d.mp4", i+1))
 		if err := h.s3Service.DownloadFile(ctx, h.assetsBucket, extractS3Key(clip.VideoURL), clipPath); err != nil {
-			return "", fmt.Errorf("failed to download clip %d: %w", i+1, err)
+			return "", "", fmt.Errorf("failed to download clip %d: %w", i+1, err)
 		}
 		clipPaths = append(clipPaths, clipPath)
 	}
@@ -1436,13 +1463,13 @@ func (h *GenerateHandler) composeVideo(
 	concatFile := filepath.Join(tmpDir, "concat.txt")
 	f, err := os.Create(concatFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to create concat file: %w", err)
+		return "", "", fmt.Errorf("failed to create concat file: %w", err)
 	}
 	for _, path := range clipPaths {
 		fmt.Fprintf(f, "file '%s'\n", path)
 	}
 	if err := f.Close(); err != nil {
-		return "", fmt.Errorf("failed to close concat file: %w", err)
+		return "", "", fmt.Errorf("failed to close concat file: %w", err)
 	}
 
 	// Concatenate clips (video track only)
@@ -1465,7 +1492,7 @@ func (h *GenerateHandler) composeVideo(
 			zap.String("output", string(output)),
 			zap.Error(err),
 		)
-		return "", fmt.Errorf("ffmpeg concat failed: %w", err)
+		return "", "", fmt.Errorf("ffmpeg concat failed: %w", err)
 	}
 
 	if trimmedText != "" && totalDuration > 0 {
@@ -1481,7 +1508,7 @@ func (h *GenerateHandler) composeVideo(
 
 		config, err := buildDrawtextConfig(h.logger, trimmedText, sideEffectsStartTime, totalDuration, videoWidth, videoHeight)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		if config != nil {
 			h.logger.Info("Applying side effects text overlay",
@@ -1507,7 +1534,7 @@ func (h *GenerateHandler) composeVideo(
 					zap.String("output", string(output)),
 					zap.Error(err),
 				)
-				return "", fmt.Errorf("ffmpeg text overlay failed: %w", err)
+				return "", "", fmt.Errorf("ffmpeg text overlay failed: %w", err)
 			}
 
 			h.logger.Info("Text overlay applied successfully", zap.String("job_id", jobID))
@@ -1522,22 +1549,64 @@ func (h *GenerateHandler) composeVideo(
 		)
 	}
 
-	// Upload final video to S3
-	h.logger.Info("Uploading final video to S3",
+	// Upload final MP4 video to S3
+	h.logger.Info("Uploading final MP4 video to S3",
 		zap.String("job_id", jobID),
 	)
-	finalS3Key := buildFinalVideoKey(userID, jobID)
-	finalURL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, finalS3Key, finalVideo, "video/mp4")
+	mp4S3Key := buildFinalVideoKey(userID, jobID)
+	_, err = h.s3Service.UploadFile(ctx, h.assetsBucket, mp4S3Key, finalVideo, "video/mp4")
 	if err != nil {
-		return "", fmt.Errorf("failed to upload final video: %w", err)
+		return "", "", fmt.Errorf("failed to upload MP4 video: %w", err)
+	}
+
+	// Transcode to WebM (VP9) for web-optimized delivery
+	h.logger.Info("Transcoding to WebM format",
+		zap.String("job_id", jobID),
+	)
+	webmVideo := filepath.Join(tmpDir, "final.webm")
+	cmd = exec.CommandContext(ctx, "ffmpeg",
+		"-i", finalVideo,
+		"-c:v", "libvpx-vp9",
+		"-crf", "30",
+		"-b:v", "0",
+		"-row-mt", "1",
+		"-an", // No audio in video file
+		"-y", webmVideo,
+	)
+
+	var webmS3Key string
+	if output, err := cmd.CombinedOutput(); err != nil {
+		h.logger.Warn("WebM transcode failed, MP4 still available",
+			zap.String("job_id", jobID),
+			zap.String("output", string(output)),
+			zap.Error(err),
+		)
+		// Don't fail - MP4 is still available
+	} else {
+		// Upload WebM to S3
+		webmS3Key = buildFinalWebMKey(userID, jobID)
+		_, err = h.s3Service.UploadFile(ctx, h.assetsBucket, webmS3Key, webmVideo, "video/webm")
+		if err != nil {
+			h.logger.Warn("Failed to upload WebM, MP4 still available",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+			webmS3Key = "" // Clear key since upload failed
+		} else {
+			h.logger.Info("WebM uploaded successfully",
+				zap.String("job_id", jobID),
+				zap.String("webm_key", webmS3Key),
+			)
+		}
 	}
 
 	h.logger.Info("Video composition complete",
 		zap.String("job_id", jobID),
-		zap.String("final_url", finalURL),
+		zap.String("mp4_key", mp4S3Key),
+		zap.String("webm_key", webmS3Key),
 	)
 
-	return finalS3Key, nil
+	return mp4S3Key, webmS3Key, nil
 }
 
 // downloadFile downloads a file from URL to local path
