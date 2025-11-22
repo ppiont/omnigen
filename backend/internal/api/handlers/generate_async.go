@@ -1468,6 +1468,15 @@ func (h *GenerateHandler) composeVideo(
 		return "", fmt.Errorf("ffmpeg concat failed: %w", err)
 	}
 
+	// Detect source FPS for interpolation decision
+	sourceFPS := probeVideoFPS(finalVideo)
+	needsInterpolation := sourceFPS > 0 && sourceFPS < 30
+	h.logger.Info("Video FPS detected",
+		zap.String("job_id", jobID),
+		zap.Float64("source_fps", sourceFPS),
+		zap.Bool("needs_interpolation", needsInterpolation),
+	)
+
 	if trimmedText != "" && totalDuration > 0 {
 		videoWidth, videoHeight, err := probeVideoDimensions(finalVideo)
 		if err != nil {
@@ -1493,12 +1502,21 @@ func (h *GenerateHandler) composeVideo(
 			)
 
 			videoWithText := filepath.Join(tmpDir, "video_with_text.mp4")
+			// Combine FPS interpolation with text overlay if needed (single re-encode)
+			vfFilter := config.Filter
+			if needsInterpolation {
+				vfFilter = "fps=30," + config.Filter
+				h.logger.Info("Combining FPS interpolation with text overlay",
+					zap.String("job_id", jobID),
+				)
+			}
 			cmd = exec.CommandContext(ctx, "ffmpeg",
 				"-i", finalVideo,
-				"-vf", config.Filter,
+				"-vf", vfFilter,
 				"-c:v", "libx264",
 				"-preset", "medium",
 				"-crf", "21",
+				"-an",
 				"-y", videoWithText,
 			)
 			if output, err := cmd.CombinedOutput(); err != nil {
@@ -1520,6 +1538,38 @@ func (h *GenerateHandler) composeVideo(
 			zap.String("job_id", jobID),
 			zap.Float64("video_duration", totalDuration),
 		)
+	}
+
+	// Apply FPS interpolation if needed and not already done via text overlay
+	if needsInterpolation && !strings.Contains(finalVideo, "video_with_text") {
+		h.logger.Info("Applying standalone FPS interpolation to 30fps",
+			zap.String("job_id", jobID),
+			zap.Float64("source_fps", sourceFPS),
+		)
+		interpolatedVideo := filepath.Join(tmpDir, "interpolated.mp4")
+		cmd := exec.CommandContext(ctx, "ffmpeg",
+			"-i", finalVideo,
+			"-vf", "fps=30",
+			"-c:v", "libx264",
+			"-preset", "medium",
+			"-crf", "21",
+			"-an",
+			"-y", interpolatedVideo,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			h.logger.Warn("FPS interpolation failed, using original video",
+				zap.String("job_id", jobID),
+				zap.Float64("source_fps", sourceFPS),
+				zap.String("output", string(output)),
+				zap.Error(err),
+			)
+			// Graceful fallback: continue with original FPS video
+		} else {
+			h.logger.Info("FPS interpolation complete",
+				zap.String("job_id", jobID),
+			)
+			finalVideo = interpolatedVideo
+		}
 	}
 
 	// Upload final video to S3
@@ -1619,4 +1669,39 @@ func probeVideoDimensions(videoPath string) (int, int, error) {
 		return 0, 0, fmt.Errorf("failed to parse ffprobe dimensions: %w", err)
 	}
 	return width, height, nil
+}
+
+// probeVideoFPS returns the frame rate of a video file as a float64.
+// Returns 0 on error (caller should handle gracefully).
+func probeVideoFPS(videoPath string) float64 {
+	cmd := exec.Command(
+		"ffprobe",
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=r_frame_rate",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		videoPath,
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	// Output format is "num/den" (e.g., "24/1" or "30000/1001")
+	fpsStr := strings.TrimSpace(string(output))
+	parts := strings.Split(fpsStr, "/")
+	if len(parts) != 2 {
+		return 0
+	}
+
+	num, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		return 0
+	}
+	den, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil || den == 0 {
+		return 0
+	}
+
+	return num / den
 }
