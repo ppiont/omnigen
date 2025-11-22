@@ -61,7 +61,7 @@ type JobResponse struct {
 	NarratorAudioURL string   `json:"narrator_audio_url,omitempty"`
 	ScenesCompleted  int      `json:"scenes_completed,omitempty"`
 	SceneVideoURLs   []string `json:"scene_video_urls,omitempty"`
-
+	
 	// Side effects fields for text overlay
 	SideEffectsText      string   `json:"side_effects_text,omitempty"`
 	SideEffectsStartTime *float64 `json:"side_effects_start_time,omitempty"`
@@ -364,8 +364,8 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 	jobID := c.Param("id")
 	userID := auth.MustGetUserID(c)
 
-	// Get job to verify it exists before deletion
-	_, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
+	// Get job to verify it exists and belongs to user
+	job, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
 	if err != nil {
 		if err == repository.ErrJobNotFound {
 			c.JSON(http.StatusNotFound, errors.ErrorResponse{
@@ -384,18 +384,32 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 		return
 	}
 
-	// Delete all S3 assets using batch deletion
+	// Verify job belongs to user (security check)
+	if job.UserID != userID {
+		h.logger.Warn("User attempted to delete another user's job",
+			zap.String("job_id", jobID),
+			zap.String("job_user_id", job.UserID),
+			zap.String("requesting_user_id", userID),
+		)
+		c.JSON(http.StatusForbidden, errors.ErrorResponse{
+			Error: errors.ErrForbidden,
+		})
+		return
+	}
+
+	// Delete all S3 assets using batch deletion (best effort - continue even if it fails)
 	prefix := fmt.Sprintf("users/%s/jobs/%s/", userID, jobID)
 	h.logger.Info("Deleting S3 assets for job",
 		zap.String("job_id", jobID),
 		zap.String("user_id", userID),
 		zap.String("prefix", prefix),
 	)
-
 	s3Err := h.s3Service.DeletePrefix(c.Request.Context(), h.assetsBucket, prefix)
 	if s3Err != nil {
-		h.logger.Warn("Failed to delete S3 assets",
+		h.logger.Warn("Failed to delete S3 assets (continuing with DB deletion)",
 			zap.String("job_id", jobID),
+			zap.String("user_id", userID),
+			zap.String("prefix", prefix),
 			zap.Error(s3Err),
 		)
 		// Continue with deletion even if S3 delete fails
@@ -415,20 +429,14 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 		return
 	}
 
-	h.logger.Info("Job deleted",
+	h.logger.Info("Job deleted successfully",
 		zap.String("job_id", jobID),
 		zap.String("user_id", userID),
+		zap.Bool("s3_cleanup_success", s3Err == nil),
 	)
 
-	if s3Err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Job deleted but some assets may remain",
-			"warning": s3Err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Job deleted successfully"})
+	// Return 204 No Content for successful DELETE (standard HTTP response)
+	c.Status(http.StatusNoContent)
 }
 
 // calculateDynamicProgress calculates progress percentage based on stage and total scenes

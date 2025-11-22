@@ -69,9 +69,8 @@ function VideoCard({ video, onDownload, onDelete }) {
             e.stopPropagation();
             onDelete?.(video);
           }}
-          disabled={!isCompleted}
-          aria-label={isCompleted ? "Delete video" : "Video must be completed to delete"}
-          title={isCompleted ? "Delete" : "Video must be completed"}
+          aria-label="Delete video"
+          title="Delete"
         >
           <Trash2 size={16} />
         </button>
