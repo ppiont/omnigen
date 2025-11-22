@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -356,7 +355,7 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 // @Description Delete a video generation job and its associated assets from DynamoDB and S3
 // @Tags jobs
 // @Param id path string true "Job ID"
-// @Success 204 "No Content"
+// @Success 200 {object} map[string]interface{}
 // @Failure 404 {object} errors.ErrorResponse
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /api/v1/jobs/{id} [delete]
@@ -365,8 +364,8 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 	jobID := c.Param("id")
 	userID := auth.MustGetUserID(c)
 
-	// Get job to verify it exists and get S3 keys
-	job, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
+	// Get job to verify it exists before deletion
+	_, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
 	if err != nil {
 		if err == repository.ErrJobNotFound {
 			c.JSON(http.StatusNotFound, errors.ErrorResponse{
@@ -385,91 +384,21 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 		return
 	}
 
-	// Delete S3 assets
+	// Delete all S3 assets using batch deletion
+	prefix := fmt.Sprintf("users/%s/jobs/%s/", userID, jobID)
 	h.logger.Info("Deleting S3 assets for job",
 		zap.String("job_id", jobID),
 		zap.String("user_id", userID),
+		zap.String("prefix", prefix),
 	)
 
-	// Helper function to extract S3 key from URL
-	extractS3Key := func(url string) string {
-		if strings.HasPrefix(url, "s3://") {
-			parts := strings.SplitN(url[5:], "/", 2)
-			if len(parts) == 2 {
-				return parts[1]
-			}
-			return ""
-		}
-		if strings.HasPrefix(url, "https://") {
-			url = url[8:]
-			// Find first slash after domain
-			slashIndex := strings.Index(url, "/")
-			if slashIndex > 0 {
-				return url[slashIndex+1:]
-			}
-		}
-		// If no prefix, assume it's already a key
-		return url
-	}
-
-	// Delete final video
-	if job.VideoKey != "" {
-		if err := h.s3Service.DeleteFile(c.Request.Context(), h.assetsBucket, job.VideoKey); err != nil {
-			h.logger.Warn("Failed to delete final video from S3",
-				zap.String("job_id", jobID),
-				zap.String("video_key", job.VideoKey),
-				zap.Error(err),
-			)
-			// Continue with deletion even if S3 delete fails
-		}
-	}
-
-	// Delete scene videos
-	for i, sceneURL := range job.SceneVideoURLs {
-		if sceneURL != "" {
-			key := extractS3Key(sceneURL)
-			if key != "" {
-				if err := h.s3Service.DeleteFile(c.Request.Context(), h.assetsBucket, key); err != nil {
-					h.logger.Warn("Failed to delete scene video from S3",
-						zap.String("job_id", jobID),
-						zap.Int("scene", i+1),
-						zap.String("key", key),
-						zap.Error(err),
-					)
-					// Continue with deletion even if S3 delete fails
-				}
-			}
-		}
-	}
-
-	// Delete thumbnail
-	if job.ThumbnailURL != "" {
-		key := extractS3Key(job.ThumbnailURL)
-		if key != "" {
-			if err := h.s3Service.DeleteFile(c.Request.Context(), h.assetsBucket, key); err != nil {
-				h.logger.Warn("Failed to delete thumbnail from S3",
-					zap.String("job_id", jobID),
-					zap.String("key", key),
-					zap.Error(err),
-				)
-				// Continue with deletion even if S3 delete fails
-			}
-		}
-	}
-
-	// Delete audio
-	if job.AudioURL != "" {
-		key := extractS3Key(job.AudioURL)
-		if key != "" {
-			if err := h.s3Service.DeleteFile(c.Request.Context(), h.assetsBucket, key); err != nil {
-				h.logger.Warn("Failed to delete audio from S3",
-					zap.String("job_id", jobID),
-					zap.String("key", key),
-					zap.Error(err),
-				)
-				// Continue with deletion even if S3 delete fails
-			}
-		}
+	s3Err := h.s3Service.DeletePrefix(c.Request.Context(), h.assetsBucket, prefix)
+	if s3Err != nil {
+		h.logger.Warn("Failed to delete S3 assets",
+			zap.String("job_id", jobID),
+			zap.Error(s3Err),
+		)
+		// Continue with deletion even if S3 delete fails
 	}
 
 	// Delete job from DynamoDB
@@ -486,12 +415,20 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 		return
 	}
 
-	h.logger.Info("Job and assets deleted successfully",
+	h.logger.Info("Job deleted",
 		zap.String("job_id", jobID),
 		zap.String("user_id", userID),
 	)
 
-	c.Status(http.StatusNoContent)
+	if s3Err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Job deleted but some assets may remain",
+			"warning": s3Err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Job deleted successfully"})
 }
 
 // calculateDynamicProgress calculates progress percentage based on stage and total scenes
