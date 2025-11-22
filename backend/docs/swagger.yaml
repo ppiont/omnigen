@@ -473,8 +473,11 @@ paths:
         required: true
         type: string
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
         "404":
           description: Not Found
           schema:
