@@ -547,14 +547,14 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 
 	// STEP 5: Wait for audio generation to complete
 	h.logger.Info("Waiting for audio generation to complete", zap.String("job_id", job.JobID))
-	audioResult := <-audioChan
-	if audioResult.err != nil {
-		h.failJob(jobCtx, job, audioFailureMessage, audioResult.err, zap.String("stage", "audio_generating"))
+	audioRes := <-audioChan
+	if audioRes.err != nil {
+		h.failJob(jobCtx, job, audioFailureMessage, audioRes.err, zap.String("stage", "audio_generating"))
 		return
 	}
 
 	job.Stage = "audio_complete"
-	job.AudioURL = audioResult.audioURL
+	job.AudioURL = audioRes.audioURL
 
 	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
 		h.logger.Error("Failed to update job with audio URL",
@@ -565,7 +565,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 
 	h.logger.Info("Audio generation complete",
 		zap.String("job_id", job.JobID),
-		zap.String("audio_url", audioResult.audioURL),
+		zap.String("audio_url", audioRes.audioURL),
 	)
 
 	// STEP 6: Compose final video
