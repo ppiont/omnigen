@@ -14,17 +14,19 @@ import (
 
 // NewConfig creates a new AWS SDK configuration
 func NewConfig(ctx context.Context, region string) (aws.Config, error) {
-	// Check if using local DynamoDB
+	// Check for LocalStack or local AWS endpoints
+	awsEndpoint := os.Getenv("AWS_ENDPOINT_URL")
 	dynamoEndpoint := os.Getenv("DYNAMODB_ENDPOINT")
 
 	var cfg aws.Config
 	var err error
 
-	if dynamoEndpoint != "" {
-		// For local DynamoDB, use dummy credentials
+	// Use local credentials if any local endpoint is configured
+	if awsEndpoint != "" || dynamoEndpoint != "" {
+		// For LocalStack/local development, use static credentials
 		cfg, err = config.LoadDefaultConfig(ctx,
 			config.WithRegion(region),
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("dummy", "dummy", "")),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("test", "test", "")),
 		)
 	} else {
 		// For production, use default credentials
@@ -48,8 +50,14 @@ type Clients struct {
 
 // NewClients creates all AWS service clients
 func NewClients(cfg aws.Config) *Clients {
-	// Check for local DynamoDB endpoint
+	// Check for LocalStack endpoint (unified) or individual service endpoints
+	awsEndpoint := os.Getenv("AWS_ENDPOINT_URL")
 	dynamoEndpoint := os.Getenv("DYNAMODB_ENDPOINT")
+
+	// Use AWS_ENDPOINT_URL if set, otherwise fall back to service-specific
+	if awsEndpoint != "" && dynamoEndpoint == "" {
+		dynamoEndpoint = awsEndpoint
+	}
 
 	var dynamoClient *dynamodb.Client
 	if dynamoEndpoint != "" {
@@ -61,9 +69,30 @@ func NewClients(cfg aws.Config) *Clients {
 		dynamoClient = dynamodb.NewFromConfig(cfg)
 	}
 
+	// S3 client with optional LocalStack endpoint
+	var s3Client *s3.Client
+	if awsEndpoint != "" {
+		s3Client = s3.NewFromConfig(cfg, func(o *s3.Options) {
+			o.BaseEndpoint = &awsEndpoint
+			o.UsePathStyle = true // Required for LocalStack
+		})
+	} else {
+		s3Client = s3.NewFromConfig(cfg)
+	}
+
+	// SecretsManager client with optional LocalStack endpoint
+	var smClient *secretsmanager.Client
+	if awsEndpoint != "" {
+		smClient = secretsmanager.NewFromConfig(cfg, func(o *secretsmanager.Options) {
+			o.BaseEndpoint = &awsEndpoint
+		})
+	} else {
+		smClient = secretsmanager.NewFromConfig(cfg)
+	}
+
 	return &Clients{
 		DynamoDB:       dynamoClient,
-		S3:             s3.NewFromConfig(cfg),
-		SecretsManager: secretsmanager.NewFromConfig(cfg),
+		S3:             s3Client,
+		SecretsManager: smClient,
 	}
 }

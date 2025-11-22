@@ -2,15 +2,41 @@ package auth
 
 import (
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/omnigen/backend/internal/domain"
 	"github.com/omnigen/backend/pkg/errors"
 	"go.uber.org/zap"
 )
 
+// DevAuthMiddleware creates a middleware that bypasses authentication for local development
+// It sets a mock user context with a test user ID
+func DevAuthMiddleware(logger *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		logger.Debug("Dev auth: bypassing JWT validation")
+
+		// Set mock user claims for development
+		mockClaims := &domain.UserClaims{
+			Sub:              "dev-user-123",
+			Email:            "dev@localhost",
+			CognitoUsername:  "devuser",
+			SubscriptionTier: "pro",
+		}
+		SetUserClaims(c, mockClaims)
+		c.Next()
+	}
+}
+
 // JWTAuthMiddleware creates a middleware that validates JWT tokens
+// If SKIP_AUTH=true environment variable is set, uses DevAuthMiddleware instead
 func JWTAuthMiddleware(validator *JWTValidator, logger *zap.Logger) gin.HandlerFunc {
+	// Check for SKIP_AUTH environment variable for local development
+	if os.Getenv("SKIP_AUTH") == "true" {
+		logger.Info("SKIP_AUTH=true: Using development auth middleware (NO AUTHENTICATION)")
+		return DevAuthMiddleware(logger)
+	}
 	return func(c *gin.Context) {
 		// First, try to get token from cookie
 		tokenString := GetTokenFromCookie(c)
