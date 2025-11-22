@@ -1570,7 +1570,14 @@ func (h *GenerateHandler) downloadFile(ctx context.Context, url string, destPath
 // extractS3Key extracts the S3 key from an S3 URL
 func extractS3Key(s3URL string) string {
 	// Strip query parameters first (handles presigned URLs stored in DB)
+	// Check for both literal "?" and URL-encoded "%3F"
 	if idx := strings.Index(s3URL, "?"); idx != -1 {
+		s3URL = s3URL[:idx]
+	}
+	if idx := strings.Index(s3URL, "%3F"); idx != -1 {
+		s3URL = s3URL[:idx]
+	}
+	if idx := strings.Index(s3URL, "%3f"); idx != -1 {
 		s3URL = s3URL[:idx]
 	}
 
