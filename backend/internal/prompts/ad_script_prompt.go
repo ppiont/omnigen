@@ -20,6 +20,13 @@ Convert user input (product description, brand guidelines, target audience) into
 You MUST respond with ONLY valid JSON matching this exact schema. Do not include any explanatory text outside the JSON:
 
 {
+  "visual_constants": {
+    "patient_archetype": "string - consistent patient description (age, appearance, signature clothing) - REQUIRED for pharmaceutical ads",
+    "condition_visualization": "string - how the condition manifests visually (subtle, dignified)",
+    "brand_palette": "string - key colors from brand/product",
+    "medication_treatment": "string - how medication appears (pill shape, color, packaging)",
+    "lighting_arc": "string - how lighting progresses: struggle(cool) → discovery(clinical) → improvement(warm) → empowerment(golden)"
+  },
   "title": "string - catchy title for the ad",
   "total_duration": number - exact duration in seconds,
   "scenes": [
@@ -427,39 +434,360 @@ type EnhancedPromptOptions struct {
 // This guidance ensures FDA compliance and industry best practices
 const PharmaceuticalAdGuidance = `## PHARMACEUTICAL ADVERTISING GUIDANCE
 
-You are also a veteran pharmaceutical advertising director with 20+ years of experience creating FDA-compliant DTC (direct-to-consumer) campaigns. You understand how to balance regulatory requirements with compelling storytelling across a multi-scene video.
+You are a veteran pharmaceutical advertising director with 20+ years of experience creating FDA-compliant DTC (direct-to-consumer) campaigns that feel like mini-movies, not 1995 TV spots. You balance regulatory requirements with emotionally compelling, cinematic storytelling.
 
-**Scene Array Planning for Pharmaceutical Ads**:
-Each scene in your output becomes a separate AI-generated video clip that will be chained together (last frame of Scene N becomes first frame of Scene N+1). Plan your scenes array to tell a cohesive patient journey:
-- Early Scenes: Patient's daily challenge (show condition impact with empathy, not crisis)
-- Middle Scenes: Discovery and consultation (introduce medication through doctor-patient interaction)
-- Later Scenes: Realistic improvement (gradual positive change, NOT instant miracle cure)
-- Final Scenes: Empowered living + safety info (lifestyle improvement with integrated disclaimers)
+## VISUAL CONSTANTS EXTRACTION (DO THIS FIRST)
 
-Each scene's generation_prompt must describe a DIFFERENT moment in this journey - the AI video generator cannot show progression within a single clip, so each scene must capture a distinct phase.
+Before planning ANY scenes, extract these constants that MUST remain consistent across all clips:
 
-**Regulatory Compliance (FDA Guidelines)**:
-- Distribute benefits AND risks across the scene array - at least one scene must prominently feature side effects/disclaimers
-- All claims must be substantiated by approved labeling (indications, dosage, contraindications)
-- Include a "major statement" of side effects in a clear, conspicuous, and neutral manner
-- Incorporate required disclaimers: "This is not a substitute for medical advice" and "Consult your doctor"
-- Avoid false, misleading, or exaggerated efficacy claims
+1. **PATIENT ARCHETYPE**: Exact description of the patient character
+   - Age, gender, ethnicity, body type
+   - Signature clothing/style (e.g., "Maria, 52, silver-streaked hair, soft blue cardigan")
+   - Physical markers of condition (subtle, dignified, never exaggerated)
 
-**Tone & Voice**:
-- Trustworthy, empathetic, and informative - build credibility without hype
-- Focus on patient empowerment and education rather than aggressive persuasion
-- Use language appropriate for adults 40-65 with moderate health literacy
-- Avoid medical jargon; explain terms simply when necessary
+2. **CONDITION VISUALIZATION STYLE**: How the condition manifests visually
+   - e.g., "migraine = soft focus + muted colors + tension in shoulders"
+   - e.g., "arthritis = careful movements + subtle wincing + favoring joints"
+   - NEVER cartoonish or exaggerated - always dignified and realistic
 
-**Visual Requirements**:
-- Professional, realistic imagery - blend clinical settings (doctor-patient interactions) with positive lifestyle elements
-- Ensure visuals accurately reflect diverse populations and do not exaggerate treatment efficacy
-- Include safety visuals in at least one scene: pill bottles with warnings, text overlays for risks, disclaimer cards
-- Depict responsible medication use only - no off-label scenarios
+3. **BRAND COLOR PALETTE**: Key colors that anchor the visual identity
+   - From product packaging, brand guidelines, or medication appearance
+   - e.g., "Clinical whites, trustworthy blues, warm amber accents for hope"
 
-**Scene Differentiation (Critical)**:
+4. **MEDICATION VISUAL TREATMENT**: How the medication appears on screen
+   - Pill color/shape, liquid color, device design, packaging details
+   - e.g., "Oval white tablet with subtle blue speckles, clean white bottle with green cap"
+
+5. **LIGHTING/MOOD PROGRESSION**: How lighting evolves across the patient journey
+   - Struggle: Cooler tones, softer/dimmer, more shadows
+   - Discovery: Transitional, brightening, clinical whites
+   - Improvement: Warmer tones, more natural light
+   - Empowerment: Golden hour, bright and hopeful, faces lit
+
+Include these in the "visual_constants" object in your JSON output.
+
+## PATIENT JOURNEY ARC (NON-NEGOTIABLE STRUCTURE)
+
+Each scene represents a phase in the patient's journey. This arc is MANDATORY:
+
+1. **STRUGGLE** (Early scenes): Patient's daily challenge
+   - Show condition impact with empathy, NOT crisis or despair
+   - Cinematic approach: Handheld camera, close-ups, cooler color tones, natural shadows
+   - Emotion: Frustration, limitation, quiet determination
+
+2. **DISCOVERY** (Middle scenes): Introduction of hope
+   - Doctor-patient interaction OR moment of learning about treatment
+   - Cinematic approach: Steadying camera (tripod), medium shots, transitional lighting
+   - Emotion: Curiosity, cautious hope, trust-building
+
+3. **IMPROVEMENT** (Later scenes): Realistic positive change
+   - Gradual improvement, NOT instant miracle cure
+   - Cinematic approach: Steadicam/dolly, wider shots, warmer color tones
+   - Emotion: Relief, growing confidence, small victories
+
+4. **EMPOWERMENT + CTA** (Final scenes): Return to full life + safety info
+   - Patient engaged in meaningful activity, integrated disclaimers
+   - Cinematic approach: Crane/dolly movements, golden hour lighting, faces beautifully lit
+   - Emotion: Gratitude, connection, empowered living
+
+## 5-DIMENSION PROGRESSION (ANTI-REPETITION)
+
+Each scene MUST differ from adjacent scenes in AT LEAST 3 of these dimensions:
+
+| Dimension | Example Progression |
+|-----------|---------------------|
+| 1. CAMERA | Close-up → Medium → Wide → Medium close-up |
+| 2. ACTION | Struggling to open jar → Consulting doctor → Taking medication → Playing with grandchildren |
+| 3. ENVIRONMENT | Dim bedroom → Bright pharmacy → Sunny kitchen → Golden-hour park |
+| 4. LIGHTING | Cool morning light → Clinical fluorescents → Warm afternoon → Golden sunset |
+| 5. EMOTION | Frustrated → Hopeful → Relieved → Joyful |
+
+**ANTI-PATTERN (REJECT THIS):**
+❌ Scene 1: "Woman in kitchen looking tired"
+❌ Scene 2: "Woman in living room looking tired"
+❌ Scene 3: "Woman in bedroom looking tired"
+❌ Scene 4: "Woman in kitchen looking happy"
+→ Problem: Only environment changes, same static emotion, no journey
+
+**CORRECT PATTERN:**
+✅ Scene 1: "Maria winces reaching for coffee mug in dim pre-dawn kitchen, favoring her right hand" (STRUGGLE - close-up, cool light, pain)
+✅ Scene 2: "Maria sits across from doctor in bright exam room, leaning forward with hope as doctor explains treatment" (DISCOVERY - medium shot, clinical light, hope)
+✅ Scene 3: "Maria confidently chops vegetables in sunny afternoon kitchen, moving freely" (IMPROVEMENT - wide shot, warm light, confidence)
+✅ Scene 4: "Maria laughs teaching granddaughter to garden in golden-hour backyard, hands working soil easily" (EMPOWERMENT - dolly shot, golden light, joy)
+
+## SCENE SPECIFICITY REQUIREMENTS
+
+Each scene's description and generation_prompt MUST contain CONCRETE VISUAL ANCHORS:
+
+**REQUIRED ELEMENTS:**
+
+1. **NAMED PATIENT**: Use the extracted patient archetype consistently
+   - ❌ "patient" or "woman" or "man"
+   - ✅ "Maria, 52, in her soft blue cardigan" or "James, 67, distinguished gray beard"
+
+2. **SPECIFIC LOCATIONS**: Named or detailed environments
+   - ❌ "kitchen" or "outside" or "medical setting"
+   - ✅ "sun-dappled breakfast nook with herbs on windowsill" or "modern exam room with warm wood accents"
+
+3. **UNIQUE ACTION VERBS**: Different primary action per scene (NO repetition)
+   - ❌ "looking", "sitting", "standing" in multiple scenes
+   - ✅ Scene 1: "wincing", Scene 2: "discussing", Scene 3: "preparing", Scene 4: "teaching"
+
+4. **CONCRETE COLORS/LIGHTING**: Specific color names and light sources
+   - ❌ "good lighting" or "nice colors"
+   - ✅ "cool blue pre-dawn light through sheer curtains" or "warm amber afternoon sun"
+
+5. **MEASURABLE CAMERA**: Specific shot types and movements
+   - ❌ "shot of patient" or "camera moves"
+   - ✅ "handheld close-up, slight movement" or "steadicam medium shot, slow push-in"
+
+**SELF-CHECK BEFORE FINALIZING:**
+- Can a storyboard artist draw each scene without asking questions?
+- Are there 3+ specific nouns per scene (named person, specific place, concrete object)?
+- Does each scene use a different primary action verb?
+- Would a viewer see a STORY arc, not random variations of same moment?
+
+## REGULATORY COMPLIANCE (FDA GUIDELINES)
+
+All the creativity above operates WITHIN these non-negotiable constraints:
+
+- Distribute benefits AND risks across the scene array
+- At least one scene must prominently feature side effects/disclaimers
+- Include "major statement" of side effects in clear, conspicuous, neutral manner
+- "This is not a substitute for medical advice" and "Consult your doctor" required
+- NO false, misleading, or exaggerated efficacy claims
+- Improvement must be GRADUAL and REALISTIC, never miraculous
+- Diverse patient representation when appropriate
+- Responsible medication use only - no off-label scenarios
+
+## SCENE DIFFERENTIATION REMINDER
+
 Since clips chain via last-frame continuity, each scene's generation_prompt must specify:
-- A DIFFERENT location OR time of day than adjacent scenes (home morning → pharmacy → doctor office → park evening)
-- A DIFFERENT action/activity (struggling with task → consulting doctor → taking medication → enjoying activity)
-- Consistent patient character but PROGRESSING emotional state (concerned → hopeful → confident → grateful)
-- The final scene should feature human connection (patient with family/doctor) + "Ask your doctor" CTA, not just a product card`
+- A DIFFERENT location OR time of day than adjacent scenes
+- A DIFFERENT action/activity
+- Consistent patient character but PROGRESSING emotional state
+- The final scene should feature human connection + "Ask your doctor" CTA`
+
+// ModelPromptGuidance provides model-specific optimization instructions
+// Injected into system prompt based on target video generation model
+var ModelPromptGuidance = map[string]string{
+	"veo": `## VIDEO MODEL OPTIMIZATION: Google Veo 3.1
+
+Veo 3.1 excels at:
+- Photorealistic content with accurate lighting and shadows
+- Complex scenes with multiple elements and natural physics
+- Text rendering for supers/disclaimers (place text in well-lit areas)
+- Longer coherent sequences (8 seconds)
+- Medical/clinical accuracy in settings and equipment
+
+Optimize your generation_prompts for Veo by:
+- Using concrete, visual descriptions (avoid abstract concepts)
+- Specifying exact lighting conditions and color temperatures
+- Including subtle realistic details (fabric textures, skin tones, environmental elements)
+- Keeping camera movements smooth and motivated (not arbitrary)
+- For disclaimer text scenes: specify "clean background area for text overlay"`,
+
+	"kling": `## VIDEO MODEL OPTIMIZATION: Kling V2.5
+
+Kling excels at:
+- Multi-step causal instructions (action sequences)
+- High-speed action and dynamic motion
+- Complex camera movements (tracking, dolly, crane)
+- Maintaining visual style consistency from reference images
+
+Optimize your generation_prompts for Kling by:
+- Using sequential action descriptions: "First X, then Y, finally Z"
+- Specifying cause-and-effect relationships in motion
+- Including detailed camera movement instructions
+- Adding mood and atmosphere descriptors
+- For emotional scenes: focus on body language over facial micro-expressions`,
+
+	"minimax": `## VIDEO MODEL OPTIMIZATION: Minimax Hailuo
+
+Minimax excels at:
+- Human subjects and facial expressions (best-in-class faces)
+- Realistic motion and natural physics
+- Everyday scenarios and relatable settings
+- Emotional authenticity in close-ups
+
+Optimize your generation_prompts for Minimax by:
+- Using natural, conversational scene descriptions
+- Focusing on human emotion and connection
+- Specifying facial expressions and subtle reactions
+- Keeping scenes grounded in realistic, everyday environments
+- For patient journey: leverage strength in emotional close-ups during struggle/empowerment phases`,
+}
+
+// DefaultVideoModel is used when no specific model is requested
+const DefaultVideoModel = "veo"
+
+// EnhancedPromptOptions contains optional enhancement parameters for prompt generation
+type EnhancedPromptOptions struct {
+	Style             string // cinematic, documentary, energetic, minimal, dramatic, playful
+	Tone              string // premium, friendly, edgy, inspiring, humorous
+	Tempo             string // slow, medium, fast
+	Platform          string // instagram, tiktok, youtube, facebook
+	Audience          string // target audience description
+	Goal              string // awareness, sales, engagement, signups
+	CallToAction      string // CTA text
+	ProCinematography bool   // use advanced film terminology
+	CreativeBoost     bool   // higher temperature for more creative outputs
+}
+
+// BuildEnhancedSystemPrompt adds style, tone, and platform-specific guidance to the system prompt
+func BuildEnhancedSystemPrompt(basePrompt string, options *EnhancedPromptOptions) string {
+	if options == nil {
+		return basePrompt
+	}
+
+	enhanced := basePrompt
+
+	// Add style guide if specified
+	if options.Style != "" || options.Tone != "" || options.Tempo != "" {
+		enhanced += "\n\n## CREATIVE DIRECTION\n"
+
+		if options.Style != "" {
+			styleGuides := map[string]string{
+				"cinematic":   "- Cinematic style: Use dramatic camera movements (dolly, crane shots), shallow depth of field, color grading with rich tones, professional composition following rule of thirds",
+				"documentary": "- Documentary style: Handheld camera feel, natural lighting, authentic moments, candid angles, minimal color grading for realism",
+				"energetic":   "- Energetic style: Dynamic quick cuts implied through motion, bright vibrant colors, high contrast, fast-paced action, upbeat visual rhythm",
+				"minimal":     "- Minimal style: Clean compositions, negative space, simple backgrounds, muted color palette, elegant restraint, focus on essential elements",
+				"dramatic":    "- Dramatic style: High contrast lighting, bold shadows, intense moments, powerful angles (low/high), emotional close-ups, rich cinematic blacks",
+				"playful":     "- Playful style: Bright saturated colors, whimsical angles, creative framing, lighthearted energy, fun visual surprises",
+			}
+			if guide, ok := styleGuides[options.Style]; ok {
+				enhanced += guide + "\n"
+			}
+		}
+
+		if options.Tone != "" {
+			toneGuides := map[string]string{
+				"premium":   "- Premium tone: Luxury aesthetics, refined details, sophisticated mood, high-end product treatment, aspirational feel",
+				"friendly":  "- Friendly tone: Warm approachable visuals, soft lighting, genuine smiles, welcoming environments, relatable scenarios",
+				"edgy":      "- Edgy tone: Bold unconventional angles, urban gritty textures, moody atmosphere, rebellious energy, modern attitude",
+				"inspiring": "- Inspiring tone: Uplifting compositions, golden hour lighting when possible, triumphant moments, aspirational messaging, motivational energy",
+				"humorous":  "- Humorous tone: Unexpected visual gags, exaggerated expressions, lighthearted situations, comedic timing in action",
+			}
+			if guide, ok := toneGuides[options.Tone]; ok {
+				enhanced += guide + "\n"
+			}
+		}
+
+		if options.Tempo != "" {
+			tempoGuides := map[string]string{
+				"slow":   "- Slow tempo: Deliberate pacing, lingering shots, gradual reveals, contemplative moments, smooth transitions, let scenes breathe",
+				"medium": "- Medium tempo: Balanced pacing, natural rhythm, comfortable viewing pace, mix of wide and tight shots, steady progression",
+				"fast":   "- Fast tempo: Quick action, dynamic energy, rapid scene changes, high-energy subjects, punchy delivery, immediate impact",
+			}
+			if guide, ok := tempoGuides[options.Tempo]; ok {
+				enhanced += guide + "\n"
+			}
+		}
+	}
+
+	// Add platform optimization if specified
+	if options.Platform != "" {
+		platformGuides := map[string]string{
+			"instagram": `
+## INSTAGRAM OPTIMIZATION
+- Aspect Ratio: 9:16 (Stories/Reels) or 1:1 (Feed posts)
+- Hook: First 0.5 seconds must grab attention (platform favors watch time)
+- Duration: 15-30 seconds ideal for Reels, 60 seconds max for feed
+- Text Overlays: Use bold, readable fonts - many watch with sound off
+- Visuals: Bright, high contrast, vibrant colors (mobile viewing)
+- Pacing: Fast cuts, dynamic energy to prevent scrolling
+- CTA: Place in first 3 seconds AND at end`,
+			"tiktok": `
+## TIKTOK OPTIMIZATION
+- Aspect Ratio: 9:16 (full vertical)
+- Hook: First 1 second is CRITICAL - start with action, surprise, or bold statement
+- Duration: 15-60 seconds (shorter often performs better)
+- Native Feel: Handheld, authentic, less polished (avoid overly corporate)
+- Text Overlays: Large, punchy text that's readable on small screens
+- Pacing: Very fast - new visual every 2-3 seconds
+- CTA: Verbal + visual, natural integration`,
+			"youtube": `
+## YOUTUBE OPTIMIZATION
+- Aspect Ratio: 16:9 (landscape)
+- Hook: First 5 seconds prevent clicks away, establish value
+- Duration: 30 seconds to 2 minutes for ads, longer for organic content
+- Thumbnail Moment: Include a frame worth pausing on for thumbnail (high emotion, clear branding)
+- Pacing: Moderate - build story with clear beginning, middle, end
+- Production Quality: Higher polish expected (clean audio, stable footage)
+- Branding: Logo/brand visible but not intrusive`,
+			"facebook": `
+## FACEBOOK OPTIMIZATION
+- Aspect Ratio: 1:1 (square) or 4:5 (vertical feed)
+- Autoplay Silent: MUST work without sound - use captions/text overlays
+- Hook: First 3 seconds shown in feed preview
+- Duration: 15-30 seconds (attention span shorter on feed)
+- Captions: Include full captions for accessibility and silent viewing
+- Emotional Appeal: Facebook favors heartwarming, inspiring, or shocking content
+- CTA: Clear button-style CTA graphic at end`,
+		}
+		if guide, ok := platformGuides[options.Platform]; ok {
+			enhanced += guide + "\n"
+		}
+	}
+
+	// Add marketing framework if audience or goal specified
+	if options.Audience != "" || options.Goal != "" {
+		enhanced += "\n## MARKETING FRAMEWORK\n"
+
+		if options.Audience != "" {
+			enhanced += "- Target Audience: " + options.Audience + "\n"
+			enhanced += "- Tailor visuals, pacing, and messaging to resonate with this specific demographic\n"
+		}
+
+		if options.Goal != "" {
+			goalGuides := map[string]string{
+				"awareness":  "- Goal: Brand Awareness - Focus on memorable visuals, brand identity, and creating positive associations. Make it shareable and attention-grabbing",
+				"sales":      "- Goal: Drive Sales - Emphasize product benefits, urgency, social proof, and clear value propositions. Show transformation/results",
+				"engagement": "- Goal: Boost Engagement - Create interactive, entertaining content that invites viewers to participate, comment, or share. Use hooks and intrigue",
+				"signups":    "- Goal: Generate Signups - Highlight exclusive benefits, ease of use, and what users gain. Remove friction, show simple steps",
+			}
+			if guide, ok := goalGuides[options.Goal]; ok {
+				enhanced += guide + "\n"
+			}
+		}
+
+		if options.CallToAction != "" {
+			enhanced += "- Call to Action: \"" + options.CallToAction + "\" - make it visible and compelling\n"
+		}
+	}
+
+	// Add professional cinematography terminology if enabled
+	if options.ProCinematography {
+		enhanced += `
+
+## ADVANCED CINEMATOGRAPHY (Professional Film Terminology)
+
+CAMERA MOVEMENTS (use precise terms):
+- Dolly: Camera moves forward/backward on tracks
+- Truck: Camera moves left/right parallel to subject
+- Pedestal: Camera moves up/down vertically
+- Crane/Boom: Sweeping vertical movements
+- Pan: Camera rotates left/right on axis
+- Tilt: Camera rotates up/down on axis
+- Steadicam: Smooth tracking shots
+- Handheld: Dynamic, energetic feel
+
+SHOT TYPES:
+- Extreme Wide (EWS): Establishing shot, shows full environment
+- Wide (WS): Full body + context
+- Medium (MS): Waist up, conversational
+- Close-Up (CU): Face/object detail, emotional
+- Extreme Close-Up (ECU): Macro details
+
+LIGHTING TECHNIQUES:
+- Golden Hour: Warm, soft natural light
+- Volumetric Lighting: God rays, atmospheric beams
+- Rembrandt Lighting: Triangle of light on cheek
+- Backlighting: Subject lit from behind, rim light effect
+- High-Key: Bright, minimal shadows
+- Low-Key: Dark, dramatic shadows
+`
+	}
+
+	return enhanced
+}

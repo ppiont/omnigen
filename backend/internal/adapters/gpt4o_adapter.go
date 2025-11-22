@@ -52,6 +52,9 @@ type ScriptGenerationRequest struct {
 
 	// Style reference image - will be analyzed and converted to text description
 	StyleReferenceImage string
+
+	// Video model for generation (veo, kling, minimax) - affects prompt optimization
+	VideoModel string
 }
 
 // GPT4oRequest matches the Replicate OpenAI GPT-4o API schema
@@ -105,6 +108,25 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 			zap.String("tone", req.EnhancedOptions.Tone),
 			zap.String("platform", req.EnhancedOptions.Platform),
 			zap.Bool("pro_cinematography", req.EnhancedOptions.ProCinematography),
+		)
+	}
+
+	// Add pharmaceutical guidance for pharma ads (when Voice and SideEffects are provided)
+	isPharmaceuticalAd := req.Voice != "" && req.SideEffects != ""
+	if isPharmaceuticalAd {
+		systemPrompt += "\n\n" + prompts.PharmaceuticalAdGuidance
+		g.logger.Info("Added pharmaceutical ad guidance to system prompt")
+	}
+
+	// Add model-specific guidance based on target video model
+	targetModel := req.VideoModel
+	if targetModel == "" {
+		targetModel = prompts.DefaultVideoModel
+	}
+	if guidance, ok := prompts.ModelPromptGuidance[targetModel]; ok {
+		systemPrompt += "\n\n" + guidance
+		g.logger.Info("Added model-specific guidance to system prompt",
+			zap.String("video_model", targetModel),
 		)
 	}
 
@@ -339,7 +361,7 @@ func (g *GPT4oAdapter) GenerateScript(ctx context.Context, req *ScriptGeneration
 	}
 
 	// Validate script
-	if err := validateScript(script, req.Duration); err != nil {
+	if err := validateScript(script, req.Duration, isPharmaceuticalAd); err != nil {
 		return nil, fmt.Errorf("script validation failed: %w", err)
 	}
 
@@ -671,7 +693,7 @@ func extractJSON(s string) string {
 }
 
 // validateScript ensures the generated script meets requirements
-func validateScript(script *domain.Script, requestedDuration int) error {
+func validateScript(script *domain.Script, requestedDuration int, isPharmaceutical bool) error {
 	if script.Title == "" {
 		return fmt.Errorf("script title is empty")
 	}
@@ -696,6 +718,17 @@ func validateScript(script *domain.Script, requestedDuration int) error {
 			return fmt.Errorf("scene %d has empty generation_prompt", i+1)
 		}
 
+		// Check for minimum prompt length (catch truncated/garbage responses)
+		if len(scene.GenerationPrompt) < 50 {
+			return fmt.Errorf("scene %d has suspiciously short generation_prompt (%d chars)", i+1, len(scene.GenerationPrompt))
+		}
+
+		// Check for placeholder text that GPT-4 sometimes outputs
+		lowered := strings.ToLower(scene.GenerationPrompt)
+		if strings.Contains(lowered, "[insert") || strings.Contains(lowered, "[placeholder") || strings.Contains(lowered, "[tbd") {
+			return fmt.Errorf("scene %d contains placeholder text in generation_prompt", i+1)
+		}
+
 		totalDuration += scene.Duration
 	}
 
@@ -706,6 +739,19 @@ func validateScript(script *domain.Script, requestedDuration int) error {
 
 	if script.AudioSpec.MusicStyle == "" {
 		return fmt.Errorf("audio_spec missing music_style")
+	}
+
+	// Pharmaceutical-specific validation
+	if isPharmaceutical {
+		// Check audio_spec has narrator_script for pharma ads
+		if script.AudioSpec.NarratorScript == "" {
+			return fmt.Errorf("pharmaceutical ad missing narrator_script in audio_spec")
+		}
+
+		// Check side effects are present
+		if script.AudioSpec.SideEffectsText == "" {
+			return fmt.Errorf("pharmaceutical ad missing side_effects_text in audio_spec")
+		}
 	}
 
 	return nil
