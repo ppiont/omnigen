@@ -142,11 +142,19 @@ function VideoMetadata({ jobData }) {
     );
   }
 
+  const formattedAspectRatio = useMemo(() => {
+    const aspectRatio = jobData?.aspect_ratio || jobData?.aspectRatio;
+    if (aspectRatio && aspectRatio.trim() !== "") {
+      return aspectRatio.trim();
+    }
+    return "Not specified";
+  }, [jobData?.aspect_ratio, jobData?.aspectRatio]);
+
   const detailFields = [
     { label: "Duration", value: formattedDuration },
     {
       label: "Aspect Ratio",
-      value: jobData.aspect_ratio || "Not specified",
+      value: formattedAspectRatio,
     },
     { label: "Generated", value: formattedCreatedTime },
     { label: "Estimated Cost", value: formattedCost },

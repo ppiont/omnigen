@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/omnigen/backend/internal/auth"
+	"github.com/omnigen/backend/internal/domain"
 	"github.com/omnigen/backend/internal/repository"
 	"github.com/omnigen/backend/internal/service"
 	"github.com/omnigen/backend/pkg/errors"
@@ -58,11 +59,12 @@ type JobResponse struct {
 	ErrorMessage    *string `json:"error_message,omitempty"`
 
 	// Progress fields
-	ThumbnailURL     string   `json:"thumbnail_url,omitempty"`
-	AudioURL         string   `json:"audio_url,omitempty"`
-	NarratorAudioURL string   `json:"narrator_audio_url,omitempty"`
-	ScenesCompleted  int      `json:"scenes_completed,omitempty"`
-	SceneVideoURLs   []string `json:"scene_video_urls,omitempty"`
+	ThumbnailURL     string         `json:"thumbnail_url,omitempty"`
+	AudioURL         string         `json:"audio_url,omitempty"`
+	NarratorAudioURL string         `json:"narrator_audio_url,omitempty"`
+	ScenesCompleted  int            `json:"scenes_completed,omitempty"`
+	SceneVideoURLs   []string       `json:"scene_video_urls,omitempty"`
+	Scenes           []domain.Scene `json:"scenes,omitempty"`
 
 	// Side effects fields for text overlay
 	SideEffectsText      string   `json:"side_effects_text,omitempty"`
@@ -218,6 +220,7 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		NarratorAudioURL:     narratorAudioURL,
 		ScenesCompleted:      job.ScenesCompleted,
 		SceneVideoURLs:       job.SceneVideoURLs,
+		Scenes:               job.Scenes,
 		SideEffectsText:      job.SideEffectsText,
 		SideEffectsStartTime: sideEffectsStartTime,
 	}
