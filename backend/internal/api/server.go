@@ -27,7 +27,7 @@ type ServerConfig struct {
 	BrandGuidelinesRepo repository.BrandGuidelinesRepository // Brand guidelines repository
 	ParserService       *service.ParserService                // Script generation service
 	AssetService        *service.AssetService                 // Asset URL generation service
-	VeoAdapter          *adapters.VeoAdapter                  // Veo 3.1 video generation
+	KlingAdapter        *adapters.KlingAdapter                  // Kling V2.5 video generation
 	MinimaxAdapter      *adapters.MinimaxAdapter              // Minimax audio generation
 	TTSAdapter          adapters.TTSAdapter                   // Text-to-speech adapter for narrator voiceover
 	GPT4oAdapter        *adapters.GPT4oAdapter                 // GPT-4o for narration generation
@@ -166,7 +166,7 @@ func (s *Server) setupRoutes() {
 		// Initialize handlers with goroutine-based async architecture
 		generateHandler := handlers.NewGenerateHandler(
 			s.config.ParserService,
-			s.config.VeoAdapter,
+			s.config.KlingAdapter,
 			s.config.MinimaxAdapter,
 			s.config.TTSAdapter,
 			s.config.GPT4oAdapter,
@@ -206,7 +206,7 @@ func (s *Server) setupRoutes() {
 		regenerateHandler := handlers.NewRegenerateHandler(
 			s.config.JobRepo,
 			s.config.S3Service,
-			s.config.VeoAdapter,
+			s.config.KlingAdapter,
 			s.config.AssetsBucket,
 			s.config.Logger,
 		)

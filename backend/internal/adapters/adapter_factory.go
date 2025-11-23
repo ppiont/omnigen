@@ -38,14 +38,13 @@ func (f *AdapterFactory) CreateAdapter(adapterType AdapterType) (VideoGeneratorA
 	case AdapterTypeVeo:
 		return NewVeoAdapter(f.replicateToken, f.logger), nil
 	case AdapterTypeKling:
-		// Legacy support - map to Veo
-		return NewVeoAdapter(f.replicateToken, f.logger), nil
+		return NewKlingAdapter(f.replicateToken, f.logger), nil
 	default:
 		return nil, fmt.Errorf("unknown adapter type: %s", adapterType)
 	}
 }
 
-// GetDefaultAdapter returns the default adapter (Veo 3.1)
+// GetDefaultAdapter returns the default adapter (Kling V2.5)
 func (f *AdapterFactory) GetDefaultAdapter() VideoGeneratorAdapter {
-	return NewVeoAdapter(f.replicateToken, f.logger)
+	return NewKlingAdapter(f.replicateToken, f.logger)
 }

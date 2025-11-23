@@ -652,7 +652,7 @@ Optimize your generation_prompts for Minimax by:
 }
 
 // DefaultVideoModel is used when no specific model is requested
-const DefaultVideoModel = "veo"
+const DefaultVideoModel = "kling"
 
 // BuildEnhancedSystemPrompt adds style, tone, and platform-specific guidance to the system prompt
 func BuildEnhancedSystemPrompt(basePrompt string, options *EnhancedPromptOptions) string {

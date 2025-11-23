@@ -20,7 +20,7 @@ import (
 type RegenerateHandler struct {
 	jobRepo      *repository.DynamoDBRepository
 	s3Service    *repository.S3AssetRepository
-	veoAdapter   *adapters.VeoAdapter
+	klingAdapter *adapters.KlingAdapter
 	assetsBucket string
 	logger       *zap.Logger
 }
@@ -29,14 +29,14 @@ type RegenerateHandler struct {
 func NewRegenerateHandler(
 	jobRepo *repository.DynamoDBRepository,
 	s3Service *repository.S3AssetRepository,
-	veoAdapter *adapters.VeoAdapter,
+	klingAdapter *adapters.KlingAdapter,
 	assetsBucket string,
 	logger *zap.Logger,
 ) *RegenerateHandler {
 	return &RegenerateHandler{
 		jobRepo:      jobRepo,
 		s3Service:    s3Service,
-		veoAdapter:   veoAdapter,
+		klingAdapter: klingAdapter,
 		assetsBucket: assetsBucket,
 		logger:       logger,
 	}
@@ -319,7 +319,7 @@ func (h *RegenerateHandler) generateClip(
 		zap.String("prompt", scene.GenerationPrompt),
 	)
 
-	// Call Veo adapter
+	// Call Kling adapter
 	req := &adapters.VideoGenerationRequest{
 		Prompt:        scene.GenerationPrompt,
 		Duration:      int(scene.Duration),
@@ -327,9 +327,9 @@ func (h *RegenerateHandler) generateClip(
 		StartImageURL: scene.StartImageURL,
 	}
 
-	result, err := h.veoAdapter.GenerateVideo(ctx, req)
+	result, err := h.klingAdapter.GenerateVideo(ctx, req)
 	if err != nil {
-		return ClipVideo{}, fmt.Errorf("veo API failed: %w", err)
+		return ClipVideo{}, fmt.Errorf("kling API failed: %w", err)
 	}
 
 	// Poll until complete (max 10 minutes)
@@ -345,9 +345,9 @@ func (h *RegenerateHandler) generateClip(
 
 		if attempt > 0 {
 			time.Sleep(pollInterval)
-			result, err = h.veoAdapter.GetStatus(ctx, result.PredictionID)
+			result, err = h.klingAdapter.GetStatus(ctx, result.PredictionID)
 			if err != nil {
-				h.logger.Warn("Veo polling failed, retrying", zap.Error(err))
+				h.logger.Warn("Kling polling failed, retrying", zap.Error(err))
 				continue
 			}
 		}
