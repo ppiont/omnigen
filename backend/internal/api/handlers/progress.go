@@ -87,8 +87,35 @@ type AssetInfo struct {
 func (h *ProgressHandler) GetProgress(c *gin.Context) {
 	jobID := c.Param("id")
 
+	// Get user ID from context (set by auth middleware)
+	userID, ok := c.Get("user_id")
+	if !ok {
+		// Log detailed auth failure for debugging SSE 401 errors
+		h.logger.Warn("SSE progress stream: No user_id in context - authentication failed",
+			zap.String("job_id", jobID),
+			zap.String("client_ip", c.ClientIP()),
+			zap.String("user_agent", c.GetHeader("User-Agent")),
+			zap.Strings("cookies", c.Request.Header.Values("Cookie")),
+		)
+		c.JSON(401, gin.H{"error": "Authentication required"})
+		c.Abort()
+		return
+	}
+
+	userIDStr, ok := userID.(string)
+	if !ok {
+		h.logger.Error("SSE progress stream: Invalid user_id type in context",
+			zap.String("job_id", jobID),
+			zap.Any("user_id_type", userID),
+		)
+		c.JSON(401, gin.H{"error": "Authentication required"})
+		c.Abort()
+		return
+	}
+
 	h.logger.Info("Starting SSE progress stream for job",
 		zap.String("job_id", jobID),
+		zap.String("user_id", userIDStr),
 	)
 
 	// Set SSE headers
@@ -119,12 +146,26 @@ func (h *ProgressHandler) GetProgress(c *gin.Context) {
 			if err != nil {
 				h.logger.Error("Failed to get job in SSE stream",
 					zap.String("job_id", jobID),
+					zap.String("user_id", userIDStr),
 					zap.Error(err),
 				)
 				// Send error event
 				c.SSEvent("error", gin.H{"error": "Failed to fetch job status"})
 				c.Writer.Flush()
 				continue
+			}
+
+			// Verify job ownership for security
+			if job.UserID != userIDStr {
+				h.logger.Warn("SSE progress stream: Unauthorized access attempt",
+					zap.String("job_id", jobID),
+					zap.String("job_user_id", job.UserID),
+					zap.String("request_user_id", userIDStr),
+					zap.String("client_ip", c.ClientIP()),
+				)
+				c.SSEvent("error", gin.H{"error": "Unauthorized: Job does not belong to user"})
+				c.Writer.Flush()
+				return
 			}
 
 			// Only send update if stage changed (avoid spam)
