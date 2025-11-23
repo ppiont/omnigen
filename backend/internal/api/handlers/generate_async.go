@@ -377,6 +377,30 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	var jobThumbnailURL string // Raw S3 URL for the job thumbnail (not presigned)
 
 	for i, scene := range script.Scenes {
+		// Check for pause state
+		if job.IsPaused {
+			h.logger.Info("Job paused, stopping generation", zap.String("job_id", job.JobID))
+			// Update status to paused if not already
+			if job.Status != domain.StatusPaused {
+				job.Status = domain.StatusPaused
+				h.jobRepo.UpdateJob(jobCtx, job)
+			}
+			return
+		}
+
+		// Check for skipped scenes
+		isSkipped := false
+		for _, skipped := range job.SkippedScenes {
+			if skipped == i+1 {
+				isSkipped = true
+				break
+			}
+		}
+		if isSkipped {
+			h.logger.Info("Skipping scene", zap.String("job_id", job.JobID), zap.Int("scene", i+1))
+			continue
+		}
+
 		job.Stage = fmt.Sprintf("scene_%d_generating", i+1)
 		job.ScenesCompleted = i // Number completed so far (i is 0-indexed)
 		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {

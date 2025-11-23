@@ -228,6 +228,13 @@ func (s *Server) setupRoutes() {
 		v1.DELETE("/jobs/:id", jobsHandler.DeleteJob)
 		v1.GET("/jobs/:id/progress", progressHandler.GetProgress)                               // SSE streaming endpoint
 		v1.POST("/jobs/:id/scenes/:scene_number/regenerate", regenerateHandler.RegenerateScene) // Scene regeneration
+		
+		// Intervention routes
+		v1.POST("/jobs/:id/pause", jobsHandler.PauseJob)
+		v1.POST("/jobs/:id/resume", jobsHandler.ResumeJob)
+		v1.PUT("/jobs/:id/scenes/:scene_number", jobsHandler.ModifyScene)
+		v1.DELETE("/jobs/:id/scenes/:scene_number", jobsHandler.SkipScene)
+		v1.PUT("/jobs/:id/parameters", jobsHandler.UpdateJobParameters)
 
 		// Brand guidelines routes
 		v1.POST("/brand-guidelines", brandGuidelinesHandler.CreateBrandGuidelines)
