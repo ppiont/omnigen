@@ -3,11 +3,11 @@ package adapters
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -16,30 +16,20 @@ import (
 )
 
 // KlingAdapter implements VideoGeneratorAdapter for Kling V2.5 Turbo Pro
+// Uses Replicate's official model API (no version hash needed)
 type KlingAdapter struct {
-	apiToken      string
-	httpClient    *http.Client
-	statusClient  *http.Client // Separate client with shorter timeout for status checks
-	logger        *zap.Logger
-	modelVersion  string
-	versionMutex  sync.RWMutex // Protects modelVersion during async fetch
-	versionReady  chan struct{} // Signals when version fetch is complete (success or failure)
-}
-
-// ReplicateModelVersion represents a model version from Replicate API
-type ReplicateModelVersion struct {
-	ID      string `json:"id"`
-	Created string `json:"created_at"`
-}
-
-// ReplicateModelVersionsResponse represents the response from Replicate versions API
-type ReplicateModelVersionsResponse struct {
-	Results []ReplicateModelVersion `json:"results"`
+	apiToken     string
+	httpClient   *http.Client
+	statusClient *http.Client // Separate client with shorter timeout for status checks
+	logger       *zap.Logger
 }
 
 // NewKlingAdapter creates a new Kling V2.5 adapter
+// Kling is an official Replicate model, so no version hash is needed
 func NewKlingAdapter(apiToken string, logger *zap.Logger) *KlingAdapter {
-	adapter := &KlingAdapter{
+	logger.Info("Initializing Kling V2.5 adapter (official Replicate model)")
+
+	return &KlingAdapter{
 		apiToken: apiToken,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second, // For initial requests
@@ -47,97 +37,14 @@ func NewKlingAdapter(apiToken string, logger *zap.Logger) *KlingAdapter {
 		statusClient: &http.Client{
 			Timeout: 10 * time.Second, // Shorter timeout for status polling to prevent hanging
 		},
-		logger:       logger,
-		modelVersion: "", // Will be set by version fetch
-		versionReady: make(chan struct{}),
+		logger: logger,
 	}
-
-	// Fetch model version synchronously with timeout to ensure we have it before use
-	// This prevents race conditions where GenerateVideo is called before version is ready
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	version := adapter.fetchModelVersion(ctx)
-	if version != "" {
-		adapter.modelVersion = version
-		logger.Info("Successfully fetched Kling model version from Replicate API",
-			zap.String("model_version", version),
-		)
-	} else {
-		logger.Warn("Could not fetch Kling model version from API - video generation will fail with clear error",
-			zap.String("error", "Model version fetch failed or timed out"),
-		)
-		// Don't set a fallback - let GenerateVideo fail with clear error
-		// This prevents using invalid version that causes 422 errors
-	}
-
-	// Signal that fetch is complete (even if it failed)
-	close(adapter.versionReady)
-
-	return adapter
 }
 
-// fetchModelVersion queries Replicate API for available versions and returns the latest
-func (k *KlingAdapter) fetchModelVersion(ctx context.Context) string {
-	// Use a shorter timeout client for version fetching to prevent hanging
-	client := &http.Client{
-		Timeout: 3 * time.Second,
-	}
-
-	// Try the primary model name
-	modelName := "kwaivgi/kling-v2.5-turbo-pro"
-	url := fmt.Sprintf("https://api.replicate.com/v1/models/%s/versions", modelName)
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		k.logger.Debug("Failed to create request for model versions", zap.Error(err))
-		return ""
-	}
-
-	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", k.apiToken))
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		k.logger.Debug("Failed to fetch model versions from Replicate API", zap.Error(err))
-		return ""
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		k.logger.Debug("Replicate API returned non-200 status when fetching versions",
-			zap.Int("status_code", resp.StatusCode),
-		)
-		return ""
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		k.logger.Debug("Failed to read model versions response", zap.Error(err))
-		return ""
-	}
-
-	var versionsResp ReplicateModelVersionsResponse
-	if err := json.Unmarshal(body, &versionsResp); err != nil {
-		k.logger.Debug("Failed to unmarshal model versions response", zap.Error(err))
-		return ""
-	}
-
-	if len(versionsResp.Results) > 0 {
-		// Use the first version (most recent, as Replicate returns them sorted)
-		versionID := versionsResp.Results[0].ID
-		fullVersion := fmt.Sprintf("%s:%s", modelName, versionID)
-		return fullVersion
-	}
-
-	k.logger.Debug("No model versions found in Replicate API response")
-	return ""
-}
-
-// KlingRequest matches the Kling API schema on Replicate
+// KlingRequest matches the Kling API schema on Replicate (official model)
+// Official models don't need a version field - just input
 type KlingRequest struct {
-	Version string                 `json:"version"`
-	Input   map[string]interface{} `json:"input"`
+	Input map[string]interface{} `json:"input"`
 }
 
 // KlingResponse represents the Replicate API response
@@ -194,20 +101,9 @@ func (k *KlingAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRe
 	// Optional: Add guidance_scale (default is 0.5 based on schema)
 	// Can be made configurable later if needed
 
-	// Ensure we have a valid model version before proceeding
-	k.versionMutex.RLock()
-	modelVersion := k.modelVersion
-	k.versionMutex.RUnlock()
-
-	if modelVersion == "" {
-		// Version fetch failed during initialization - return clear error
-		return nil, fmt.Errorf("model version not available: failed to fetch from Replicate API during initialization. Please check your Replicate API token and network connection. Error: model version fetch failed or timed out")
-	}
-
-	// Construct Kling API request
+	// Construct Kling API request (official model - no version needed)
 	klingReq := KlingRequest{
-		Version: modelVersion,
-		Input:   input,
+		Input: input,
 	}
 
 	// Marshal request
@@ -216,14 +112,13 @@ func (k *KlingAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRe
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	k.logger.Info("Submitting Kling API request",
-		zap.String("model_version", modelVersion),
-	)
+	k.logger.Info("Submitting Kling API request to official model endpoint")
 
-	// Submit to Replicate API with retry logic
+	// Submit to Replicate official model API with retry logic
+	// Official models use /v1/models/{owner}/{model}/predictions endpoint
 	var klingResp KlingResponse
 	err = retry.Do(ctx, retry.APIConfig(), func() error {
-		url := "https://api.replicate.com/v1/predictions"
+		url := "https://api.replicate.com/v1/models/kwaivgi/kling-v2.5-turbo-pro/predictions"
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(jsonData)))
 		if err != nil {
 			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
@@ -250,7 +145,6 @@ func (k *KlingAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRe
 				zap.Int("status_code", resp.StatusCode),
 				zap.String("response_body", errorBody),
 				zap.String("request_url", httpReq.URL.String()),
-				zap.String("model_version", modelVersion),
 			)
 
 			// Log the request payload for debugging 422 errors
@@ -265,13 +159,13 @@ func (k *KlingAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRe
 				// Provide more specific error messages for common errors
 				var errMsg string
 				if resp.StatusCode == 422 {
-					errMsg = fmt.Sprintf("API error (status %d): Invalid request parameters or model version. Check that model version '%s' is correct and parameters match Kling V2.5 schema. Response: %s", resp.StatusCode, modelVersion, errorBody)
+					errMsg = fmt.Sprintf("API error (status %d): Invalid request parameters. Check that parameters match Kling V2.5 schema. Response: %s", resp.StatusCode, errorBody)
 				} else if resp.StatusCode == 404 {
-					errMsg = fmt.Sprintf("API error (status %d): Model not found. Check that model version '%s' exists on Replicate. Response: %s", resp.StatusCode, modelVersion, errorBody)
+					errMsg = fmt.Sprintf("API error (status %d): Model not found. The Kling model may have been renamed or removed. Response: %s", resp.StatusCode, errorBody)
 				} else {
 					errMsg = fmt.Sprintf("API error: status %d, body: %s", resp.StatusCode, errorBody)
 				}
-				return retry.NewNonRetryableError(fmt.Errorf(errMsg))
+				return retry.NewNonRetryableError(errors.New(errMsg))
 			}
 			return fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, errorBody)
 		}
@@ -453,4 +347,3 @@ func (k *KlingAdapter) extractVideoURL(output interface{}) (string, bool) {
 	}
 	return "", false
 }
-
