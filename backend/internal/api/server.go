@@ -29,6 +29,7 @@ type ServerConfig struct {
 	VeoAdapter       *adapters.VeoAdapter     // Veo 3.1 video generation
 	MinimaxAdapter   *adapters.MinimaxAdapter // Minimax audio generation
 	TTSAdapter       adapters.TTSAdapter      // Text-to-speech adapter for narrator voiceover
+	GPT4oAdapter     *adapters.GPT4oAdapter   // GPT-4o for narration generation
 	AssetsBucket     string                   // S3 bucket for video assets
 	APIKeys          []string                 // Deprecated: Use JWTValidator instead
 	JWTValidator     *auth.JWTValidator
@@ -155,12 +156,20 @@ func (s *Server) setupRoutes() {
 	}
 
 	{
+		// Initialize disclaimer service for two-pass narration generation
+		var disclaimerService *service.DisclaimerService
+		if ttsAdapter, ok := s.config.TTSAdapter.(*adapters.OpenAITTSAdapter); ok && s.config.GPT4oAdapter != nil {
+			disclaimerService = service.NewDisclaimerService(ttsAdapter, s.config.GPT4oAdapter, s.config.Logger)
+		}
+
 		// Initialize handlers with goroutine-based async architecture
 		generateHandler := handlers.NewGenerateHandler(
 			s.config.ParserService,
 			s.config.VeoAdapter,
 			s.config.MinimaxAdapter,
 			s.config.TTSAdapter,
+			s.config.GPT4oAdapter,
+			disclaimerService,
 			s.config.S3Service,
 			s.config.JobRepo,
 			s.config.AssetsBucket,

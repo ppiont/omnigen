@@ -81,6 +81,25 @@ type SyncPoint struct {
 	Description string  `json:"description"` // e.g., "Product reveal on beat drop"
 }
 
+// DisclaimerTier represents the type of disclaimer based on video length
+type DisclaimerTier string
+
+const (
+	DisclaimerTierFull     DisclaimerTier = "full"      // ≥30s: full legal disclaimer
+	DisclaimerTierShort    DisclaimerTier = "short"     // 15-29s: abbreviated (12-18 words)
+	DisclaimerTierTextOnly DisclaimerTier = "text_only" // <15s: no audio, text overlay only
+)
+
+// DisclaimerSpec contains the computed disclaimer configuration
+type DisclaimerSpec struct {
+	Tier          DisclaimerTier `json:"tier"`
+	FullText      string         `json:"full_text"`       // Original full disclaimer
+	AudioText     string         `json:"audio_text"`      // Text to read (full or short)
+	AudioDuration float64        `json:"audio_duration"`  // TTS duration at specified speed
+	UseAudio      bool           `json:"use_audio"`       // Whether to generate audio
+	Speed         float64        `json:"speed"`           // TTS speed (1.4 or 1.5)
+}
+
 // Metadata contains creative direction and brand information
 type Metadata struct {
 	ProductName    string   `json:"product_name"`

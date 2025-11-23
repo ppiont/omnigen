@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -602,6 +605,124 @@ Provide a concise 2-3 sentence description that captures the essence of this vis
 	return styleDescription, nil
 }
 
+// GenerateText generates simple text completion via Replicate GPT-4o.
+// Used for disclaimer shortening, narration expansion, etc.
+func (g *GPT4oAdapter) GenerateText(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
+	g.logger.Info("Generating text with GPT-4o",
+		zap.String("user_prompt", userPrompt[:min(100, len(userPrompt))]),
+	)
+
+	// Build Replicate API request (same pattern as AnalyzeStyleReference)
+	gpt4oReq := GPT4oRequest{
+		Version: g.modelVersion,
+		Input: map[string]interface{}{
+			"messages": []map[string]string{
+				{
+					"role":    "system",
+					"content": systemPrompt,
+				},
+				{
+					"role":    "user",
+					"content": userPrompt,
+				},
+			},
+			"temperature":           0.3, // Lower temperature for consistent output
+			"max_completion_tokens": 1000,
+		},
+	}
+
+	payload, err := json.Marshal(gpt4oReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Submit prediction to Replicate with retry logic
+	var gpt4oResp GPT4oResponse
+	err = retry.Do(ctx, retry.APIConfig(), func() error {
+		httpReq, err := http.NewRequestWithContext(ctx, "POST",
+			"https://api.replicate.com/v1/predictions",
+			bytes.NewReader(payload))
+		if err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
+		}
+
+		httpReq.Header.Set("Authorization", "Bearer "+g.apiToken)
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		resp, err := g.httpClient.Do(httpReq)
+		if err != nil {
+			return fmt.Errorf("request failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				return retry.NewNonRetryableError(fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body)))
+			}
+			return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+		}
+
+		if err := json.Unmarshal(body, &gpt4oResp); err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to parse response: %w", err))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	// Poll for completion if not ready (max 1 minute for text generation)
+	if gpt4oResp.Status != "succeeded" {
+		maxAttempts := 12 // 12 * 5s = 1 minute
+		pollInterval := 5 * time.Second
+
+		for attempt := 0; attempt < maxAttempts; attempt++ {
+			select {
+			case <-ctx.Done():
+				return "", fmt.Errorf("context cancelled: %w", ctx.Err())
+			default:
+			}
+
+			time.Sleep(pollInterval)
+
+			pollResp, err := g.pollStatus(ctx, gpt4oResp.ID)
+			if err != nil {
+				continue
+			}
+
+			if pollResp.Status == "succeeded" && len(pollResp.Output) > 0 {
+				gpt4oResp = *pollResp
+				break
+			}
+
+			if pollResp.Status == "failed" || pollResp.Status == "canceled" {
+				return "", fmt.Errorf("text generation failed: %s", pollResp.Error)
+			}
+
+			gpt4oResp = *pollResp
+		}
+	}
+
+	if len(gpt4oResp.Output) == 0 {
+		return "", fmt.Errorf("no output from GPT-4o")
+	}
+
+	// Concatenate all output chunks (GPT-4o streams response)
+	var result string
+	for _, chunk := range gpt4oResp.Output {
+		result += chunk
+	}
+
+	return strings.TrimSpace(result), nil
+}
+
 // buildUserPrompt constructs the user prompt from request parameters
 func buildUserPrompt(req *ScriptGenerationRequest) string {
 	prompt := fmt.Sprintf(`Create a %d-second advertisement video script based on this creative direction:
@@ -619,37 +740,23 @@ func buildUserPrompt(req *ScriptGenerationRequest) string {
 	}
 
 	// Add pharmaceutical ad instructions if Voice and SideEffects are provided
+	// Two-pass system: First pass generates scenes only, second pass generates narration with exact timing
 	isPharmaceuticalAd := req.Voice != "" && req.SideEffects != ""
 	if isPharmaceuticalAd {
-		sideEffectsStartTime := float64(req.Duration) * 0.8 // 80% of duration
-		wordCount := int(float64(req.Duration) * 2.5)       // ~2.5 words per second
-
 		prompt += fmt.Sprintf(`
 
 **PHARMACEUTICAL AD CONFIGURATION:**
-This is a pharmaceutical advertisement that requires:
-1. **Narrator Voiceover**: Generate a complete narrator script in audio_spec.narrator_script
-   - Narrator voice: %s
-   - Word count: ~%d words total (approximately 2.5 words per second)
-   - Structure: 80%% product benefits (0-%.1fs), 20%% side effects disclosure (%.1fs-%ds)
-   - Tone: Professional pharmaceutical ad voice, clear and authoritative
+This is a pharmaceutical advertisement.
+- Generate scenes with visual descriptions and durations as normal
+- Do NOT generate narrator_script (this will be generated separately with precise timing in a second pass)
+- Set audio_spec.narrator_script to an empty string ""
+- Set audio_spec.side_effects_text to the EXACT text provided below
+- Set audio_spec.side_effects_start_time to 0 (will be calculated dynamically based on actual TTS duration)
 
-2. **Side Effects Disclosure**:
-   - Use the EXACT text provided below (DO NOT modify, rewrite, or rephrase)
-   - Include this text verbatim at the end of narrator_script
-   - Set audio_spec.side_effects_text to the EXACT text below
-   - Set audio_spec.side_effects_start_time to %.1f (80%% of duration)
-
-**SIDE EFFECTS TEXT (USE VERBATIM - DO NOT MODIFY):**
+**SIDE EFFECTS TEXT (STORE VERBATIM - DO NOT MODIFY):**
 %s
 
-**CRITICAL**: The side effects text above is legally approved wording. You MUST use it EXACTLY as provided without any changes.`,
-			req.Voice,
-			wordCount,
-			sideEffectsStartTime,
-			sideEffectsStartTime,
-			req.Duration,
-			sideEffectsStartTime,
+**CRITICAL**: The side effects text above is legally approved wording. Store it EXACTLY as provided in audio_spec.side_effects_text.`,
 			req.SideEffects,
 		)
 	}
@@ -767,19 +874,148 @@ func validateScript(script *domain.Script, requestedDuration int, isPharmaceutic
 	}
 
 	// Pharmaceutical-specific validation
+	// Note: narrator_script is no longer required in first pass (two-pass system generates it in second pass)
 	if isPharmaceutical {
-		// Check audio_spec has narrator_script for pharma ads
-		if script.AudioSpec.NarratorScript == "" {
-			return fmt.Errorf("pharmaceutical ad missing narrator_script in audio_spec")
-		}
-
-		// Check side effects are present
+		// Check side effects are present (narrator_script will be generated in second pass)
 		if script.AudioSpec.SideEffectsText == "" {
 			return fmt.Errorf("pharmaceutical ad missing side_effects_text in audio_spec")
 		}
 	}
 
 	return nil
+}
+
+// GenerateNarrationForScenes generates narration given scene timings and a word budget.
+func (g *GPT4oAdapter) GenerateNarrationForScenes(
+	ctx context.Context,
+	scenes []domain.Scene,
+	totalDuration float64,
+	disclaimerDuration float64,
+	targetWords int,
+	productName string,
+	productDescription string,
+) (string, error) {
+	g.logger.Info("Generating narration for scenes",
+		zap.Int("num_scenes", len(scenes)),
+		zap.Float64("total_duration", totalDuration),
+		zap.Float64("disclaimer_duration", disclaimerDuration),
+		zap.Int("target_words", targetWords),
+	)
+
+	// Build scene timing description
+	var sceneDesc strings.Builder
+	var runningTime float64
+	for i, scene := range scenes {
+		endTime := runningTime + scene.Duration
+		sceneDesc.WriteString(fmt.Sprintf("Scene %d (%.1fs-%.1fs): %s\n",
+			i+1, runningTime, endTime, scene.Action))
+		runningTime = endTime
+	}
+
+	// Calculate music tail (same logic as service)
+	musicTail := math.Min(2.0, math.Max(1.0, totalDuration/30.0))
+	narrationEndTime := totalDuration - disclaimerDuration - musicTail
+	wordMin := int(float64(targetWords) * 0.95)
+	wordMax := int(float64(targetWords) * 1.05)
+
+	prompt := fmt.Sprintf(`You are writing voiceover narration for a pharmaceutical advertisement.
+
+**Product**: %s
+**Description**: %s
+
+**Timing Constraints**:
+- Total video duration: %.1f seconds
+- Side effects disclaimer will take the final %.1f seconds (fast disclaimer voice)
+- You have exactly %.1f seconds for the main narration at natural speed
+- Target word count: %d-%d words (aim for %d words)
+
+**Scene Breakdown**:
+%s
+
+**Instructions**:
+Write ONE continuous narration script that flows naturally across all scenes.
+- Spend roughly proportional time on each scene according to its duration
+- End the main narration by %.1fs so there is a clean beat before the disclaimer
+- Tone: warm, trusting, empowering, never pushy or sales-y
+- Do NOT mention scene numbers or transitions
+- Do NOT include the side effects disclaimer (that will be added separately)
+
+**Output Format**:
+Write only the narration text, then on a new line write the word count in this format:
+<word_count>NUMBER</word_count>`,
+		productName,
+		productDescription,
+		totalDuration,
+		disclaimerDuration,
+		narrationEndTime,
+		wordMin, wordMax, targetWords,
+		sceneDesc.String(),
+		narrationEndTime,
+	)
+
+	systemPrompt := "You are an expert pharmaceutical advertising copywriter. You write clear, compliant, emotionally resonant narration that matches video timing precisely."
+
+	return g.GenerateText(ctx, systemPrompt, prompt)
+}
+
+// ExpandNarration expands a short narration to target word count.
+func (g *GPT4oAdapter) ExpandNarration(
+	ctx context.Context,
+	currentNarration string,
+	currentWords int,
+	targetWords int,
+) (string, error) {
+	g.logger.Info("Expanding narration",
+		zap.Int("current_words", currentWords),
+		zap.Int("target_words", targetWords),
+	)
+
+	systemPrompt := "You are an expert pharmaceutical advertising copywriter. You expand scripts while maintaining tone and flow."
+
+	userPrompt := fmt.Sprintf(`The current narration script is only %d words but needs to be %d-%d words.
+
+Current script:
+%s
+
+Expand this script to %d-%d words while:
+- Keeping the EXACT same structure and flow
+- Keeping the EXACT ending line unchanged
+- Adding more emotional benefit language
+- Adding patient relatability
+- Subtly reinforcing the mechanism of action
+
+Output only the expanded narration text, then the word count:
+<word_count>NUMBER</word_count>`,
+		currentWords,
+		int(float64(targetWords)*0.95), int(float64(targetWords)*1.05),
+		currentNarration,
+		int(float64(targetWords)*0.95), int(float64(targetWords)*1.05),
+	)
+
+	return g.GenerateText(ctx, systemPrompt, userPrompt)
+}
+
+// ParseNarrationResponse extracts narration text and word count from GPT response.
+func ParseNarrationResponse(response string) (string, int, error) {
+	// Extract word count from <word_count>NUMBER</word_count>
+	re := regexp.MustCompile(`<word_count>(\d+)</word_count>`)
+	matches := re.FindStringSubmatch(response)
+
+	var wordCount int
+	if len(matches) >= 2 {
+		wordCount, _ = strconv.Atoi(matches[1])
+	}
+
+	// Remove word count tag from narration
+	narration := re.ReplaceAllString(response, "")
+	narration = strings.TrimSpace(narration)
+
+	// Verify word count if not provided
+	if wordCount == 0 {
+		wordCount = len(strings.Fields(narration))
+	}
+
+	return narration, wordCount, nil
 }
 
 // min returns the minimum of two integers

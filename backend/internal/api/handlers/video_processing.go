@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -11,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/omnigen/backend/internal/domain"
 	"github.com/omnigen/backend/internal/repository"
+	"github.com/omnigen/backend/internal/service"
 	"go.uber.org/zap"
 )
 
@@ -144,27 +147,61 @@ func composeVideoCommon(
 	s3Service *repository.S3AssetRepository,
 	assetsBucket string,
 	logger *zap.Logger,
-	userID string,
-	jobID string,
+	job *domain.Job,
 	clips []ClipVideo,
-	sideEffectsText string,
-	sideEffectsStartTime float64,
 ) (string, string, error) {
-	trimmedText := strings.TrimSpace(sideEffectsText)
+	userID := job.UserID
+	jobID := job.JobID
+
 	var totalDuration float64
 	for _, clip := range clips {
 		totalDuration += clip.Duration
 	}
 
+	// Determine text overlay settings based on disclaimer tier
+	var overlayText string
+	var overlayStart float64
+
+	if job.DisclaimerSpec != nil {
+		switch job.DisclaimerSpec.Tier {
+		case domain.DisclaimerTierTextOnly:
+			// Text-only: show abbreviated disclaimer for last 4-5 seconds
+			overlayText = job.DisclaimerSpec.AudioText // Abbreviated version
+			overlayStart = math.Max(0, totalDuration-5.0)
+			logger.Info("Using text-only disclaimer overlay",
+				zap.String("job_id", jobID),
+				zap.Float64("overlay_start", overlayStart),
+				zap.String("tier", string(job.DisclaimerSpec.Tier)),
+			)
+
+		case domain.DisclaimerTierShort, domain.DisclaimerTierFull:
+			// Audio disclaimer: show full text starting when audio disclaimer begins
+			overlayText = job.DisclaimerSpec.FullText
+			musicTail := service.CalculateMusicTail(int(totalDuration))
+			overlayStart = totalDuration - job.DisclaimerSpec.AudioDuration - musicTail
+			logger.Info("Using audio-synced disclaimer overlay",
+				zap.String("job_id", jobID),
+				zap.Float64("overlay_start", overlayStart),
+				zap.String("tier", string(job.DisclaimerSpec.Tier)),
+			)
+		}
+	} else {
+		// Fallback to existing behavior for non-pharmaceutical ads or legacy jobs
+		overlayText = job.SideEffectsText
+		overlayStart = job.SideEffectsStartTime
+	}
+
+	trimmedText := strings.TrimSpace(overlayText)
+
 	logger.Info("Composing final video",
 		zap.String("job_id", jobID),
 		zap.Int("num_clips", len(clips)),
 		zap.Bool("has_side_effects", trimmedText != ""),
-		zap.Float64("side_effects_start_time", sideEffectsStartTime),
+		zap.Float64("side_effects_start_time", overlayStart),
 		zap.Float64("video_duration_estimate", totalDuration),
 	)
 
-	if sideEffectsStartTime > 0 && trimmedText == "" {
+	if overlayStart > 0 && trimmedText == "" {
 		return "", "", fmt.Errorf("side effects text is required when sideEffectsStartTime is provided")
 	}
 
@@ -235,7 +272,7 @@ func composeVideoCommon(
 			videoHeight = 1080
 		}
 
-		config, err := buildDrawtextConfig(logger, trimmedText, sideEffectsStartTime, totalDuration, videoWidth, videoHeight)
+		config, err := buildDrawtextConfig(logger, trimmedText, overlayStart, totalDuration, videoWidth, videoHeight)
 		if err != nil {
 			return "", "", err
 		}

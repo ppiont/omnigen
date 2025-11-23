@@ -88,11 +88,11 @@ func TestGenerateValidationErrors(t *testing.T) {
 			expectedField:   "start_image",
 		},
 		{
-			name: "duration not divisible by five",
+			name: "duration not achievable with Veo clips",
 			mutate: func(payload map[string]interface{}) {
 				payload["duration"] = 33
 			},
-			expectedMessage: "Duration must be between 10-60 seconds and divisible by 5",
+			expectedMessage: "Duration must be between 10-60 seconds and achievable with 4, 6, or 8 second clips",
 			expectedField:   "duration",
 		},
 	}
