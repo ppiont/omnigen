@@ -33,8 +33,9 @@ export function AuthProvider({ children }) {
 
       // Schedule proactive token refresh after successful authentication
       scheduleTokenRefresh();
-    } catch {
-      // Not authenticated or session expired
+    } catch (err) {
+      // Not authenticated or session expired - this is expected on login page
+      // Silently handle 401 errors (user is simply not logged in)
       setUser(null);
     } finally {
       setLoading(false);
