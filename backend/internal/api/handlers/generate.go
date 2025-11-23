@@ -21,15 +21,16 @@ import (
 
 // GenerateHandler handles video generation requests with goroutine-based async processing
 type GenerateHandler struct {
-	parserService  *service.ParserService
-	veoAdapter     *adapters.VeoAdapter
-	minimaxAdapter *adapters.MinimaxAdapter
-	ttsAdapter     adapters.TTSAdapter // Text-to-speech adapter for narrator voiceover
-	s3Service      *repository.S3AssetRepository
-	jobRepo        *repository.DynamoDBRepository
-	assetsBucket   string
-	logger         *zap.Logger
-	semaphore      *concurrency.Semaphore // Limits concurrent video generations
+	parserService         *service.ParserService
+	veoAdapter            *adapters.VeoAdapter
+	minimaxAdapter        *adapters.MinimaxAdapter
+	ttsAdapter            adapters.TTSAdapter // Text-to-speech adapter for narrator voiceover
+	s3Service             *repository.S3AssetRepository
+	jobRepo               *repository.DynamoDBRepository
+	brandGuidelinesRepo   repository.BrandGuidelinesRepository // Brand guidelines repository
+	assetsBucket          string
+	logger                *zap.Logger
+	semaphore             *concurrency.Semaphore // Limits concurrent video generations
 }
 
 // NewGenerateHandler creates a new generate handler
@@ -40,18 +41,20 @@ func NewGenerateHandler(
 	ttsAdapter adapters.TTSAdapter,
 	s3Service *repository.S3AssetRepository,
 	jobRepo *repository.DynamoDBRepository,
+	brandGuidelinesRepo repository.BrandGuidelinesRepository,
 	assetsBucket string,
 	logger *zap.Logger,
 ) *GenerateHandler {
 	return &GenerateHandler{
-		parserService:  parserService,
-		veoAdapter:     veoAdapter,
-		minimaxAdapter: minimaxAdapter,
-		ttsAdapter:     ttsAdapter,
-		s3Service:      s3Service,
-		jobRepo:        jobRepo,
-		assetsBucket:   assetsBucket,
-		logger:         logger,
+		parserService:       parserService,
+		veoAdapter:          veoAdapter,
+		minimaxAdapter:      minimaxAdapter,
+		ttsAdapter:          ttsAdapter,
+		s3Service:           s3Service,
+		jobRepo:             jobRepo,
+		brandGuidelinesRepo: brandGuidelinesRepo,
+		assetsBucket:        assetsBucket,
+		logger:              logger,
 		semaphore:      concurrency.NewSemaphore(MaxConcurrentGenerations),
 	}
 }

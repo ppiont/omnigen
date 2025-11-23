@@ -427,6 +427,85 @@ export const presets = {
 };
 
 /**
+ * Brand Guidelines API endpoints
+ */
+export const brandGuidelines = {
+  /**
+   * Create new brand guidelines
+   * @param {Object} guidelines - Brand guidelines data
+   * @returns {Promise<Object>}
+   */
+  create: (guidelines) =>
+    apiRequest("/api/v1/brand-guidelines", {
+      method: "POST",
+      body: JSON.stringify(guidelines),
+    }),
+
+  /**
+   * Get all brand guidelines for the user
+   * @returns {Promise<Array>}
+   */
+  list: () => apiRequest("/api/v1/brand-guidelines"),
+
+  /**
+   * Get specific brand guidelines by ID
+   * @param {string} id - Guidelines ID
+   * @returns {Promise<Object>}
+   */
+  get: (id) => apiRequest(`/api/v1/brand-guidelines/${id}`),
+
+  /**
+   * Update brand guidelines
+   * @param {string} id - Guidelines ID
+   * @param {Object} guidelines - Updated guidelines data
+   * @returns {Promise<Object>}
+   */
+  update: (id, guidelines) =>
+    apiRequest(`/api/v1/brand-guidelines/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(guidelines),
+    }),
+
+  /**
+   * Set specific guidelines as active
+   * @param {string} id - Guidelines ID
+   * @returns {Promise<Object>}
+   */
+  setActive: (id) =>
+    apiRequest(`/api/v1/brand-guidelines/${id}/activate`, {
+      method: "POST",
+    }),
+
+  /**
+   * Delete brand guidelines
+   * @param {string} id - Guidelines ID
+   * @returns {Promise<void>}
+   */
+  delete: (id) =>
+    apiRequest(`/api/v1/brand-guidelines/${id}`, {
+      method: "DELETE",
+    }),
+
+  /**
+   * Get presigned URL for uploading brand guideline documents
+   * @param {Object} params
+   * @param {string} params.filename - Original filename
+   * @param {string} params.contentType - MIME type
+   * @param {number} params.fileSize - File size in bytes
+   * @returns {Promise<{upload_url: string, asset_url: string}>}
+   */
+  getUploadUrl: ({ filename, contentType, fileSize }) =>
+    apiRequest("/api/v1/brand-guidelines/upload/presigned-url", {
+      method: "POST",
+      body: JSON.stringify({
+        filename,
+        content_type: contentType,
+        file_size: fileSize,
+      }),
+    }),
+};
+
+/**
  * Health check endpoint (no auth required)
  */
 export const health = {

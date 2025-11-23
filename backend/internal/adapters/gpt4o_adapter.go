@@ -47,6 +47,9 @@ type ScriptGenerationRequest struct {
 	Voice       string // "male" or "female" for narrator voice
 	SideEffects string // User-provided side effects disclosure text (use verbatim)
 
+	// Brand guidelines - text-formatted brand consistency requirements
+	BrandGuidelines string // Pre-formatted brand guidelines for consistent output
+
 	// Enhanced prompt options (optional)
 	EnhancedOptions *prompts.EnhancedPromptOptions
 

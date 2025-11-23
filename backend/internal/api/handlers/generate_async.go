@@ -224,6 +224,30 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		zap.String("job_id", job.JobID),
 	)
 
+	// STEP 0: Retrieve active brand guidelines for the user (if any)
+	var brandGuidelinesText string
+	if activeBrandGuidelines, err := h.brandGuidelinesRepo.GetActiveBrandGuidelines(jobCtx, job.UserID); err != nil {
+		h.logger.Warn("Failed to retrieve active brand guidelines",
+			zap.String("job_id", job.JobID),
+			zap.String("user_id", job.UserID),
+			zap.Error(err),
+		)
+		// Continue without brand guidelines - this is not a critical failure
+	} else if activeBrandGuidelines != nil {
+		brandGuidelinesText = activeBrandGuidelines.ForVideoGeneration()
+		h.logger.Info("Retrieved active brand guidelines for video generation",
+			zap.String("job_id", job.JobID),
+			zap.String("user_id", job.UserID),
+			zap.String("guideline_id", activeBrandGuidelines.GuidelineID),
+			zap.String("guideline_name", activeBrandGuidelines.Name),
+		)
+	} else {
+		h.logger.Debug("No active brand guidelines found for user",
+			zap.String("job_id", job.JobID),
+			zap.String("user_id", job.UserID),
+		)
+	}
+
 	// STEP 1: Generate script with GPT-4o (happens in background now!)
 	h.logger.Info("Generating script with GPT-4o", zap.String("job_id", job.JobID))
 	job.Stage = "script_generating"
@@ -244,6 +268,9 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 
 		// Style reference image - will be analyzed and converted to text
 		StyleReferenceImage: req.StyleReferenceImage,
+
+		// Brand guidelines - automatically applied for consistent branding
+		BrandGuidelines: brandGuidelinesText,
 
 		// Pharmaceutical ad configuration
 		Voice:       job.Voice,
