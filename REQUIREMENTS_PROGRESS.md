@@ -26,16 +26,16 @@
 
 **Speed Targets:**
 
-- [ ] 30 second video: Generate in under 5 minutes
-- [ ] 60 second video: Generate in under 10 minutes
-- [ ] 3 minute video: Generate in under 20 minutes
+- [x] 30 second video: Generate in under 5 minutes
+- [x] 60 second video: Generate in under 10 minutes
+- [x] 3 minute video: Generate in under 20 minutes
 
 ***Note:* We understand AI model inference takes time. We're measuring end to end pipeline efficiency, including smart caching and optimization strategies.*
 
 **Cost Efficiency:**
 
-- [ ] Track and report generation cost per video
-- [ ] Optimize API calls (avoid redundant generations)
+- [x] Track and report generation cost per video
+- [x] Optimize API calls (avoid redundant generations)
 - [ ] Implement caching for repeated elements
 - [x] Target: Under $200.00 per minute of final video (Dev stage keep at or under $2.00)
 
@@ -58,7 +58,7 @@
 **Output Control:**
 
 - [ ] Preview generation before final render
-- [ ] Regenerate specific scenes
+- [x] Regenerate specific scenes
 - [ ] Adjust timing and transitions
 - [ ] Export in multiple formats
 
