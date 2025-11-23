@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { FileText, Info } from "lucide-react";
+import { FileText, Info, Film } from "lucide-react";
 import VideoPlayer from "../components/workspace/VideoPlayer";
 import VideoMetadata from "../components/workspace/VideoMetadata";
 import ScriptEditor from "../components/workspace/ScriptEditor";
+import ScenePanel from "../components/workspace/ScenePanel";
 import Timeline from "../components/workspace/Timeline";
 import ActionsToolbar from "../components/workspace/ActionsToolbar";
 import { jobs } from "../utils/api";
@@ -345,25 +346,32 @@ function Workspace() {
    * Triggers a browser download for the provided job's video file.
    *
    * @param {Object} [job=jobData] - Job data containing video_url
+   * @param {string} [format='mp4'] - Download format ('mp4' or 'webm')
    */
-  const handleDownload = (job = jobData) => {
-    console.log("[WORKSPACE] ⬇️ Download requested for job:", job?.job_id);
+  const handleDownload = (job = jobData, format = "mp4") => {
+    console.log("[WORKSPACE] ⬇️ Download requested for job:", job?.job_id, "format:", format);
 
-    if (!job?.video_url) {
-      console.warn("[WORKSPACE] ⚠️ Cannot download: No video URL");
+    const videoUrl = format === "webm" && job?.webm_video_url
+      ? job.webm_video_url
+      : job?.video_url;
+
+    if (!videoUrl) {
+      console.warn("[WORKSPACE] ⚠️ Cannot download: No video URL for format:", format);
       setErrorState({
         type: "download_unavailable",
         title: "Video Not Ready",
-        message: "Video is not ready for download yet.",
+        message: format === "webm"
+          ? "WebM format is not available for this video."
+          : "Video is not ready for download yet.",
         action: "retry",
       });
       return;
     }
 
-    console.log("[WORKSPACE] ⬇️ Starting download:", job.video_url);
+    console.log("[WORKSPACE] ⬇️ Starting download:", videoUrl);
     const link = document.createElement("a");
-    link.href = job.video_url;
-    link.download = `video-${job.job_id}.mp4`;
+    link.href = videoUrl;
+    link.download = `video-${job.job_id}.${format}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -768,6 +776,11 @@ function Workspace() {
       icon: <Info size={20} />,
     },
     {
+      id: "scenes",
+      label: "Scenes",
+      icon: <Film size={20} />,
+    },
+    {
       id: "script",
       label: "Script",
       icon: <FileText size={20} />,
@@ -923,6 +936,16 @@ function Workspace() {
             >
               {activeSidebarTab === "metadata" && (
                 <VideoMetadata key={jobData.job_id} jobData={jobData} />
+              )}
+              {activeSidebarTab === "scenes" && (
+                <ScenePanel
+                  jobId={jobData.job_id}
+                  scenes={scenes}
+                  sceneVideoUrls={jobData.scene_video_urls}
+                  sceneVersions={jobData.scene_versions}
+                  onSceneRegenerated={() => fetchJob(jobData.job_id)}
+                  disabled={!isCompletedStatus(jobData.status)}
+                />
               )}
               {activeSidebarTab === "script" && (
                 <ScriptEditor script={script} onChange={handleScriptChange} />

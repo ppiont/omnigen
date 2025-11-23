@@ -48,7 +48,8 @@ type JobResponse struct {
 	ProgressPercent int     `json:"progress_percent"`
 	Prompt          string  `json:"prompt"`
 	Duration        int     `json:"duration"`
-	VideoURL        *string `json:"video_url,omitempty"`
+	VideoURL        *string `json:"video_url,omitempty"`      // MP4 format
+	WebMVideoURL    *string `json:"webm_video_url,omitempty"` // WebM format (VP9)
 	Model           string  `json:"model,omitempty"`
 	CreatedAt       int64   `json:"created_at"`
 	UpdatedAt       int64   `json:"updated_at"`
@@ -61,7 +62,7 @@ type JobResponse struct {
 	NarratorAudioURL string   `json:"narrator_audio_url,omitempty"`
 	ScenesCompleted  int      `json:"scenes_completed,omitempty"`
 	SceneVideoURLs   []string `json:"scene_video_urls,omitempty"`
-	
+
 	// Side effects fields for text overlay
 	SideEffectsText      string   `json:"side_effects_text,omitempty"`
 	SideEffectsStartTime *float64 `json:"side_effects_start_time,omitempty"`
@@ -120,17 +121,31 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		return
 	}
 
-	// Generate presigned URL if video is completed
+	// Generate presigned URL if video is completed (MP4)
 	var videoURL *string
 	if job.Status == "completed" && job.VideoKey != "" {
 		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), job.VideoKey, 7*24*time.Hour)
 		if err != nil {
-			h.logger.Error("Failed to generate presigned URL",
+			h.logger.Error("Failed to generate presigned URL for MP4",
 				zap.String("job_id", jobID),
 				zap.Error(err),
 			)
 		} else {
 			videoURL = &url
+		}
+	}
+
+	// Generate presigned URL for WebM video if available
+	var webmVideoURL *string
+	if job.Status == "completed" && job.WebMVideoKey != "" {
+		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), job.WebMVideoKey, 7*24*time.Hour)
+		if err != nil {
+			h.logger.Warn("Failed to generate presigned URL for WebM",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+		} else {
+			webmVideoURL = &url
 		}
 	}
 
@@ -190,6 +205,7 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		Prompt:               job.Prompt,
 		Duration:             job.Duration,
 		VideoURL:             videoURL,
+		WebMVideoURL:         webmVideoURL,
 		Model:                job.Model,
 		CreatedAt:            job.CreatedAt,
 		UpdatedAt:            job.UpdatedAt,
@@ -255,18 +271,32 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 	// Convert to response format
 	jobResponses := make([]JobResponse, len(jobs))
 	for i, job := range jobs {
-		// Convert VideoKey to presigned URL if present
+		// Convert VideoKey to presigned URL if present (MP4)
 		var videoURL *string
 		if job.VideoKey != "" {
 			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), job.VideoKey, 1*time.Hour)
 			if err != nil {
-				h.logger.Warn("Failed to generate presigned URL",
+				h.logger.Warn("Failed to generate presigned URL for MP4",
 					zap.String("job_id", job.JobID),
 					zap.String("video_key", job.VideoKey),
 					zap.Error(err),
 				)
 			} else {
 				videoURL = &url
+			}
+		}
+
+		// Generate presigned URL for WebM video if available
+		var webmVideoURL *string
+		if job.WebMVideoKey != "" {
+			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), job.WebMVideoKey, 1*time.Hour)
+			if err != nil {
+				h.logger.Warn("Failed to generate presigned URL for WebM",
+					zap.String("job_id", job.JobID),
+					zap.Error(err),
+				)
+			} else {
+				webmVideoURL = &url
 			}
 		}
 
@@ -323,6 +353,7 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 			Stage:                job.Stage,
 			ProgressPercent:      calculateDynamicProgress(job.Stage, len(job.Scenes)),
 			VideoURL:             videoURL,
+			WebMVideoURL:         webmVideoURL,
 			ErrorMessage:         job.ErrorMessage,
 			Prompt:               job.Prompt,
 			Duration:             job.Duration,
