@@ -97,6 +97,23 @@ type GenerateResponse struct {
 	EstimatedCompletion int    `json:"estimated_completion_seconds"`
 }
 
+// isValidVeoDuration checks if duration can be formed by summing 4, 6, or 8 second clips
+// Veo 3.1 constraint: each clip must be exactly 4, 6, or 8 seconds
+func isValidVeoDuration(duration int) bool {
+	// Valid durations that can be formed with 4, 6, 8 second clips (10-60 range)
+	validDurations := []int{
+		10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
+		32, 34, 36, 38, 40, 42, 44, 46, 48, 50,
+		52, 54, 56, 58, 60,
+	}
+	for _, valid := range validDurations {
+		if duration == valid {
+			return true
+		}
+	}
+	return false
+}
+
 // Generate handles POST /api/v1/generate - FULLY ASYNC (returns instantly)
 // @Summary Generate video from prompt with intelligent parsing
 // @Description Creates job immediately and processes video generation in background goroutine
@@ -182,10 +199,10 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 
 	req.StartImage = strings.TrimSpace(req.StartImage)
 
-	// Validate duration is multiple of 5 (Veo constraint: 5s or 10s clips only)
-	if req.Duration < 10 || req.Duration > 60 || req.Duration%5 != 0 {
+	// Validate duration can be formed by 4, 6, or 8 second clips (Veo 3.1 constraint)
+	if req.Duration < 10 || req.Duration > 60 || !isValidVeoDuration(req.Duration) {
 		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
-			Error: errors.NewValidationError("duration", "Duration must be between 10-60 seconds and divisible by 5"),
+			Error: errors.NewValidationError("duration", "Duration must be between 10-60 seconds and achievable with 4, 6, or 8 second clips"),
 		})
 		return
 	}
@@ -214,6 +231,7 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		Prompt:      req.Prompt,
 		Duration:    req.Duration,
 		AspectRatio: req.AspectRatio,
+		Model:       h.veoAdapter.GetModelName(),
 
 		Voice:       req.Voice,
 		SideEffects: req.SideEffects,

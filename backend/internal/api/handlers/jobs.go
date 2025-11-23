@@ -48,19 +48,21 @@ type JobResponse struct {
 	ProgressPercent int     `json:"progress_percent"`
 	Prompt          string  `json:"prompt"`
 	Duration        int     `json:"duration"`
-	VideoURL        *string `json:"video_url,omitempty"`
+	VideoURL        *string `json:"video_url,omitempty"`      // MP4 format
+	WebMVideoURL    *string `json:"webm_video_url,omitempty"` // WebM format (VP9)
+	Model           string  `json:"model,omitempty"`
 	CreatedAt       int64   `json:"created_at"`
 	UpdatedAt       int64   `json:"updated_at"`
 	CompletedAt     *int64  `json:"completed_at,omitempty"`
 	ErrorMessage    *string `json:"error_message,omitempty"`
 
 	// Progress fields
-	ThumbnailURL    string   `json:"thumbnail_url,omitempty"`
-	AudioURL        string   `json:"audio_url,omitempty"`
-	NarratorAudioURL string  `json:"narrator_audio_url,omitempty"`
-	ScenesCompleted int      `json:"scenes_completed,omitempty"`
-	SceneVideoURLs  []string `json:"scene_video_urls,omitempty"`
-	
+	ThumbnailURL     string   `json:"thumbnail_url,omitempty"`
+	AudioURL         string   `json:"audio_url,omitempty"`
+	NarratorAudioURL string   `json:"narrator_audio_url,omitempty"`
+	ScenesCompleted  int      `json:"scenes_completed,omitempty"`
+	SceneVideoURLs   []string `json:"scene_video_urls,omitempty"`
+
 	// Side effects fields for text overlay
 	SideEffectsText      string   `json:"side_effects_text,omitempty"`
 	SideEffectsStartTime *float64 `json:"side_effects_start_time,omitempty"`
@@ -119,17 +121,31 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		return
 	}
 
-	// Generate presigned URL if video is completed
+	// Generate presigned URL if video is completed (MP4)
 	var videoURL *string
 	if job.Status == "completed" && job.VideoKey != "" {
 		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), job.VideoKey, 7*24*time.Hour)
 		if err != nil {
-			h.logger.Error("Failed to generate presigned URL",
+			h.logger.Error("Failed to generate presigned URL for MP4",
 				zap.String("job_id", jobID),
 				zap.Error(err),
 			)
 		} else {
 			videoURL = &url
+		}
+	}
+
+	// Generate presigned URL for WebM video if available
+	var webmVideoURL *string
+	if job.Status == "completed" && job.WebMVideoKey != "" {
+		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), job.WebMVideoKey, 7*24*time.Hour)
+		if err != nil {
+			h.logger.Warn("Failed to generate presigned URL for WebM",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+		} else {
+			webmVideoURL = &url
 		}
 	}
 
@@ -161,6 +177,20 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		}
 	}
 
+	// Generate presigned URL for thumbnail
+	var thumbnailURL string
+	if job.ThumbnailURL != "" {
+		url, err := h.s3Service.GetPresignedURL(c.Request.Context(), extractS3Key(job.ThumbnailURL), 7*24*time.Hour)
+		if err != nil {
+			h.logger.Warn("Failed to generate presigned URL for thumbnail",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+		} else {
+			thumbnailURL = url
+		}
+	}
+
 	// Prepare side effects start time pointer
 	var sideEffectsStartTime *float64
 	if job.SideEffectsStartTime > 0 {
@@ -168,23 +198,25 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 	}
 
 	response := JobResponse{
-		JobID:               job.JobID,
-		Status:              job.Status,
-		Stage:               job.Stage,
-		ProgressPercent:     calculateDynamicProgress(job.Stage, len(job.Scenes)),
-		Prompt:              job.Prompt,
-		Duration:            job.Duration,
-		VideoURL:            videoURL,
-		CreatedAt:           job.CreatedAt,
-		UpdatedAt:           job.UpdatedAt,
-		CompletedAt:         job.CompletedAt,
-		ErrorMessage:        job.ErrorMessage,
-		ThumbnailURL:        job.ThumbnailURL,
-		AudioURL:            audioURL,
-		NarratorAudioURL:    narratorAudioURL,
-		ScenesCompleted:     job.ScenesCompleted,
-		SceneVideoURLs:      job.SceneVideoURLs,
-		SideEffectsText:     job.SideEffectsText,
+		JobID:                job.JobID,
+		Status:               job.Status,
+		Stage:                job.Stage,
+		ProgressPercent:      calculateDynamicProgress(job.Stage, len(job.Scenes)),
+		Prompt:               job.Prompt,
+		Duration:             job.Duration,
+		VideoURL:             videoURL,
+		WebMVideoURL:         webmVideoURL,
+		Model:                job.Model,
+		CreatedAt:            job.CreatedAt,
+		UpdatedAt:            job.UpdatedAt,
+		CompletedAt:          job.CompletedAt,
+		ErrorMessage:         job.ErrorMessage,
+		ThumbnailURL:         thumbnailURL,
+		AudioURL:             audioURL,
+		NarratorAudioURL:     narratorAudioURL,
+		ScenesCompleted:      job.ScenesCompleted,
+		SceneVideoURLs:       job.SceneVideoURLs,
+		SideEffectsText:      job.SideEffectsText,
 		SideEffectsStartTime: sideEffectsStartTime,
 	}
 
@@ -239,18 +271,32 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 	// Convert to response format
 	jobResponses := make([]JobResponse, len(jobs))
 	for i, job := range jobs {
-		// Convert VideoKey to presigned URL if present
+		// Convert VideoKey to presigned URL if present (MP4)
 		var videoURL *string
 		if job.VideoKey != "" {
 			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), job.VideoKey, 1*time.Hour)
 			if err != nil {
-				h.logger.Warn("Failed to generate presigned URL",
+				h.logger.Warn("Failed to generate presigned URL for MP4",
 					zap.String("job_id", job.JobID),
 					zap.String("video_key", job.VideoKey),
 					zap.Error(err),
 				)
 			} else {
 				videoURL = &url
+			}
+		}
+
+		// Generate presigned URL for WebM video if available
+		var webmVideoURL *string
+		if job.WebMVideoKey != "" {
+			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), job.WebMVideoKey, 1*time.Hour)
+			if err != nil {
+				h.logger.Warn("Failed to generate presigned URL for WebM",
+					zap.String("job_id", job.JobID),
+					zap.Error(err),
+				)
+			} else {
+				webmVideoURL = &url
 			}
 		}
 
@@ -281,6 +327,20 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 			}
 		}
 
+		// Generate presigned URL for thumbnail
+		var thumbnailURL string
+		if job.ThumbnailURL != "" {
+			url, err := h.s3Service.GetPresignedURL(c.Request.Context(), extractS3Key(job.ThumbnailURL), 1*time.Hour)
+			if err != nil {
+				h.logger.Warn("Failed to generate presigned URL for thumbnail",
+					zap.String("job_id", job.JobID),
+					zap.Error(err),
+				)
+			} else {
+				thumbnailURL = url
+			}
+		}
+
 		// Prepare side effects start time pointer
 		var sideEffectsStartTime *float64
 		if job.SideEffectsStartTime > 0 {
@@ -288,23 +348,25 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 		}
 
 		jobResponses[i] = JobResponse{
-			JobID:               job.JobID,
-			Status:              job.Status,
-			Stage:               job.Stage,
-			ProgressPercent:     calculateDynamicProgress(job.Stage, len(job.Scenes)),
-			VideoURL:            videoURL,
-			ErrorMessage:        job.ErrorMessage,
-			Prompt:              job.Prompt,
-			Duration:            job.Duration,
-			CreatedAt:           job.CreatedAt,
-			UpdatedAt:           job.UpdatedAt,
-			CompletedAt:         job.CompletedAt,
-			ThumbnailURL:        job.ThumbnailURL,
-			AudioURL:            audioURL,
-			NarratorAudioURL:    narratorAudioURL,
-			ScenesCompleted:     job.ScenesCompleted,
-			SceneVideoURLs:      job.SceneVideoURLs,
-			SideEffectsText:     job.SideEffectsText,
+			JobID:                job.JobID,
+			Status:               job.Status,
+			Stage:                job.Stage,
+			ProgressPercent:      calculateDynamicProgress(job.Stage, len(job.Scenes)),
+			VideoURL:             videoURL,
+			WebMVideoURL:         webmVideoURL,
+			ErrorMessage:         job.ErrorMessage,
+			Prompt:               job.Prompt,
+			Duration:             job.Duration,
+			Model:                job.Model,
+			CreatedAt:            job.CreatedAt,
+			UpdatedAt:            job.UpdatedAt,
+			CompletedAt:          job.CompletedAt,
+			ThumbnailURL:         thumbnailURL,
+			AudioURL:             audioURL,
+			NarratorAudioURL:     narratorAudioURL,
+			ScenesCompleted:      job.ScenesCompleted,
+			SceneVideoURLs:       job.SceneVideoURLs,
+			SideEffectsText:      job.SideEffectsText,
 			SideEffectsStartTime: sideEffectsStartTime,
 		}
 	}
@@ -333,8 +395,8 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 	jobID := c.Param("id")
 	userID := auth.MustGetUserID(c)
 
-	// Get job to verify it exists before deletion
-	_, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
+	// Get job to verify it exists and belongs to user
+	job, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
 	if err != nil {
 		if err == repository.ErrJobNotFound {
 			c.JSON(http.StatusNotFound, errors.ErrorResponse{
@@ -353,18 +415,32 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 		return
 	}
 
-	// Delete all S3 assets using batch deletion
+	// Verify job belongs to user (security check)
+	if job.UserID != userID {
+		h.logger.Warn("User attempted to delete another user's job",
+			zap.String("job_id", jobID),
+			zap.String("job_user_id", job.UserID),
+			zap.String("requesting_user_id", userID),
+		)
+		c.JSON(http.StatusForbidden, errors.ErrorResponse{
+			Error: errors.ErrForbidden,
+		})
+		return
+	}
+
+	// Delete all S3 assets using batch deletion (best effort - continue even if it fails)
 	prefix := fmt.Sprintf("users/%s/jobs/%s/", userID, jobID)
 	h.logger.Info("Deleting S3 assets for job",
 		zap.String("job_id", jobID),
 		zap.String("user_id", userID),
 		zap.String("prefix", prefix),
 	)
-
 	s3Err := h.s3Service.DeletePrefix(c.Request.Context(), h.assetsBucket, prefix)
 	if s3Err != nil {
-		h.logger.Warn("Failed to delete S3 assets",
+		h.logger.Warn("Failed to delete S3 assets (continuing with DB deletion)",
 			zap.String("job_id", jobID),
+			zap.String("user_id", userID),
+			zap.String("prefix", prefix),
 			zap.Error(s3Err),
 		)
 		// Continue with deletion even if S3 delete fails
@@ -384,20 +460,14 @@ func (h *JobsHandler) DeleteJob(c *gin.Context) {
 		return
 	}
 
-	h.logger.Info("Job deleted",
+	h.logger.Info("Job deleted successfully",
 		zap.String("job_id", jobID),
 		zap.String("user_id", userID),
+		zap.Bool("s3_cleanup_success", s3Err == nil),
 	)
 
-	if s3Err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Job deleted but some assets may remain",
-			"warning": s3Err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Job deleted successfully"})
+	// Return 204 No Content for successful DELETE (standard HTTP response)
+	c.Status(http.StatusNoContent)
 }
 
 // calculateDynamicProgress calculates progress percentage based on stage and total scenes

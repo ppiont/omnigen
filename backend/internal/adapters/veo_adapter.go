@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+
+	"github.com/omnigen/backend/pkg/retry"
 )
 
 // VeoAdapter implements VideoGeneratorAdapter for Google Veo 3.1
@@ -27,7 +29,7 @@ func NewVeoAdapter(apiToken string, logger *zap.Logger) *VeoAdapter {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second, // Async operation - just for initial request acknowledgment
 		},
-		logger:       logger,
+		logger: logger,
 		// Veo 3.1 model on Replicate with specific version hash
 		// Replicate HTTP API requires the full version hash for direct API calls
 		// Version hash obtained from: https://replicate.com/google/veo-3.1
@@ -105,7 +107,7 @@ func (v *VeoAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRequ
 		Version: v.modelVersion,
 		Input:   input,
 	}
-	
+
 	// Log the full request for debugging
 	v.logger.Debug("Veo API request",
 		zap.String("version", v.modelVersion),
@@ -124,78 +126,92 @@ func (v *VeoAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRequ
 		zap.Bool("has_image", req.StartImageURL != ""),
 		zap.String("model_version", v.modelVersion),
 	)
-	
+
 	// Log the full request payload for debugging
 	v.logger.Debug("Veo API request payload",
 		zap.Any("input", input),
 	)
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(
-		ctx,
-		"POST",
-		"https://api.replicate.com/v1/predictions",
-		strings.NewReader(string(jsonData)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", v.apiToken))
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Prefer", "wait=0") // Don't wait for completion
-
-	// Execute request
-	resp, err := v.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		// Log full error details for debugging
-		errorBody := string(body)
-		v.logger.Error("Veo API error",
-			zap.Int("status_code", resp.StatusCode),
-			zap.String("response_body", errorBody),
-			zap.String("request_url", httpReq.URL.String()),
-			zap.String("model_version", v.modelVersion),
-		)
-		
-		// Log the request payload for debugging 422 errors
-		if resp.StatusCode == 422 {
-			v.logger.Error("Veo API validation error - request payload",
-				zap.Any("request_input", veoReq.Input),
-				zap.String("full_request", string(jsonData)),
-		)
-		}
-		
-		// Provide specific error messages for common status codes
-		if resp.StatusCode == 422 {
-			// HTTP 422 - Unprocessable Entity (validation error)
-			// This usually means invalid model version or parameter mismatch
-			return nil, fmt.Errorf("API error (status %d): Invalid request parameters or model version. Check that model version '%s' is correct and parameters match Veo 3.1 schema. Response: %s", resp.StatusCode, v.modelVersion, errorBody)
-		}
-		if resp.StatusCode == 402 {
-			return nil, fmt.Errorf("API error (status %d): Payment required - Replicate account has insufficient credits. Response: %s", resp.StatusCode, errorBody)
-		}
-		if resp.StatusCode == 404 {
-			return nil, fmt.Errorf("API error (status %d): Model not found. Check that model version '%s' exists on Replicate. Response: %s", resp.StatusCode, v.modelVersion, errorBody)
-		}
-		
-		return nil, fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, errorBody)
-	}
-
-	// Parse response
+	// Execute request with retry logic
 	var veoResp VeoResponse
-	if err := json.Unmarshal(body, &veoResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	err = retry.Do(ctx, retry.APIConfig(), func() error {
+		// Create HTTP request (must be created fresh for each attempt)
+		httpReq, err := http.NewRequestWithContext(
+			ctx,
+			"POST",
+			"https://api.replicate.com/v1/predictions",
+			strings.NewReader(string(jsonData)),
+		)
+		if err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
+		}
+
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", v.apiToken))
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Prefer", "wait=0") // Don't wait for completion
+
+		// Execute request
+		resp, err := v.httpClient.Do(httpReq)
+		if err != nil {
+			// Network errors are retryable
+			return fmt.Errorf("failed to execute request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		// Read response
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			// Log full error details for debugging
+			errorBody := string(body)
+			v.logger.Error("Veo API error",
+				zap.Int("status_code", resp.StatusCode),
+				zap.String("response_body", errorBody),
+				zap.String("request_url", httpReq.URL.String()),
+				zap.String("model_version", v.modelVersion),
+			)
+
+			// Log the request payload for debugging 422 errors
+			if resp.StatusCode == 422 {
+				v.logger.Error("Veo API validation error - request payload",
+					zap.Any("request_input", veoReq.Input),
+					zap.String("full_request", string(jsonData)),
+				)
+			}
+
+			// 4xx errors are non-retryable (client errors)
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				var errMsg string
+				switch resp.StatusCode {
+				case 422:
+					errMsg = fmt.Sprintf("API error (status %d): Invalid request parameters or model version. Check that model version '%s' is correct and parameters match Veo 3.1 schema. Response: %s", resp.StatusCode, v.modelVersion, errorBody)
+				case 402:
+					errMsg = fmt.Sprintf("API error (status %d): Payment required - Replicate account has insufficient credits. Response: %s", resp.StatusCode, errorBody)
+				case 404:
+					errMsg = fmt.Sprintf("API error (status %d): Model not found. Check that model version '%s' exists on Replicate. Response: %s", resp.StatusCode, v.modelVersion, errorBody)
+				default:
+					errMsg = fmt.Sprintf("API error: status %d, body: %s", resp.StatusCode, errorBody)
+				}
+				return retry.NewNonRetryableError(fmt.Errorf("%s", errMsg))
+			}
+
+			// 5xx errors are retryable (server errors)
+			return fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, errorBody)
+		}
+
+		// Parse response
+		if err := json.Unmarshal(body, &veoResp); err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to parse response: %w", err))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	v.logger.Info("Veo prediction created successfully",
@@ -228,37 +244,52 @@ func (v *VeoAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRequ
 
 // GetStatus checks the status of a video generation job
 func (v *VeoAdapter) GetStatus(ctx context.Context, predictionID string) (*VideoGenerationResult, error) {
-	// Create HTTP request
 	url := fmt.Sprintf("https://api.replicate.com/v1/predictions/%s", predictionID)
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
 
-	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", v.apiToken))
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	// Execute request
-	resp, err := v.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse response
 	var veoResp VeoResponse
-	if err := json.Unmarshal(body, &veoResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	err := retry.Do(ctx, retry.APIConfig(), func() error {
+		// Create HTTP request
+		httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
+		}
+
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", v.apiToken))
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		// Execute request
+		resp, err := v.httpClient.Do(httpReq)
+		if err != nil {
+			// Network errors are retryable
+			return fmt.Errorf("failed to execute request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		// Read response
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			// 4xx errors are non-retryable
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				return retry.NewNonRetryableError(fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(body)))
+			}
+			// 5xx errors are retryable
+			return fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(body))
+		}
+
+		// Parse response
+		if err := json.Unmarshal(body, &veoResp); err != nil {
+			return retry.NewNonRetryableError(fmt.Errorf("failed to parse response: %w", err))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	// Map to our result format
@@ -292,7 +323,7 @@ func (v *VeoAdapter) GetStatus(ctx context.Context, predictionID string) (*Video
 			// No error or logs - provide generic message with status
 			result.Error = fmt.Sprintf("Generation failed with status: %s (no error details provided)", veoResp.Status)
 		}
-		
+
 		// Log full response for debugging
 		v.logger.Error("Veo generation failed",
 			zap.String("prediction_id", veoResp.ID),
@@ -334,18 +365,24 @@ func (v *VeoAdapter) mapAspectRatio(ar string) string {
 	}
 }
 
-// mapDuration maps our duration to Veo's duration
-// Veo 3.1 default duration is 8 seconds
-// According to the API, duration should be an integer (default: 8)
+// mapDuration maps scene duration to Veo's supported durations
+// Veo 3.1 ONLY supports 4, 6, or 8 seconds (enum constraint)
 func (v *VeoAdapter) mapDuration(seconds int) int {
-	// Veo 3.1 supports various durations, default is 8 seconds
-	// For scene clips, we'll use 8 seconds as the base (matches default)
-	// For longer videos, we'll need to generate multiple clips
-	if seconds <= 8 {
-		return 8
+	// Veo 3.1 valid durations: 4, 6, 8 (enum)
+	// Map to closest valid duration
+	if seconds <= 4 {
+		return 4
 	}
-	// For longer clips, round to nearest 8-second increment
-	return ((seconds + 4) / 8) * 8
+	if seconds <= 5 {
+		// 5 is closer to 4 than 6
+		return 4
+	}
+	if seconds <= 7 {
+		// 6 and 7 map to 6
+		return 6
+	}
+	// 8+ maps to 8 (max clip length)
+	return 8
 }
 
 // mapStatus maps Replicate status to our status format

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -74,8 +75,22 @@ func buildFinalVideoKey(userID, jobID string) string {
 	return fmt.Sprintf("users/%s/jobs/%s/final/video.mp4", userID, jobID)
 }
 
+func buildFinalWebMKey(userID, jobID string) string {
+	return fmt.Sprintf("users/%s/jobs/%s/final/video.webm", userID, jobID)
+}
+
 func buildJobThumbnailKey(userID, jobID string) string {
 	return fmt.Sprintf("users/%s/jobs/%s/thumbnails/job-thumbnail.jpg", userID, jobID)
+}
+
+// buildVersionedSceneClipKey returns S3 key for a specific clip version
+func buildVersionedSceneClipKey(userID, jobID string, sceneNumber, version int) string {
+	return fmt.Sprintf("users/%s/jobs/%s/clips/scene-%03d-v%d.mp4", userID, jobID, sceneNumber, version)
+}
+
+// buildVersionedSceneThumbnailKey returns S3 key for a specific scene thumbnail version
+func buildVersionedSceneThumbnailKey(userID, jobID string, sceneNumber, version int) string {
+	return fmt.Sprintf("users/%s/jobs/%s/thumbnails/scene-%03d-v%d.jpg", userID, jobID, sceneNumber, version)
 }
 
 const (
@@ -112,14 +127,14 @@ func (h *GenerateHandler) failJob(
 	if internalErr != nil {
 		// Extract meaningful error details
 		errStr := internalErr.Error()
-		
+
 		// Add technical details in a user-friendly way
 		// Check for common error patterns and provide helpful context
 		if strings.Contains(errStr, "Payment required") || strings.Contains(errStr, "status 402") || strings.Contains(errStr, "status 402") {
 			// HTTP 402 - Payment Required (Replicate credits/billing issue)
 			errorMessage = "Script generation failed due to insufficient Replicate API credits. Please check your Replicate account balance and billing settings."
-		} else if strings.Contains(errStr, "API error") || strings.Contains(errStr, "status") {
-			// API errors - include status code if available
+		} else if strings.Contains(errStr, "API error") || (strings.Contains(errStr, "status") && !strings.Contains(errStr, "exit status")) {
+			// API errors - include status code if available (but not ffmpeg/process exit codes)
 			// For 422 errors, try to extract more details from the response
 			if strings.Contains(errStr, "422") {
 				// Try to extract the actual error message from Replicate
@@ -134,7 +149,7 @@ func (h *GenerateHandler) failJob(
 						}
 						errorMessage = fmt.Sprintf("%s (API Error: HTTP 422 - %s)", userMessage, responseBody)
 					} else {
-			errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
+						errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
 					}
 				} else {
 					errorMessage = fmt.Sprintf("%s (API Error: %s)", userMessage, extractAPIError(errStr))
@@ -188,7 +203,7 @@ func extractAPIError(errStr string) string {
 			}
 		}
 	}
-	
+
 	// Fallback: return first 100 chars
 	if len(errStr) > 100 {
 		return errStr[:100] + "..."
@@ -304,8 +319,19 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	job.Scenes = script.Scenes
 	job.AudioSpec = script.AudioSpec
 	job.ScriptMetadata = script.Metadata
-	job.SideEffectsText = script.AudioSpec.SideEffectsText
-	job.SideEffectsStartTime = script.AudioSpec.SideEffectsStartTime
+
+	// ALWAYS use the user's original side effects text for FDA compliance
+	// GPT-4o should NOT generate or modify side effects - this is legally required verbatim text
+	job.SideEffectsText = job.SideEffects
+	if job.SideEffectsText != "" {
+		// Default to 80% of duration for side effects start time
+		job.SideEffectsStartTime = float64(job.Duration) * 0.8
+		h.logger.Info("Using user-provided side effects text for FDA compliance",
+			zap.String("job_id", job.JobID),
+			zap.Int("text_length", len(job.SideEffectsText)),
+			zap.Float64("side_effects_start_time", job.SideEffectsStartTime),
+		)
+	}
 
 	// Update job with embedded script
 	job.Stage = "script_complete"
@@ -341,66 +367,14 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		)
 	}
 
-	// STEP 2: Generate narrator voiceover (if configured)
-	if job.Voice != "" && job.AudioSpec.NarratorScript != "" {
-		job.Stage = "narrator_generating"
-		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
-			h.logger.Error("Failed to update job stage",
-				zap.String("job_id", job.JobID),
-				zap.String("stage", "narrator_generating"),
-				zap.Error(err),
-			)
-		}
-
-		narratorAudioURL, err := h.generateNarratorVoiceover(
-			jobCtx,
-			job.UserID,
-			job.JobID,
-			job.Voice,
-			job.AudioSpec.NarratorScript,
-			job.AudioSpec.SideEffectsStartTime,
-			job.Duration,
-		)
-		if err != nil {
-			h.failJob(jobCtx, job, narratorFailureMessage, err, zap.String("stage", "narrator_generating"))
-			return
-		}
-
-		job.Stage = "narrator_complete"
-		job.NarratorAudioURL = narratorAudioURL
-
-		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
-			h.logger.Error("Failed to update job with narrator audio URL",
-				zap.String("job_id", job.JobID),
-				zap.Error(err),
-			)
-		}
-
-		h.logger.Info("Narrator voiceover generation complete",
-			zap.String("job_id", job.JobID),
-			zap.String("narrator_audio_url", narratorAudioURL),
-		)
-	} else {
-		if job.Voice == "" {
-			h.logger.Info("Skipping narrator voiceover generation (voice not configured)",
-				zap.String("job_id", job.JobID),
-			)
-		} else {
-			h.logger.Warn("Skipping narrator voiceover generation (narrator script missing)",
-				zap.String("job_id", job.JobID),
-				zap.Int("script_length", len(job.AudioSpec.NarratorScript)),
-			)
-		}
-	}
-
-	// STEP 3: Generate video clips sequentially
+	// STEP 2: Generate video clips sequentially (must be first to get actual duration)
 	var clipVideos []ClipVideo
 	// Start with empty lastFrameURL so the first scene is pure AI generation
 	var lastFrameURL string
 
 	// Initialize arrays for accumulating scene data
 	sceneVideoURLs := make([]string, 0, len(script.Scenes))
-	var lastThumbnailURL string
+	var jobThumbnailURL string // Raw S3 URL for the job thumbnail (not presigned)
 
 	for i, scene := range script.Scenes {
 		job.Stage = fmt.Sprintf("scene_%d_generating", i+1)
@@ -425,7 +399,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		if i == len(script.Scenes)-1 && strings.TrimSpace(req.StartImage) != "" {
 			// Extract S3 key from the product image URL
 			s3Key := extractS3Key(req.StartImage)
-			
+
 			// Generate presigned URL for video API access (valid for 1 hour)
 			presignedURL, err := h.s3Service.GetPresignedURL(jobCtx, s3Key, 1*time.Hour)
 			if err != nil {
@@ -436,14 +410,14 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 					zap.Error(err),
 				)
 				// Fall back to direct URL if presigning fails (shouldn't happen, but be safe)
-			scene.StartImageURL = req.StartImage
+				scene.StartImageURL = req.StartImage
 			} else {
 				scene.StartImageURL = presignedURL
-			h.logger.Info("Using product image for last scene (side effects segment)",
-				zap.String("job_id", job.JobID),
-				zap.Int("scene", i+1),
+				h.logger.Info("Using product image for last scene (side effects segment)",
+					zap.String("job_id", job.JobID),
+					zap.Int("scene", i+1),
 					zap.String("product_image_url", presignedURL),
-			)
+				)
 			}
 		} else {
 			scene.StartImageURL = lastFrameURL
@@ -480,9 +454,9 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 
 		// Accumulate scene data
 		sceneVideoURLs = append(sceneVideoURLs, clipResult.VideoURL)
-		lastThumbnailURL = clipResult.LastFrameURL
 
-		// Extract and upload job thumbnail from first scene
+		// Extract and upload job thumbnail from first scene only
+		// Note: clipResult.LastFrameURL is presigned (for Veo API continuity) and should NOT be stored in DB
 		if i == 0 {
 			jobThumbnail, err := h.extractJobThumbnail(jobCtx, job.UserID, job.JobID, clipResult.VideoURL)
 			if err != nil {
@@ -492,8 +466,8 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 				)
 				// Continue - this is not critical
 			} else {
-				// Use the job thumbnail (from first I-frame) instead of last frame URL
-				lastThumbnailURL = jobThumbnail
+				// Store raw S3 URL (not presigned) - will be presigned when served via API
+				jobThumbnailURL = jobThumbnail
 				h.logger.Info("Job thumbnail set from first scene",
 					zap.String("job_id", job.JobID),
 					zap.String("thumbnail_url", jobThumbnail),
@@ -501,11 +475,22 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 			}
 		}
 
+		// Initialize versioning for this scene (version 1)
+		if job.SceneVersions == nil {
+			job.SceneVersions = make(map[int]int)
+		}
+		if job.ClipVersions == nil {
+			job.ClipVersions = make(map[string]string)
+		}
+		sceneNum := i + 1
+		job.SceneVersions[sceneNum] = 1
+		job.ClipVersions[fmt.Sprintf("scene-%d-v1", sceneNum)] = clipResult.VideoURL
+
 		// Update job with accumulated data
 		job.Stage = fmt.Sprintf("scene_%d_complete", i+1)
 		job.ScenesCompleted = i + 1
 		job.SceneVideoURLs = sceneVideoURLs
-		job.ThumbnailURL = lastThumbnailURL
+		job.ThumbnailURL = jobThumbnailURL
 
 		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
 			h.logger.Error("Failed to update job progress",
@@ -529,7 +514,100 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		)
 	}
 
-	// STEP 4: Generate audio
+	// STEP 3: Calculate actual video duration from generated clips
+	var actualVideoDuration float64
+	for _, clip := range clipVideos {
+		actualVideoDuration += clip.Duration
+	}
+
+	h.logger.Info("Video clips generation complete",
+		zap.String("job_id", job.JobID),
+		zap.Int("num_clips", len(clipVideos)),
+		zap.Float64("actual_video_duration", actualVideoDuration),
+		zap.Int("requested_duration", job.Duration),
+	)
+
+	// Update side effects start time based on actual video duration
+	if job.SideEffectsText != "" {
+		job.SideEffectsStartTime = actualVideoDuration * 0.8
+		h.logger.Info("Updated side effects start time for actual video duration",
+			zap.String("job_id", job.JobID),
+			zap.Float64("side_effects_start_time", job.SideEffectsStartTime),
+		)
+	}
+
+	// STEP 4: Generate narrator voiceover AND background audio in parallel
+	// Both use the actual video duration for proper timing
+	type audioResult struct {
+		url string
+		err error
+	}
+
+	narratorChan := make(chan audioResult, 1)
+	musicChan := make(chan audioResult, 1)
+
+	// Start narrator voiceover generation (if configured)
+	needsNarrator := job.Voice != "" && job.AudioSpec.NarratorScript != ""
+	if needsNarrator {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					h.logger.Error("Panic in narrator generation",
+						zap.String("job_id", job.JobID),
+						zap.Any("panic", r),
+					)
+					narratorChan <- audioResult{err: fmt.Errorf("narrator generation panic: %v", r)}
+				}
+			}()
+
+			h.logger.Info("Generating narrator voiceover (parallel with music)",
+				zap.String("job_id", job.JobID),
+				zap.Float64("target_duration", actualVideoDuration),
+			)
+
+			narratorURL, err := h.generateNarratorVoiceover(
+				jobCtx,
+				job.UserID,
+				job.JobID,
+				job.Voice,
+				job.AudioSpec.NarratorScript,
+				job.SideEffectsStartTime,
+				int(actualVideoDuration),
+			)
+			narratorChan <- audioResult{url: narratorURL, err: err}
+		}()
+	} else {
+		// No narrator needed - send empty result
+		if job.Voice == "" {
+			h.logger.Info("Skipping narrator voiceover (voice not configured)", zap.String("job_id", job.JobID))
+		} else {
+			h.logger.Warn("Skipping narrator voiceover (narrator script missing)", zap.String("job_id", job.JobID))
+		}
+		narratorChan <- audioResult{url: "", err: nil}
+	}
+
+	// Start background music generation
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				h.logger.Error("Panic in music generation",
+					zap.String("job_id", job.JobID),
+					zap.Any("panic", r),
+				)
+				musicChan <- audioResult{err: fmt.Errorf("music generation panic: %v", r)}
+			}
+		}()
+
+		h.logger.Info("Generating background music (parallel with narrator)",
+			zap.String("job_id", job.JobID),
+			zap.Float64("target_duration", actualVideoDuration),
+		)
+
+		audioURL, err := h.generateAudio(jobCtx, job.UserID, job.JobID, script)
+		musicChan <- audioResult{url: audioURL, err: err}
+	}()
+
+	// Update job stage
 	job.Stage = "audio_generating"
 	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
 		h.logger.Error("Failed to update job stage",
@@ -538,28 +616,41 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 			zap.Error(err),
 		)
 	}
-	h.logger.Info("Generating audio", zap.String("job_id", job.JobID))
 
-	audioURL, err := h.generateAudio(jobCtx, job.UserID, job.JobID, script)
-	if err != nil {
-		h.failJob(jobCtx, job, audioFailureMessage, err, zap.String("stage", "audio_generating"))
+	// Wait for both audio tracks to complete
+	h.logger.Info("Waiting for audio generation to complete", zap.String("job_id", job.JobID))
+
+	narratorRes := <-narratorChan
+	if narratorRes.err != nil {
+		h.failJob(jobCtx, job, narratorFailureMessage, narratorRes.err, zap.String("stage", "narrator_generating"))
 		return
 	}
+	if narratorRes.url != "" {
+		job.NarratorAudioURL = narratorRes.url
+		h.logger.Info("Narrator voiceover complete",
+			zap.String("job_id", job.JobID),
+			zap.String("narrator_url", narratorRes.url),
+		)
+	}
+
+	musicRes := <-musicChan
+	if musicRes.err != nil {
+		h.failJob(jobCtx, job, audioFailureMessage, musicRes.err, zap.String("stage", "audio_generating"))
+		return
+	}
+	job.AudioURL = musicRes.url
+	h.logger.Info("Background music complete",
+		zap.String("job_id", job.JobID),
+		zap.String("audio_url", musicRes.url),
+	)
 
 	job.Stage = "audio_complete"
-	job.AudioURL = audioURL
-
 	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
-		h.logger.Error("Failed to update job with audio URL",
+		h.logger.Error("Failed to update job with audio URLs",
 			zap.String("job_id", job.JobID),
 			zap.Error(err),
 		)
 	}
-
-	h.logger.Info("Audio generation complete",
-		zap.String("job_id", job.JobID),
-		zap.String("audio_url", audioURL),
-	)
 
 	// STEP 5: Compose final video
 	job.Stage = "composing"
@@ -572,7 +663,7 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	}
 	h.logger.Info("Composing final video (video track only)", zap.String("job_id", job.JobID))
 
-	finalVideoKey, err := h.composeVideo(
+	mp4Key, webmKey, err := h.composeVideo(
 		jobCtx,
 		job.UserID,
 		job.JobID,
@@ -585,8 +676,8 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 		return
 	}
 
-	// STEP 6: Mark job complete with video URL
-	err = h.jobRepo.MarkJobComplete(jobCtx, job.JobID, finalVideoKey)
+	// STEP 6: Mark job complete (with both MP4 and WebM keys)
+	err = h.jobRepo.MarkJobComplete(jobCtx, job.JobID, mp4Key, webmKey)
 	if err != nil {
 		h.logger.Error("Failed to mark job complete", zap.String("job_id", job.JobID), zap.Error(err))
 		return
@@ -594,7 +685,8 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 
 	h.logger.Info("Video generation complete",
 		zap.String("job_id", job.JobID),
-		zap.String("video_key", finalVideoKey),
+		zap.String("mp4_key", mp4Key),
+		zap.String("webm_key", webmKey),
 	)
 }
 
@@ -685,7 +777,7 @@ func (h *GenerateHandler) generateClip(
 				zap.String("prediction_id", result.PredictionID),
 			)
 		}
-		
+
 		// Log every 60th attempt (every 5 minutes) with more detail
 		if attempt > 0 && attempt%60 == 0 {
 			h.logger.Warn("Veo generation taking longer than expected",
@@ -818,38 +910,26 @@ func (h *GenerateHandler) extractJobThumbnail(
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Download video
+	// Download video using S3 SDK (videoURL is a raw S3 URL, not presigned)
 	videoPath := filepath.Join(tmpDir, "video.mp4")
-	if err := h.downloadFile(ctx, videoURL, videoPath); err != nil {
+	videoS3Key := extractS3Key(videoURL)
+	if err := h.s3Service.DownloadFile(ctx, h.assetsBucket, videoS3Key, videoPath); err != nil {
 		return "", fmt.Errorf("failed to download video: %w", err)
 	}
 
-	// Extract middle frame (at 50% of video duration for best representation)
+	// Extract the very first frame of the video for the thumbnail
 	thumbnailPath := filepath.Join(tmpDir, "thumbnail.jpg")
 	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-ss", "0", // Seek to the very beginning
 		"-i", videoPath,
-		"-vf", "select='eq(pict_type\\,I)',scale=1280:-1", // Extract I-frame, scale to 1280px width
-		"-frames:v", "1",
+		"-frames:v", "1", // Extract exactly 1 frame
+		"-vf", "scale=1280:-1", // Scale to 1280px width, maintain aspect ratio
 		"-q:v", "2", // High quality
 		"-y", thumbnailPath,
 	)
 
 	if err := cmd.Run(); err != nil {
-		h.logger.Warn("Failed to extract thumbnail, trying simpler method",
-			zap.String("job_id", jobID),
-			zap.Error(err),
-		)
-		// Fallback: extract frame at 1 second
-		cmd = exec.CommandContext(ctx, "ffmpeg",
-			"-ss", "1",
-			"-i", videoPath,
-			"-frames:v", "1",
-			"-q:v", "2",
-			"-y", thumbnailPath,
-		)
-		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("failed to extract thumbnail: %w", err)
-		}
+		return "", fmt.Errorf("failed to extract thumbnail: %w", err)
 	}
 
 	// Upload to S3
@@ -980,12 +1060,39 @@ func (h *GenerateHandler) generateNarratorVoiceover(
 	}
 
 	processedAudioPath := filepath.Join(tmpDir, "narrator-processed.mp3")
-	durationSeconds := float64(duration)
 
-	if sideEffectsStartTime > 0 && durationSeconds > 0 && sideEffectsStartTime < durationSeconds {
+	// Get actual audio duration using ffprobe
+	audioDuration, err := getAudioDuration(ctx, rawAudioPath)
+	if err != nil {
+		h.logger.Warn("Failed to get audio duration, skipping variable speed",
+			zap.String("job_id", jobID),
+			zap.Error(err),
+		)
+		audioDuration = 0
+	}
+
+	h.logger.Info("TTS audio generated",
+		zap.String("job_id", jobID),
+		zap.Float64("audio_duration", audioDuration),
+		zap.Float64("video_duration", float64(duration)),
+		zap.Float64("requested_split_time", sideEffectsStartTime),
+	)
+
+	// Calculate proportional split point based on actual audio duration
+	// sideEffectsStartTime is 80% of video duration, we want 80% of audio duration
+	var actualSplitTime float64
+	if sideEffectsStartTime > 0 && float64(duration) > 0 {
+		// Use same ratio for audio: if side effects start at 80% of video, start at 80% of audio
+		ratio := sideEffectsStartTime / float64(duration)
+		actualSplitTime = audioDuration * ratio
+	}
+
+	// Only apply variable speed if we have valid audio and split point
+	if actualSplitTime > 0 && audioDuration > 0 && actualSplitTime < audioDuration-0.5 {
 		h.logger.Info("Applying variable speed to narrator audio",
 			zap.String("job_id", jobID),
-			zap.Float64("split_time", sideEffectsStartTime),
+			zap.Float64("audio_duration", audioDuration),
+			zap.Float64("split_time", actualSplitTime),
 		)
 
 		mainSegmentPath := filepath.Join(tmpDir, "main-segment.mp3")
@@ -995,7 +1102,7 @@ func (h *GenerateHandler) generateNarratorVoiceover(
 		cmd := exec.CommandContext(ctx, "ffmpeg",
 			"-i", rawAudioPath,
 			"-ss", "0",
-			"-to", fmt.Sprintf("%.2f", sideEffectsStartTime),
+			"-to", fmt.Sprintf("%.2f", actualSplitTime),
 			"-c", "copy",
 			"-y", mainSegmentPath,
 		)
@@ -1005,7 +1112,7 @@ func (h *GenerateHandler) generateNarratorVoiceover(
 
 		cmd = exec.CommandContext(ctx, "ffmpeg",
 			"-i", rawAudioPath,
-			"-ss", fmt.Sprintf("%.2f", sideEffectsStartTime),
+			"-ss", fmt.Sprintf("%.2f", actualSplitTime),
 			"-c", "copy",
 			"-y", sideEffectsSegmentPath,
 		)
@@ -1042,7 +1149,8 @@ func (h *GenerateHandler) generateNarratorVoiceover(
 		h.logger.Info("Skipping variable speed for narrator audio",
 			zap.String("job_id", jobID),
 			zap.Float64("side_effects_start_time", sideEffectsStartTime),
-			zap.Float64("duration_seconds", durationSeconds),
+			zap.Float64("audio_duration", audioDuration),
+			zap.Float64("actual_split_time", actualSplitTime),
 		)
 
 		if err := os.Rename(rawAudioPath, processedAudioPath); err != nil {
@@ -1098,10 +1206,37 @@ func (h *GenerateHandler) processAudio(ctx context.Context, userID string, jobID
 	return audioS3URL, nil
 }
 
+// getAudioDuration returns the duration of an audio file in seconds using ffprobe
+func getAudioDuration(ctx context.Context, audioPath string) (float64, error) {
+	cmd := exec.CommandContext(ctx, "ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		audioPath,
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe failed: %w", err)
+	}
+
+	durationStr := strings.TrimSpace(string(output))
+	duration, err := strconv.ParseFloat(durationStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse duration '%s': %w", durationStr, err)
+	}
+
+	return duration, nil
+}
+
 // detectAvailableFont returns the first available font file path from a prioritized list.
 func detectAvailableFont(logger *zap.Logger) string {
 	fontPaths := []string{
+		// Alpine Linux (Docker container)
+		"/usr/share/fonts/ttf-dejavu/DejaVuSans-Bold.ttf",
+		"/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf",
+		// Debian/Ubuntu
 		"/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+		"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 		"/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
 		"/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
 	}
@@ -1298,12 +1433,13 @@ func wrapText(text string, videoWidth int, fontSize float64) (string, int) {
 
 // composeVideo concatenates video clips and prepares the final video track (no audio mixing).
 // 4-Track Architecture:
-//   - Video Track: final/video.mp4 (output of this function)
+//   - Video Track: final/video.mp4 and final/video.webm (output of this function)
 //   - Music Track: audio/background-music.mp3 (generated separately)
 //   - Narrator Track: audio/narrator-voiceover.mp3 (generated separately)
 //   - Text Track: side_effects_text metadata (rendered by the frontend)
 //
 // All audio playback, mixing, and synchronization happens in the frontend.
+// Returns: (mp4Key, webmKey, error) - webmKey may be empty if WebM encoding fails
 func (h *GenerateHandler) composeVideo(
 	ctx context.Context,
 	userID string,
@@ -1311,7 +1447,7 @@ func (h *GenerateHandler) composeVideo(
 	clips []ClipVideo,
 	sideEffectsText string,
 	sideEffectsStartTime float64,
-) (string, error) {
+) (string, string, error) {
 	trimmedText := strings.TrimSpace(sideEffectsText)
 	var totalDuration float64
 	for _, clip := range clips {
@@ -1327,12 +1463,12 @@ func (h *GenerateHandler) composeVideo(
 	)
 
 	if sideEffectsStartTime > 0 && trimmedText == "" {
-		return "", fmt.Errorf("side effects text is required when sideEffectsStartTime is provided")
+		return "", "", fmt.Errorf("side effects text is required when sideEffectsStartTime is provided")
 	}
 
 	tmpDir := filepath.Join("/tmp", jobID, "composition")
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create temp dir: %w", err)
+		return "", "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -1345,7 +1481,7 @@ func (h *GenerateHandler) composeVideo(
 	for i, clip := range clips {
 		clipPath := filepath.Join(tmpDir, fmt.Sprintf("clip-%d.mp4", i+1))
 		if err := h.s3Service.DownloadFile(ctx, h.assetsBucket, extractS3Key(clip.VideoURL), clipPath); err != nil {
-			return "", fmt.Errorf("failed to download clip %d: %w", i+1, err)
+			return "", "", fmt.Errorf("failed to download clip %d: %w", i+1, err)
 		}
 		clipPaths = append(clipPaths, clipPath)
 	}
@@ -1354,13 +1490,13 @@ func (h *GenerateHandler) composeVideo(
 	concatFile := filepath.Join(tmpDir, "concat.txt")
 	f, err := os.Create(concatFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to create concat file: %w", err)
+		return "", "", fmt.Errorf("failed to create concat file: %w", err)
 	}
 	for _, path := range clipPaths {
 		fmt.Fprintf(f, "file '%s'\n", path)
 	}
 	if err := f.Close(); err != nil {
-		return "", fmt.Errorf("failed to close concat file: %w", err)
+		return "", "", fmt.Errorf("failed to close concat file: %w", err)
 	}
 
 	// Concatenate clips (video track only)
@@ -1383,8 +1519,17 @@ func (h *GenerateHandler) composeVideo(
 			zap.String("output", string(output)),
 			zap.Error(err),
 		)
-		return "", fmt.Errorf("ffmpeg concat failed: %w", err)
+		return "", "", fmt.Errorf("ffmpeg concat failed: %w", err)
 	}
+
+	// Detect source FPS for interpolation decision
+	sourceFPS := probeVideoFPS(finalVideo)
+	needsInterpolation := sourceFPS > 0 && sourceFPS < 30
+	h.logger.Info("Video FPS detected",
+		zap.String("job_id", jobID),
+		zap.Float64("source_fps", sourceFPS),
+		zap.Bool("needs_interpolation", needsInterpolation),
+	)
 
 	if trimmedText != "" && totalDuration > 0 {
 		videoWidth, videoHeight, err := probeVideoDimensions(finalVideo)
@@ -1399,7 +1544,7 @@ func (h *GenerateHandler) composeVideo(
 
 		config, err := buildDrawtextConfig(h.logger, trimmedText, sideEffectsStartTime, totalDuration, videoWidth, videoHeight)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		if config != nil {
 			h.logger.Info("Applying side effects text overlay",
@@ -1411,12 +1556,21 @@ func (h *GenerateHandler) composeVideo(
 			)
 
 			videoWithText := filepath.Join(tmpDir, "video_with_text.mp4")
+			// Combine FPS interpolation with text overlay if needed (single re-encode)
+			vfFilter := config.Filter
+			if needsInterpolation {
+				vfFilter = "fps=30," + config.Filter
+				h.logger.Info("Combining FPS interpolation with text overlay",
+					zap.String("job_id", jobID),
+				)
+			}
 			cmd = exec.CommandContext(ctx, "ffmpeg",
 				"-i", finalVideo,
-				"-vf", config.Filter,
+				"-vf", vfFilter,
 				"-c:v", "libx264",
 				"-preset", "medium",
 				"-crf", "21",
+				"-an",
 				"-y", videoWithText,
 			)
 			if output, err := cmd.CombinedOutput(); err != nil {
@@ -1425,7 +1579,7 @@ func (h *GenerateHandler) composeVideo(
 					zap.String("output", string(output)),
 					zap.Error(err),
 				)
-				return "", fmt.Errorf("ffmpeg text overlay failed: %w", err)
+				return "", "", fmt.Errorf("ffmpeg text overlay failed: %w", err)
 			}
 
 			h.logger.Info("Text overlay applied successfully", zap.String("job_id", jobID))
@@ -1440,22 +1594,96 @@ func (h *GenerateHandler) composeVideo(
 		)
 	}
 
-	// Upload final video to S3
-	h.logger.Info("Uploading final video to S3",
+	// Apply FPS interpolation if needed and not already done via text overlay
+	if needsInterpolation && !strings.Contains(finalVideo, "video_with_text") {
+		h.logger.Info("Applying standalone FPS interpolation to 30fps",
+			zap.String("job_id", jobID),
+			zap.Float64("source_fps", sourceFPS),
+		)
+		interpolatedVideo := filepath.Join(tmpDir, "interpolated.mp4")
+		cmd := exec.CommandContext(ctx, "ffmpeg",
+			"-i", finalVideo,
+			"-vf", "fps=30",
+			"-c:v", "libx264",
+			"-preset", "medium",
+			"-crf", "21",
+			"-an",
+			"-y", interpolatedVideo,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			h.logger.Warn("FPS interpolation failed, using original video",
+				zap.String("job_id", jobID),
+				zap.Float64("source_fps", sourceFPS),
+				zap.String("output", string(output)),
+				zap.Error(err),
+			)
+			// Graceful fallback: continue with original FPS video
+		} else {
+			h.logger.Info("FPS interpolation complete",
+				zap.String("job_id", jobID),
+			)
+			finalVideo = interpolatedVideo
+		}
+	}
+
+	// Upload final MP4 video to S3
+	h.logger.Info("Uploading final MP4 video to S3",
 		zap.String("job_id", jobID),
 	)
-	finalS3Key := buildFinalVideoKey(userID, jobID)
-	finalURL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, finalS3Key, finalVideo, "video/mp4")
+	mp4S3Key := buildFinalVideoKey(userID, jobID)
+	_, err = h.s3Service.UploadFile(ctx, h.assetsBucket, mp4S3Key, finalVideo, "video/mp4")
 	if err != nil {
-		return "", fmt.Errorf("failed to upload final video: %w", err)
+		return "", "", fmt.Errorf("failed to upload MP4 video: %w", err)
+	}
+
+	// Transcode to WebM (VP9) for web-optimized delivery
+	h.logger.Info("Transcoding to WebM format",
+		zap.String("job_id", jobID),
+	)
+	webmVideo := filepath.Join(tmpDir, "final.webm")
+	cmd = exec.CommandContext(ctx, "ffmpeg",
+		"-i", finalVideo,
+		"-c:v", "libvpx-vp9",
+		"-crf", "30",
+		"-b:v", "0",
+		"-row-mt", "1",
+		"-an", // No audio in video file
+		"-y", webmVideo,
+	)
+
+	var webmS3Key string
+	if output, err := cmd.CombinedOutput(); err != nil {
+		h.logger.Warn("WebM transcode failed, MP4 still available",
+			zap.String("job_id", jobID),
+			zap.String("output", string(output)),
+			zap.Error(err),
+		)
+		// Don't fail - MP4 is still available
+	} else {
+		// Upload WebM to S3
+		webmS3Key = buildFinalWebMKey(userID, jobID)
+		_, err = h.s3Service.UploadFile(ctx, h.assetsBucket, webmS3Key, webmVideo, "video/webm")
+		if err != nil {
+			h.logger.Warn("Failed to upload WebM, MP4 still available",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+			webmS3Key = "" // Clear key since upload failed
+		} else {
+			h.logger.Info("WebM uploaded successfully",
+				zap.String("job_id", jobID),
+				zap.String("webm_key", webmS3Key),
+			)
+		}
 	}
 
 	h.logger.Info("Video composition complete",
 		zap.String("job_id", jobID),
-		zap.String("final_url", finalURL),
+		zap.String("mp4_key", mp4S3Key),
+		zap.String("webm_key", webmS3Key),
 	)
 
-	return finalS3Key, nil
+	return mp4S3Key, webmS3Key, nil
 }
 
 // downloadFile downloads a file from URL to local path
@@ -1487,6 +1715,18 @@ func (h *GenerateHandler) downloadFile(ctx context.Context, url string, destPath
 
 // extractS3Key extracts the S3 key from an S3 URL
 func extractS3Key(s3URL string) string {
+	// Strip query parameters first (handles presigned URLs stored in DB)
+	// Check for both literal "?" and URL-encoded "%3F"
+	if idx := strings.Index(s3URL, "?"); idx != -1 {
+		s3URL = s3URL[:idx]
+	}
+	if idx := strings.Index(s3URL, "%3F"); idx != -1 {
+		s3URL = s3URL[:idx]
+	}
+	if idx := strings.Index(s3URL, "%3f"); idx != -1 {
+		s3URL = s3URL[:idx]
+	}
+
 	// Extract key from URL like https://bucket.s3.amazonaws.com/key or https://s3.amazonaws.com/bucket/key
 	parts := strings.Split(s3URL, "/")
 	if len(parts) < 4 {
@@ -1525,4 +1765,39 @@ func probeVideoDimensions(videoPath string) (int, int, error) {
 		return 0, 0, fmt.Errorf("failed to parse ffprobe dimensions: %w", err)
 	}
 	return width, height, nil
+}
+
+// probeVideoFPS returns the frame rate of a video file as a float64.
+// Returns 0 on error (caller should handle gracefully).
+func probeVideoFPS(videoPath string) float64 {
+	cmd := exec.Command(
+		"ffprobe",
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=r_frame_rate",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		videoPath,
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	// Output format is "num/den" (e.g., "24/1" or "30000/1001")
+	fpsStr := strings.TrimSpace(string(output))
+	parts := strings.Split(fpsStr, "/")
+	if len(parts) != 2 {
+		return 0
+	}
+
+	num, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		return 0
+	}
+	den, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil || den == 0 {
+		return 0
+	}
+
+	return num / den
 }

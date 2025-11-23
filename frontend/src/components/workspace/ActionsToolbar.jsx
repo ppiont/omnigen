@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
+import { ChevronDown } from "lucide-react";
 
 /**
  * Renders Download and Delete controls for a workspace video. Heavy lifting
@@ -11,7 +12,10 @@ import PropTypes from "prop-types";
 function ActionsToolbar({ jobData, onDownload, onDelete }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showFormatMenu, setShowFormatMenu] = useState(false);
+  const formatMenuRef = useRef(null);
 
+  const hasWebM = Boolean(jobData?.webm_video_url);
   const isDownloadDisabled =
     !jobData?.video_url ||
     jobData?.status !== "completed" ||
@@ -44,13 +48,43 @@ function ActionsToolbar({ jobData, onDownload, onDelete }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [closeModal, isModalOpen]);
 
+  // Close format menu when clicking outside
+  useEffect(() => {
+    if (!showFormatMenu) return undefined;
+
+    const handleClickOutside = (event) => {
+      if (formatMenuRef.current && !formatMenuRef.current.contains(event.target)) {
+        setShowFormatMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showFormatMenu]);
+
   const handleDownloadClick = () => {
     if (isDownloadDisabled || !jobData || typeof onDownload !== "function") {
       return;
     }
 
+    // If WebM is available, show format menu; otherwise download MP4 directly
+    if (hasWebM) {
+      setShowFormatMenu(!showFormatMenu);
+    } else {
+      try {
+        onDownload(jobData, "mp4");
+      } catch {
+        window.alert("Unable to download the video. Please try again.");
+      }
+    }
+  };
+
+  const handleFormatSelect = (format) => {
+    setShowFormatMenu(false);
+    if (!jobData || typeof onDownload !== "function") return;
+
     try {
-      onDownload(jobData);
+      onDownload(jobData, format);
     } catch {
       window.alert("Unable to download the video. Please try again.");
     }
@@ -92,35 +126,65 @@ function ActionsToolbar({ jobData, onDownload, onDelete }) {
         role="toolbar"
         aria-label="Video actions"
       >
-        <button
-          type="button"
-          className="action-btn action-btn-download"
-          onClick={handleDownloadClick}
-          disabled={isDownloadDisabled}
-          title={
-            isDownloadDisabled
-              ? "Video is not ready for download yet"
-              : "Download video"
-          }
-          aria-disabled={isDownloadDisabled}
-        >
-          <svg
-            className="action-icon"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="download-button-wrapper" ref={formatMenuRef}>
+          <button
+            type="button"
+            className="action-btn action-btn-download"
+            onClick={handleDownloadClick}
+            disabled={isDownloadDisabled}
+            title={
+              isDownloadDisabled
+                ? "Video is not ready for download yet"
+                : hasWebM
+                ? "Choose download format"
+                : "Download video (MP4)"
+            }
+            aria-disabled={isDownloadDisabled}
+            aria-haspopup={hasWebM ? "true" : undefined}
+            aria-expanded={hasWebM ? showFormatMenu : undefined}
           >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          <span className="action-btn-text">Download</span>
-        </button>
+            <svg
+              className="action-icon"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span className="action-btn-text">Download</span>
+            {hasWebM && <ChevronDown size={16} className="dropdown-icon" />}
+          </button>
+
+          {showFormatMenu && hasWebM && (
+            <div className="format-dropdown" role="menu">
+              <button
+                type="button"
+                className="format-option"
+                onClick={() => handleFormatSelect("mp4")}
+                role="menuitem"
+              >
+                <span className="format-name">MP4</span>
+                <span className="format-desc">Best compatibility</span>
+              </button>
+              <button
+                type="button"
+                className="format-option"
+                onClick={() => handleFormatSelect("webm")}
+                role="menuitem"
+              >
+                <span className="format-name">WebM</span>
+                <span className="format-desc">Smaller file size</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         <button
           type="button"
@@ -226,8 +290,9 @@ ActionsToolbar.propTypes = {
     job_id: PropTypes.string.isRequired,
     status: PropTypes.string.isRequired,
     video_url: PropTypes.string,
+    webm_video_url: PropTypes.string,
   }).isRequired,
-  onDownload: PropTypes.func,
+  onDownload: PropTypes.func, // (jobData, format: 'mp4' | 'webm') => void
   onDelete: PropTypes.func,
 };
 

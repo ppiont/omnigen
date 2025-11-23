@@ -21,8 +21,8 @@ type JobRepository interface {
 	// UpdateJobStageWithMetadata updates stage and metadata atomically
 	UpdateJobStageWithMetadata(ctx context.Context, jobID string, stage string, metadata map[string]interface{}) error
 
-	// MarkJobComplete marks a job as completed with video key
-	MarkJobComplete(ctx context.Context, jobID string, videoKey string) error
+	// MarkJobComplete marks a job as completed with video keys (MP4 required, WebM optional)
+	MarkJobComplete(ctx context.Context, jobID string, videoKey string, webmVideoKey ...string) error
 
 	// MarkJobFailed marks a job as failed with error message
 	MarkJobFailed(ctx context.Context, jobID string, errorMsg string) error

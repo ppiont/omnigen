@@ -1,10 +1,20 @@
 package domain
 
+// VisualConstants holds the consistent visual elements across all scenes (for pharmaceutical ads)
+type VisualConstants struct {
+	PatientArchetype       string `json:"patient_archetype,omitempty"`
+	ConditionVisualization string `json:"condition_visualization,omitempty"`
+	BrandPalette           string `json:"brand_palette,omitempty"`
+	MedicationTreatment    string `json:"medication_treatment,omitempty"`
+	LightingArc            string `json:"lighting_arc,omitempty"`
+}
+
 // Script represents a complete ad creative script with production-ready scene specifications
 type Script struct {
-	ScriptID         string    `json:"script_id" dynamodbav:"script_id"`
-	UserID           string    `json:"user_id" dynamodbav:"user_id"`
-	Title            string    `json:"title" dynamodbav:"title"`
+	ScriptID         string           `json:"script_id" dynamodbav:"script_id"`
+	UserID           string           `json:"user_id" dynamodbav:"user_id"`
+	VisualConstants  *VisualConstants `json:"visual_constants,omitempty" dynamodbav:"visual_constants,omitempty"`
+	Title            string           `json:"title" dynamodbav:"title"`
 	TotalDuration    int       `json:"total_duration" dynamodbav:"total_duration"` // seconds
 	Scenes           []Scene   `json:"scenes" dynamodbav:"scenes"`
 	AudioSpec        AudioSpec `json:"audio_spec" dynamodbav:"audio_spec"`

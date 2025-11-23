@@ -21,7 +21,9 @@ const categories = [
   "Tutorial",
 ];
 const styles = ["Clinical", "Professional", "Documentary", "Informative", "Trustworthy"];
-const durations = ["10s", "20s", "30s", "40s", "50s", "60s"]; // Must be multiple of 10
+// Valid durations must be achievable with Veo 3.1 clips (4s, 6s, or 8s each)
+// 10=4+6, 16=8+8, 20=4+8+8, 24=8+8+8, 30=6+6+6+6+6, 40=8+8+8+8+8, 60=many combos
+const durations = ["10s", "16s", "20s", "24s", "30s", "40s", "60s"];
 const aspects = ["16:9", "9:16", "1:1"]; // Backend only supports these
 
 const SIDE_EFFECTS_MIN = 10;
@@ -97,7 +99,7 @@ function Create() {
     },
     onFailed: (finalProgress) => {
       console.error("[CREATE] ❌ Job failed:", finalProgress);
-      
+
       // Extract detailed error message from job if available
       let errorMessage = "Video generation failed. Please try again.";
       if (finalProgress?.error_message) {
@@ -106,7 +108,7 @@ function Create() {
       } else if (finalProgress?.message) {
         errorMessage = finalProgress.message;
       }
-      
+
       setGenerationState("error");
       setGenerationError(errorMessage);
       setIsGenerating(false);
@@ -263,10 +265,44 @@ function Create() {
     return "1-2 min";
   };
 
+  // Cost calculation constants (based on pipeline.md)
+  const COST_SCRIPT_GPT4O = 0.20;        // Fixed cost for script generation
+  const COST_VIDEO_VEO_PER_SECOND = 0.07; // Veo 3.1 cost per second
+  const COST_AUDIO_MINIMAX = 0.50;       // Fixed cost for background music
+  const COST_TTS_OPENAI = 0.10;          // Fixed cost for narrator TTS (pharmaceutical ads only)
+  const COST_STORAGE_S3 = 0.01;          // Estimated S3 storage cost
+
+  // Calculate estimated cost based on user selections (updates in real-time)
+  const estimatedCost = useMemo(() => {
+    const durationNum = parseInt(selectedDuration) || 30;
+    
+    // Check if this is a pharmaceutical ad (has voice and side effects)
+    const isPharmaceuticalAd = voice && sideEffects.trim().length >= SIDE_EFFECTS_MIN;
+    
+    // Calculate costs
+    const scriptCost = COST_SCRIPT_GPT4O;
+    const videoCost = durationNum * COST_VIDEO_VEO_PER_SECOND;
+    const audioCost = COST_AUDIO_MINIMAX;
+    const ttsCost = isPharmaceuticalAd ? COST_TTS_OPENAI : 0;
+    const storageCost = COST_STORAGE_S3;
+    
+    const totalCost = scriptCost + videoCost + audioCost + ttsCost + storageCost;
+    
+    return {
+      total: totalCost,
+      breakdown: {
+        script: scriptCost,
+        video: videoCost,
+        audio: audioCost,
+        tts: ttsCost,
+        storage: storageCost,
+      },
+      isPharmaceuticalAd,
+    };
+  }, [selectedDuration, voice, sideEffects]);
+
   const getEstimatedCost = () => {
-    const durationNum = parseInt(selectedDuration);
-    const cost = (durationNum / 30) * 1.5;
-    return `$${cost.toFixed(2)}`;
+    return `$${estimatedCost.total.toFixed(2)}`;
   };
 
   const handleGenerate = async () => {
@@ -332,13 +368,14 @@ function Create() {
       return;
     }
 
-    // Validate duration is multiple of 10
+    // Validate duration is achievable with Veo 3.1 clips (4s, 6s, or 8s)
     const durationNum = parseInt(selectedDuration);
-    if (durationNum % 10 !== 0) {
+    const validDurations = [10, 16, 20, 24, 30, 40, 60];
+    if (!validDurations.includes(durationNum)) {
       console.warn(
-        "[CREATE] ⚠️ Validation failed: Duration must be multiple of 10"
+        "[CREATE] ⚠️ Validation failed: Duration must be valid for Veo 3.1"
       );
-      setValidationError("Duration must be 10, 20, 30, 40, 50, or 60 seconds");
+      setValidationError("Duration must be 10, 16, 20, 24, 30, 40, or 60 seconds");
       return;
     }
 
@@ -581,15 +618,74 @@ function Create() {
 
           {/* Estimation - only show when idle */}
           {generationState === "idle" && (
-            <div className="estimation-grid">
-              <div className="estimation-item">
-                <span className="estimation-label">Estimated time</span>
-                <span className="estimation-value">{getEstimatedTime()}</span>
+            <div className="estimation-section">
+              <div className="estimation-grid">
+                <div className="estimation-item">
+                  <span className="estimation-label">Estimated time</span>
+                  <span className="estimation-value">{getEstimatedTime()}</span>
+                </div>
+                <div className="estimation-item">
+                  <span className="estimation-label">Estimated cost</span>
+                  <span 
+                    className="estimation-value cost-total" 
+                    title={`Script: $${estimatedCost.breakdown.script.toFixed(2)} | Video: $${estimatedCost.breakdown.video.toFixed(2)} | Audio: $${estimatedCost.breakdown.audio.toFixed(2)}${estimatedCost.isPharmaceuticalAd ? ` | TTS: $${estimatedCost.breakdown.tts.toFixed(2)}` : ''} | Storage: $${estimatedCost.breakdown.storage.toFixed(2)}`}
+                  >
+                    {getEstimatedCost()}
+                  </span>
+                </div>
               </div>
-              <div className="estimation-item">
-                <span className="estimation-label">Estimated cost</span>
-                <span className="estimation-value">{getEstimatedCost()}</span>
-              </div>
+              
+              {/* Cost Breakdown - Expandable */}
+              <details className="cost-breakdown">
+                <summary className="cost-breakdown-summary">
+                  View cost breakdown
+                </summary>
+                <div className="cost-breakdown-list">
+                  <div className="cost-breakdown-item">
+                    <span className="cost-item-label">Script Generation (GPT-4o)</span>
+                    <span className="cost-item-value">
+                      ${estimatedCost.breakdown.script.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="cost-breakdown-item">
+                    <span className="cost-item-label">
+                      Video Generation (Veo 3.1)
+                      <span className="cost-item-detail">
+                        {parseInt(selectedDuration)}s × ${COST_VIDEO_VEO_PER_SECOND.toFixed(2)}/s
+                      </span>
+                    </span>
+                    <span className="cost-item-value">
+                      ${estimatedCost.breakdown.video.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="cost-breakdown-item">
+                    <span className="cost-item-label">Background Music (Minimax)</span>
+                    <span className="cost-item-value">
+                      ${estimatedCost.breakdown.audio.toFixed(2)}
+                    </span>
+                  </div>
+                  {estimatedCost.isPharmaceuticalAd && (
+                    <div className="cost-breakdown-item">
+                      <span className="cost-item-label">Narrator Voiceover (OpenAI TTS)</span>
+                      <span className="cost-item-value">
+                        ${estimatedCost.breakdown.tts.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="cost-breakdown-item">
+                    <span className="cost-item-label">Storage (S3)</span>
+                    <span className="cost-item-value">
+                      ${estimatedCost.breakdown.storage.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="cost-breakdown-item cost-breakdown-total">
+                    <span className="cost-item-label">Total</span>
+                    <span className="cost-item-value">
+                      ${estimatedCost.total.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </details>
             </div>
           )}
         </section>

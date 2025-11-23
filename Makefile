@@ -168,6 +168,25 @@ deploy-frontend: frontend-build ## Build and deploy frontend to S3 and invalidat
 	@printf '${GREEN}Frontend deployed successfully!${NC}\n'
 	@printf 'URL: https://%s\n' "$$(cd $(INFRA_DIR) && terraform output -raw cloudfront_domain_name)"
 
+# Local Development
+
+dev: ## Start all services locally with Docker Compose
+	@printf '${CYAN}Starting local development environment...${NC}\n'
+	@docker compose up --build
+	@printf '${GREEN}Local environment started!${NC}\n'
+
+dev-down: ## Stop local development environment
+	@printf '${CYAN}Stopping local development environment...${NC}\n'
+	@docker compose down
+	@printf '${GREEN}Local environment stopped!${NC}\n'
+
+dev-logs: ## Tail logs from local development services
+	@docker compose logs -f
+
+dev-api: ## Start only the backend API locally (requires external AWS/LocalStack)
+	@printf '${CYAN}Starting backend API locally...${NC}\n'
+	@cd backend && SKIP_AUTH=true go run ./cmd/api
+
 # Logging commands
 
 logs-ecs: ## Tail ECS logs

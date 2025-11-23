@@ -1,5 +1,348 @@
 basePath: /api/v1
 definitions:
+  domain.BrandColors:
+    properties:
+      accent:
+        description: Accent/highlight colors
+        items:
+          $ref: '#/definitions/domain.ColorSpec'
+        type: array
+      neutral:
+        description: Grays, blacks, whites
+        items:
+          $ref: '#/definitions/domain.ColorSpec'
+        type: array
+      primary:
+        description: Main brand colors
+        items:
+          $ref: '#/definitions/domain.ColorSpec'
+        type: array
+      prohibited:
+        description: Colors to avoid
+        items:
+          $ref: '#/definitions/domain.ColorSpec'
+        type: array
+      secondary:
+        description: Supporting colors
+        items:
+          $ref: '#/definitions/domain.ColorSpec'
+        type: array
+    type: object
+  domain.BrandGuidelineRequest:
+    properties:
+      brand_voice:
+        $ref: '#/definitions/domain.BrandVoice'
+      colors:
+        $ref: '#/definitions/domain.BrandColors'
+      description:
+        type: string
+      image_style:
+        $ref: '#/definitions/domain.ImageStyle'
+      logo_assets:
+        items:
+          $ref: '#/definitions/domain.LogoAsset'
+        type: array
+      name:
+        type: string
+      parse_from_document:
+        description: For document parsing - client can upload a document and we'll
+          extract guidelines
+        type: boolean
+      source_document:
+        $ref: '#/definitions/domain.DocumentRef'
+      typography:
+        $ref: '#/definitions/domain.BrandTypography'
+      video_style:
+        $ref: '#/definitions/domain.VideoStyle'
+    required:
+    - name
+    type: object
+  domain.BrandGuidelineSummary:
+    properties:
+      created_at:
+        type: integer
+      description:
+        type: string
+      guideline_id:
+        type: string
+      has_colors:
+        type: boolean
+      has_image_style:
+        type: boolean
+      has_logos:
+        type: boolean
+      has_video_style:
+        type: boolean
+      has_voice:
+        type: boolean
+      is_active:
+        type: boolean
+      name:
+        type: string
+      updated_at:
+        type: integer
+    type: object
+  domain.BrandGuidelines:
+    properties:
+      brand_voice:
+        allOf:
+        - $ref: '#/definitions/domain.BrandVoice'
+        description: Tone and Messaging
+      colors:
+        allOf:
+        - $ref: '#/definitions/domain.BrandColors'
+        description: Visual Brand Elements
+      created_at:
+        description: Unix timestamp
+        type: integer
+      description:
+        description: Optional description
+        type: string
+      guideline_id:
+        description: Primary key
+        type: string
+      image_style:
+        allOf:
+        - $ref: '#/definitions/domain.ImageStyle'
+        description: Media Guidelines
+      is_active:
+        description: Metadata
+        type: boolean
+      logo_assets:
+        description: Logo variations
+        items:
+          $ref: '#/definitions/domain.LogoAsset'
+        type: array
+      name:
+        description: User-friendly name for the guidelines
+        type: string
+      source_document:
+        allOf:
+        - $ref: '#/definitions/domain.DocumentRef'
+        description: Document References
+      typography:
+        allOf:
+        - $ref: '#/definitions/domain.BrandTypography'
+        description: Font preferences
+      updated_at:
+        description: Unix timestamp
+        type: integer
+      user_id:
+        description: User who uploaded this
+        type: string
+      video_style:
+        allOf:
+        - $ref: '#/definitions/domain.VideoStyle'
+        description: Video-specific guidelines
+    type: object
+  domain.BrandTypography:
+    properties:
+      fallbacks:
+        description: Web-safe fallback fonts
+        items:
+          type: string
+        type: array
+      primary:
+        allOf:
+        - $ref: '#/definitions/domain.FontSpec'
+        description: Main brand font
+      restrictions:
+        description: Fonts to avoid
+        items:
+          type: string
+        type: array
+      secondary:
+        allOf:
+        - $ref: '#/definitions/domain.FontSpec'
+        description: Supporting font
+    type: object
+  domain.BrandVoice:
+    properties:
+      do_list:
+        description: Things to do in messaging
+        items:
+          type: string
+        type: array
+      dont_list:
+        description: Things to avoid
+        items:
+          type: string
+        type: array
+      messaging_style:
+        description: formal, casual, playful, etc.
+        type: string
+      personality:
+        description: Brand personality traits
+        items:
+          type: string
+        type: array
+      sample_messages:
+        description: Example brand messages
+        items:
+          type: string
+        type: array
+      tone_keywords:
+        description: Descriptive tone words
+        items:
+          type: string
+        type: array
+    type: object
+  domain.ColorSpec:
+    properties:
+      cmyk:
+        description: For print
+        type: string
+      description:
+        description: Usage context
+        type: string
+      hex:
+        description: '#FF0000'
+        type: string
+      name:
+        description: Color name (e.g., "Primary Blue")
+        type: string
+      pantone:
+        description: Pantone code
+        type: string
+      rgb:
+        description: rgb(255, 0, 0)
+        type: string
+    type: object
+  domain.DocumentRef:
+    properties:
+      content_type:
+        description: MIME type
+        type: string
+      file_size:
+        description: File size in bytes
+        type: integer
+      filename:
+        description: Original filename
+        type: string
+      s3_url:
+        description: S3 storage location
+        type: string
+      uploaded_at:
+        description: Unix timestamp
+        type: integer
+    type: object
+  domain.FontSpec:
+    properties:
+      family:
+        description: Font family name
+        type: string
+      styles:
+        description: Available styles (italic, normal)
+        items:
+          type: string
+        type: array
+      usage_context:
+        description: When to use this font
+        type: string
+      weights:
+        description: Available weights (light, regular, bold)
+        items:
+          type: string
+        type: array
+    type: object
+  domain.ImageStyle:
+    properties:
+      color_treatment:
+        description: Color processing style
+        type: string
+      composition:
+        description: Composition preferences
+        items:
+          type: string
+        type: array
+      mood:
+        description: Overall mood/feeling
+        type: string
+      restrictions:
+        description: What to avoid in images
+        items:
+          type: string
+        type: array
+      style:
+        description: Photography style
+        type: string
+      subjects:
+        description: Preferred subjects/themes
+        items:
+          type: string
+        type: array
+    type: object
+  domain.LogoAsset:
+    properties:
+      asset_id:
+        description: Unique identifier
+        type: string
+      color_type:
+        description: full-color, monochrome, white, etc.
+        type: string
+      content_type:
+        description: MIME type
+        type: string
+      file_size:
+        description: File size in bytes
+        type: integer
+      name:
+        description: Logo variant name
+        type: string
+      s3_url:
+        description: S3 storage location
+        type: string
+      usage:
+        description: Usage guidelines
+        type: string
+      variant:
+        description: horizontal, vertical, icon, etc.
+        type: string
+    type: object
+  domain.TextOverlayStyle:
+    properties:
+      animation:
+        description: Animation style for text
+        type: string
+      background:
+        description: Background treatment for text
+        type: string
+      color:
+        description: Text color (often from brand colors)
+        type: string
+      font_family:
+        description: Preferred font for overlays
+        type: string
+      font_size:
+        description: Size guidelines (large, medium, small)
+        type: string
+      position:
+        description: Positioning preference
+        type: string
+    type: object
+  domain.VideoStyle:
+    properties:
+      camera_movement:
+        description: Preferred camera movements
+        items:
+          type: string
+        type: array
+      color_grading:
+        description: Color grading style
+        type: string
+      pacing_style:
+        description: fast, medium, slow
+        type: string
+      text_overlays:
+        allOf:
+        - $ref: '#/definitions/domain.TextOverlayStyle'
+        description: Text overlay guidelines
+      transition_type:
+        description: Preferred transitions
+        items:
+          type: string
+        type: array
+    type: object
   errors.APIError:
     properties:
       code:
@@ -151,6 +494,8 @@ definitions:
         type: string
       job_id:
         type: string
+      model:
+        type: string
       narrator_audio_url:
         type: string
       progress_percent:
@@ -178,6 +523,10 @@ definitions:
       updated_at:
         type: integer
       video_url:
+        description: MP4 format
+        type: string
+      webm_video_url:
+        description: WebM format (VP9)
         type: string
     type: object
   handlers.ListJobsResponse:
@@ -239,6 +588,26 @@ definitions:
     - access_token
     - id_token
     - refresh_token
+    type: object
+  handlers.RegenerateRequest:
+    properties:
+      cascade:
+        description: Regenerate subsequent scenes too
+        type: boolean
+    type: object
+  handlers.RegenerateResponse:
+    properties:
+      cascade_count:
+        description: How many subsequent scenes regenerated
+        type: integer
+      clip_url:
+        type: string
+      job_id:
+        type: string
+      new_version:
+        type: integer
+      scene_number:
+        type: integer
     type: object
   handlers.UserResponse:
     properties:
@@ -354,6 +723,214 @@ paths:
       summary: Refresh access token
       tags:
       - auth
+  /api/v1/brand-guidelines:
+    get:
+      description: Get all brand guidelines for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.BrandGuidelineSummary'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List user's brand guidelines
+      tags:
+      - brand-guidelines
+    post:
+      consumes:
+      - application/json
+      description: Create new brand guidelines for the authenticated user
+      parameters:
+      - description: Brand guideline data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.BrandGuidelineRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.BrandGuidelines'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create brand guidelines
+      tags:
+      - brand-guidelines
+  /api/v1/brand-guidelines/{id}:
+    delete:
+      description: Delete specific brand guidelines
+      parameters:
+      - description: Guideline ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete brand guidelines
+      tags:
+      - brand-guidelines
+    get:
+      description: Get specific brand guidelines by ID
+      parameters:
+      - description: Guideline ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.BrandGuidelines'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get brand guidelines by ID
+      tags:
+      - brand-guidelines
+    put:
+      consumes:
+      - application/json
+      description: Update existing brand guidelines
+      parameters:
+      - description: Guideline ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated brand guideline data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/domain.BrandGuidelineRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.BrandGuidelines'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update brand guidelines
+      tags:
+      - brand-guidelines
+  /api/v1/brand-guidelines/{id}/activate:
+    post:
+      description: Set specific brand guidelines as active for the user
+      parameters:
+      - description: Guideline ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.BrandGuidelines'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set active brand guidelines
+      tags:
+      - brand-guidelines
+  /api/v1/brand-guidelines/upload/presigned-url:
+    post:
+      consumes:
+      - application/json
+      description: Generate a presigned URL for uploading a brand guidelines document
+      parameters:
+      - description: Upload request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.PresignedURLRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.PresignedURLResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get presigned URL for brand document upload
+      tags:
+      - brand-guidelines
   /api/v1/generate:
     post:
       consumes:
@@ -540,6 +1117,51 @@ paths:
       security:
       - BearerAuth: []
       summary: Stream job progress in real-time
+      tags:
+      - jobs
+  /api/v1/jobs/{id}/scenes/{scene_number}/regenerate:
+    post:
+      consumes:
+      - application/json
+      description: Regenerates a single scene of a completed job with versioning support
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Scene number (1-indexed)
+        in: path
+        name: scene_number
+        required: true
+        type: integer
+      - description: Regeneration options
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handlers.RegenerateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.RegenerateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Regenerate a specific scene
       tags:
       - jobs
   /api/v1/upload/presigned-url:
