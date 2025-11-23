@@ -264,54 +264,69 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	}
 
 	// STEP 1: Generate script with GPT-4o (happens in background now!)
-	h.logger.Info("Generating script with GPT-4o", zap.String("job_id", job.JobID))
-	job.Stage = "script_generating"
-	if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
-		h.logger.Error("Failed to update job stage",
-			zap.String("job_id", job.JobID),
-			zap.String("stage", "script_generating"),
-			zap.Error(err),
-		)
-	}
+	// Check cache first
+	cacheKey := h.cacheService.GenerateScriptCacheKey(job)
+	var script *domain.Script
+	var err error
 
-	script, err := h.parserService.GenerateScript(jobCtx, service.ParseRequest{
-		UserID:      job.UserID,
-		Prompt:      req.Prompt,
-		Duration:    req.Duration,
-		AspectRatio: req.AspectRatio,
-		StartImage:  req.StartImage,
+	if cachedScript, found := h.cacheService.GetScript(jobCtx, cacheKey); found {
+		h.logger.Info("Script cache hit", zap.String("cache_key", cacheKey))
+		script = cachedScript
+	} else {
+		h.logger.Info("Generating script with GPT-4o", zap.String("job_id", job.JobID))
+		job.Stage = "script_generating"
+		if err := h.jobRepo.UpdateJob(jobCtx, job); err != nil {
+			h.logger.Error("Failed to update job stage",
+				zap.String("job_id", job.JobID),
+				zap.String("stage", "script_generating"),
+				zap.Error(err),
+			)
+		}
 
-		// Style reference image - will be analyzed and converted to text
-		StyleReferenceImage: req.StyleReferenceImage,
+		script, err = h.parserService.GenerateScript(jobCtx, service.ParseRequest{
+			UserID:      job.UserID,
+			Prompt:      req.Prompt,
+			Duration:    req.Duration,
+			AspectRatio: req.AspectRatio,
+			StartImage:  req.StartImage,
 
-		// Brand guidelines - automatically applied for consistent branding
-		BrandGuidelines: brandGuidelinesText,
+			// Style reference image - will be analyzed and converted to text
+			StyleReferenceImage: req.StyleReferenceImage,
 
-		// Pharmaceutical ad configuration
-		Voice:       job.Voice,
-		SideEffects: job.SideEffects,
+			// Brand guidelines - automatically applied for consistent branding
+			BrandGuidelines: brandGuidelinesText,
 
-		// Enhanced prompt options (Phase 1)
-		Style:             req.Style,
-		Tone:              req.Tone,
-		Tempo:             req.Tempo,
-		Platform:          req.Platform,
-		Audience:          req.Audience,
-		Goal:              req.Goal,
-		CallToAction:      req.CallToAction,
-		ProCinematography: req.ProCinematography,
-		CreativeBoost:     req.CreativeBoost,
-	})
-	if err != nil {
-		h.logger.Error("Script generation failed with error",
-			zap.String("job_id", job.JobID),
-			zap.String("stage", "script_generating"),
-			zap.Error(err),
-			zap.String("error_type", fmt.Sprintf("%T", err)),
-			zap.String("error_string", err.Error()),
-		)
-		h.failJob(jobCtx, job, scriptFailureMessage, err, zap.String("stage", "script_generating"))
-		return
+			// Pharmaceutical ad configuration
+			Voice:       job.Voice,
+			SideEffects: job.SideEffects,
+
+			// Enhanced prompt options (Phase 1)
+			Style:             req.Style,
+			Tone:              req.Tone,
+			Tempo:             req.Tempo,
+			Platform:          req.Platform,
+			Audience:          req.Audience,
+			Goal:              req.Goal,
+			CallToAction:      req.CallToAction,
+			ProCinematography: req.ProCinematography,
+			CreativeBoost:     req.CreativeBoost,
+		})
+		if err != nil {
+			h.logger.Error("Script generation failed with error",
+				zap.String("job_id", job.JobID),
+				zap.String("stage", "script_generating"),
+				zap.Error(err),
+				zap.String("error_type", fmt.Sprintf("%T", err)),
+				zap.String("error_string", err.Error()),
+			)
+			h.failJob(jobCtx, job, scriptFailureMessage, err, zap.String("stage", "script_generating"))
+			return
+		}
+
+		// Store in cache
+		if err := h.cacheService.StoreScript(jobCtx, cacheKey, script); err != nil {
+			h.logger.Warn("Failed to cache script", zap.Error(err))
+		}
 	}
 
 	// Embed script in job record
@@ -677,7 +692,21 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 			zap.Float64("target_duration", actualVideoDuration),
 		)
 
+		// Check audio cache
+		audioCacheKey := h.cacheService.GenerateAudioCacheKey(job.AudioSpec, int(actualVideoDuration))
+		if cachedURL, found := h.cacheService.GetAudio(jobCtx, audioCacheKey); found {
+			h.logger.Info("Audio cache hit", zap.String("cache_key", audioCacheKey))
+			musicChan <- audioResult{url: cachedURL, err: nil}
+			return
+		}
+
 		audioURL, err := h.generateAudio(jobCtx, job.UserID, job.JobID, script)
+		if err == nil {
+			// Store in cache
+			if err := h.cacheService.StoreAudio(jobCtx, audioCacheKey, audioURL); err != nil {
+				h.logger.Warn("Failed to cache audio", zap.Error(err))
+			}
+		}
 		musicChan <- audioResult{url: audioURL, err: err}
 	}()
 
