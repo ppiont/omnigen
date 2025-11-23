@@ -114,7 +114,7 @@ func (k *KlingAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRe
 
 	// Submit to Replicate API with retry logic
 	var klingResp KlingResponse
-	err = retry.Do(func() error {
+	err = retry.Do(ctx, retry.APIConfig(), func() error {
 		url := "https://api.replicate.com/v1/predictions"
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(jsonData)))
 		if err != nil {
@@ -190,7 +190,7 @@ func (k *KlingAdapter) GetStatus(ctx context.Context, predictionID string) (*Vid
 	url := fmt.Sprintf("https://api.replicate.com/v1/predictions/%s", predictionID)
 
 	var klingResp KlingResponse
-	err := retry.Do(func() error {
+	err := retry.Do(ctx, retry.APIConfig(), func() error {
 		httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
