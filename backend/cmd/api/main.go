@@ -92,6 +92,12 @@ func main() {
 		zapLogger,
 	)
 
+	brandGuidelinesRepo := repository.NewDynamoDBBrandGuidelinesRepository(
+		awsClients.DynamoDB,
+		cfg.BrandGuidelinesTable,
+		zapLogger,
+	)
+
 	// Initialize services
 	secretsService := service.NewSecretsService(
 		awsClients.SecretsManager,
@@ -177,26 +183,27 @@ func main() {
 
 	// Initialize HTTP server with goroutine-based async architecture
 	server := api.NewServer(&api.ServerConfig{
-		Port:             cfg.Port,
-		Environment:      cfg.Environment,
-		Logger:           zapLogger,
-		JobRepo:          jobRepo,
-		S3Service:        s3Service,
-		UsageRepo:        usageRepo,
-		ParserService:    parserService,
-		AssetService:     assetService,
-		VeoAdapter:       veoAdapter,     // Video generation (Veo 3.1)
-		MinimaxAdapter:   minimaxAdapter, // Audio generation
-		TTSAdapter:       ttsAdapter,     // Text-to-speech for narrator voiceover
-		AssetsBucket:     cfg.AssetsBucket,
-		APIKeys:          apiKeys,
-		JWTValidator:     jwtValidator,
-		CookieConfig:     cookieConfig,
-		CloudFrontDomain: cfg.CloudFrontDomain,
-		CognitoDomain:    cfg.CognitoDomain,
-		OpenAIKey:        cfg.OpenAIKey,
-		ReadTimeout:      time.Duration(cfg.ReadTimeout) * time.Second,
-		WriteTimeout:     time.Duration(cfg.WriteTimeout) * time.Second,
+		Port:                cfg.Port,
+		Environment:         cfg.Environment,
+		Logger:              zapLogger,
+		JobRepo:             jobRepo,
+		S3Service:           s3Service,
+		UsageRepo:           usageRepo,
+		BrandGuidelinesRepo: brandGuidelinesRepo,
+		ParserService:       parserService,
+		AssetService:        assetService,
+		VeoAdapter:          veoAdapter,     // Video generation (Veo 3.1)
+		MinimaxAdapter:      minimaxAdapter, // Audio generation
+		TTSAdapter:          ttsAdapter,     // Text-to-speech for narrator voiceover
+		AssetsBucket:        cfg.AssetsBucket,
+		APIKeys:             apiKeys,
+		JWTValidator:        jwtValidator,
+		CookieConfig:        cookieConfig,
+		CloudFrontDomain:    cfg.CloudFrontDomain,
+		CognitoDomain:       cfg.CognitoDomain,
+		OpenAIKey:           cfg.OpenAIKey,
+		ReadTimeout:         time.Duration(cfg.ReadTimeout) * time.Second,
+		WriteTimeout:        time.Duration(cfg.WriteTimeout) * time.Second,
 	})
 
 	httpServer := &http.Server{
@@ -241,12 +248,13 @@ type Config struct {
 	WriteTimeout int    `envconfig:"WRITE_TIMEOUT" default:"30"`
 
 	// AWS configuration
-	AWSRegion          string `envconfig:"AWS_REGION" required:"true"`
-	AssetsBucket       string `envconfig:"ASSETS_BUCKET" required:"true"`
-	JobTable           string `envconfig:"JOB_TABLE" required:"true"`
-	UsageTable         string `envconfig:"USAGE_TABLE" required:"true"`
-	ReplicateSecretARN string `envconfig:"REPLICATE_SECRET_ARN"` // Optional: if not set, will use REPLICATE_API_KEY env var
-	OpenAISecretARN    string `envconfig:"OPENAI_SECRET_ARN"`    // Optional: if not set, will use OPENAI_API_KEY env var
+	AWSRegion               string `envconfig:"AWS_REGION" required:"true"`
+	AssetsBucket            string `envconfig:"ASSETS_BUCKET" required:"true"`
+	JobTable                string `envconfig:"JOB_TABLE" required:"true"`
+	UsageTable              string `envconfig:"USAGE_TABLE" required:"true"`
+	BrandGuidelinesTable    string `envconfig:"BRAND_GUIDELINES_TABLE" default:"omnigen-brand-guidelines"`
+	ReplicateSecretARN      string `envconfig:"REPLICATE_SECRET_ARN"` // Optional: if not set, will use REPLICATE_API_KEY env var
+	OpenAISecretARN         string `envconfig:"OPENAI_SECRET_ARN"`    // Optional: if not set, will use OPENAI_API_KEY env var
 
 	// Authentication configuration
 	CognitoUserPoolID string `envconfig:"COGNITO_USER_POOL_ID" required:"true"`
