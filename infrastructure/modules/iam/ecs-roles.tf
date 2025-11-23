@@ -109,6 +109,7 @@ resource "aws_iam_role_policy" "ecs_task" {
           "dynamodb:PutItem",
           "dynamodb:GetItem",
           "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
           "dynamodb:Query",
           "dynamodb:Scan",
           "dynamodb:DescribeTable"
