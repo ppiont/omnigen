@@ -11,7 +11,7 @@
 
 **Audio Visual Sync:**
 
-- [ ] Voiceover timing (ad creatives) [PARTIAL - voiceover only happens in beginning and we only get song in ~second half]
+- [x] Voiceover timing (ad creatives) 
 - [ ] Sound effects aligned with visuals
 - [x] No audio video drift
 
@@ -60,7 +60,7 @@
 - [ ] Preview generation before final render
 - [x] Regenerate specific scenes
 - [ ] Adjust timing and transitions
-- [ ] Export in multiple formats
+- [x] Export in multiple formats
 
 **Feedback Loop:**
 
