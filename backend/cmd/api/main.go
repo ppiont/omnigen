@@ -19,7 +19,6 @@ import (
 	"github.com/omnigen/backend/internal/api"
 	"github.com/omnigen/backend/internal/auth"
 	"github.com/omnigen/backend/internal/aws"
-	"github.com/omnigen/backend/internal/domain"
 	"github.com/omnigen/backend/internal/repository"
 	"github.com/omnigen/backend/internal/service"
 	"github.com/omnigen/backend/pkg/logger"
