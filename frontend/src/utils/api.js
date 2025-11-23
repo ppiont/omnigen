@@ -87,11 +87,13 @@ export async function apiRequest(endpoint, options = {}) {
     }
 
     // Handle 401 errors with automatic token refresh
-    // Exclude login and refresh endpoints to prevent infinite loops
+    // Exclude login, refresh, and /auth/me endpoints to prevent unnecessary refresh attempts
+    // /auth/me returns 401 when not logged in, which is expected behavior
     if (
       response.status === 401 &&
       !endpoint.includes("/auth/login") &&
-      !endpoint.includes("/auth/refresh")
+      !endpoint.includes("/auth/refresh") &&
+      !endpoint.includes("/auth/me")
     ) {
       console.warn(
         `[API] ${new Date().toISOString()} ⚠️  401 Unauthorized on ${method} ${endpoint}. Attempting token refresh...`
