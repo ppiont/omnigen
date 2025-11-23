@@ -43,6 +43,11 @@ output "dynamodb_table_name" {
   value       = module.storage.dynamodb_table_name
 }
 
+output "dynamodb_brand_guidelines_table_name" {
+  description = "DynamoDB table name for brand guidelines"
+  value       = module.storage.dynamodb_brand_guidelines_table_name
+}
+
 # Compute
 output "ecs_cluster_name" {
   description = "ECS cluster name"

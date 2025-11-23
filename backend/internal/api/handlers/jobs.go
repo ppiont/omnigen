@@ -48,6 +48,7 @@ type JobResponse struct {
 	ProgressPercent int     `json:"progress_percent"`
 	Prompt          string  `json:"prompt"`
 	Duration        int     `json:"duration"`
+	AspectRatio     string  `json:"aspect_ratio,omitempty"`
 	VideoURL        *string `json:"video_url,omitempty"`      // MP4 format
 	WebMVideoURL    *string `json:"webm_video_url,omitempty"` // WebM format (VP9)
 	Model           string  `json:"model,omitempty"`
@@ -204,6 +205,7 @@ func (h *JobsHandler) GetJob(c *gin.Context) {
 		ProgressPercent:      calculateDynamicProgress(job.Stage, len(job.Scenes)),
 		Prompt:               job.Prompt,
 		Duration:             job.Duration,
+		AspectRatio:          job.AspectRatio,
 		VideoURL:             videoURL,
 		WebMVideoURL:         webmVideoURL,
 		Model:                job.Model,
@@ -357,6 +359,7 @@ func (h *JobsHandler) ListJobs(c *gin.Context) {
 			ErrorMessage:         job.ErrorMessage,
 			Prompt:               job.Prompt,
 			Duration:             job.Duration,
+			AspectRatio:          job.AspectRatio,
 			Model:                job.Model,
 			CreatedAt:            job.CreatedAt,
 			UpdatedAt:            job.UpdatedAt,

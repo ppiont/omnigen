@@ -23,6 +23,11 @@ variable "dynamodb_usage_table_arn" {
   type        = string
 }
 
+variable "dynamodb_brand_guidelines_table_arn" {
+  description = "ARN of the DynamoDB brand guidelines table"
+  type        = string
+}
+
 variable "replicate_secret_arn" {
   description = "ARN of the Replicate API key secret"
   type        = string

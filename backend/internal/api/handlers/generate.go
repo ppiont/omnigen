@@ -21,17 +21,18 @@ import (
 
 // GenerateHandler handles video generation requests with goroutine-based async processing
 type GenerateHandler struct {
-	parserService     *service.ParserService
-	veoAdapter        *adapters.VeoAdapter
-	minimaxAdapter    *adapters.MinimaxAdapter
-	ttsAdapter        adapters.TTSAdapter // Text-to-speech adapter for narrator voiceover
-	gpt4oAdapter      *adapters.GPT4oAdapter
-	disclaimerService *service.DisclaimerService
-	s3Service         *repository.S3AssetRepository
-	jobRepo           *repository.DynamoDBRepository
-	assetsBucket      string
-	logger            *zap.Logger
-	semaphore         *concurrency.Semaphore // Limits concurrent video generations
+	parserService       *service.ParserService
+	veoAdapter          *adapters.VeoAdapter
+	minimaxAdapter      *adapters.MinimaxAdapter
+	ttsAdapter          adapters.TTSAdapter // Text-to-speech adapter for narrator voiceover
+	gpt4oAdapter        *adapters.GPT4oAdapter
+	disclaimerService   *service.DisclaimerService
+	s3Service           *repository.S3AssetRepository
+	jobRepo             *repository.DynamoDBRepository
+	brandGuidelinesRepo repository.BrandGuidelinesRepository // Brand guidelines repository
+	assetsBucket        string
+	logger              *zap.Logger
+	semaphore           *concurrency.Semaphore // Limits concurrent video generations
 }
 
 // NewGenerateHandler creates a new generate handler
@@ -44,21 +45,23 @@ func NewGenerateHandler(
 	disclaimerService *service.DisclaimerService,
 	s3Service *repository.S3AssetRepository,
 	jobRepo *repository.DynamoDBRepository,
+	brandGuidelinesRepo repository.BrandGuidelinesRepository,
 	assetsBucket string,
 	logger *zap.Logger,
 ) *GenerateHandler {
 	return &GenerateHandler{
-		parserService:     parserService,
-		veoAdapter:        veoAdapter,
-		minimaxAdapter:    minimaxAdapter,
-		ttsAdapter:        ttsAdapter,
-		gpt4oAdapter:      gpt4oAdapter,
-		disclaimerService: disclaimerService,
-		s3Service:         s3Service,
-		jobRepo:           jobRepo,
-		assetsBucket:      assetsBucket,
-		logger:            logger,
-		semaphore:         concurrency.NewSemaphore(MaxConcurrentGenerations),
+		parserService:       parserService,
+		veoAdapter:          veoAdapter,
+		minimaxAdapter:      minimaxAdapter,
+		ttsAdapter:          ttsAdapter,
+		gpt4oAdapter:        gpt4oAdapter,
+		disclaimerService:   disclaimerService,
+		s3Service:           s3Service,
+		jobRepo:             jobRepo,
+		brandGuidelinesRepo: brandGuidelinesRepo,
+		assetsBucket:        assetsBucket,
+		logger:              logger,
+		semaphore:           concurrency.NewSemaphore(MaxConcurrentGenerations),
 	}
 }
 
@@ -98,23 +101,6 @@ type GenerateResponse struct {
 	NumClips            int    `json:"num_clips"`
 	CreatedAt           int64  `json:"created_at"`
 	EstimatedCompletion int    `json:"estimated_completion_seconds"`
-}
-
-// isValidVeoDuration checks if duration can be formed by summing 4, 6, or 8 second clips
-// Veo 3.1 constraint: each clip must be exactly 4, 6, or 8 seconds
-func isValidVeoDuration(duration int) bool {
-	// Valid durations that can be formed with 4, 6, 8 second clips (10-60 range)
-	validDurations := []int{
-		10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
-		32, 34, 36, 38, 40, 42, 44, 46, 48, 50,
-		52, 54, 56, 58, 60,
-	}
-	for _, valid := range validDurations {
-		if duration == valid {
-			return true
-		}
-	}
-	return false
 }
 
 // Generate handles POST /api/v1/generate - FULLY ASYNC (returns instantly)
@@ -202,10 +188,10 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 
 	req.StartImage = strings.TrimSpace(req.StartImage)
 
-	// Validate duration can be formed by 4, 6, or 8 second clips (Veo 3.1 constraint)
-	if req.Duration < 10 || req.Duration > 60 || !isValidVeoDuration(req.Duration) {
+	// Validate duration is multiple of 5 (Veo constraint: 5s or 10s clips only)
+	if req.Duration < 10 || req.Duration > 60 || req.Duration%5 != 0 {
 		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
-			Error: errors.NewValidationError("duration", "Duration must be between 10-60 seconds and achievable with 4, 6, or 8 second clips"),
+			Error: errors.NewValidationError("duration", "Duration must be between 10-60 seconds and divisible by 5"),
 		})
 		return
 	}
@@ -234,7 +220,6 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		Prompt:      req.Prompt,
 		Duration:    req.Duration,
 		AspectRatio: req.AspectRatio,
-		Model:       h.veoAdapter.GetModelName(),
 
 		Voice:       req.Voice,
 		SideEffects: req.SideEffects,

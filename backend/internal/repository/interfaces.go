@@ -66,3 +66,30 @@ type UsageRepository interface {
 	// IncrementUsage increments usage counters
 	IncrementUsage(ctx context.Context, userID string, videoDuration int) error
 }
+
+// BrandGuidelinesRepository defines the interface for brand guidelines persistence operations
+type BrandGuidelinesRepository interface {
+	// CreateBrandGuidelines creates a new brand guidelines record
+	CreateBrandGuidelines(ctx context.Context, guidelines *domain.BrandGuidelines) error
+
+	// GetBrandGuidelines retrieves brand guidelines by ID
+	GetBrandGuidelines(ctx context.Context, guidelineID string) (*domain.BrandGuidelines, error)
+
+	// GetBrandGuidelinesByUser retrieves all brand guidelines for a user
+	GetBrandGuidelinesByUser(ctx context.Context, userID string) ([]*domain.BrandGuidelines, error)
+
+	// GetActiveBrandGuidelines retrieves the active brand guidelines for a user
+	GetActiveBrandGuidelines(ctx context.Context, userID string) (*domain.BrandGuidelines, error)
+
+	// UpdateBrandGuidelines updates brand guidelines
+	UpdateBrandGuidelines(ctx context.Context, guidelines *domain.BrandGuidelines) error
+
+	// SetActiveBrandGuidelines sets a specific guideline as active and deactivates others for the user
+	SetActiveBrandGuidelines(ctx context.Context, userID, guidelineID string) error
+
+	// DeleteBrandGuidelines deletes brand guidelines by ID
+	DeleteBrandGuidelines(ctx context.Context, guidelineID string) error
+
+	// HealthCheck verifies the repository is operational
+	HealthCheck(ctx context.Context) error
+}

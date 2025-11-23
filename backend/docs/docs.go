@@ -451,76 +451,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/jobs/{id}/scenes/{scene_number}/regenerate": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Regenerates a single scene of a completed job with versioning support",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "jobs"
-                ],
-                "summary": "Regenerate a specific scene",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Job ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Scene number (1-indexed)",
-                        "name": "scene_number",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Regeneration options",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.RegenerateRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.RegenerateResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/upload/presigned-url": {
             "post": {
                 "security": [
@@ -819,9 +749,6 @@ const docTemplate = `{
                 "job_id": {
                     "type": "string"
                 },
-                "model": {
-                    "type": "string"
-                },
                 "narrator_audio_url": {
                     "type": "string"
                 },
@@ -861,11 +788,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "video_url": {
-                    "description": "MP4 format",
-                    "type": "string"
-                },
-                "webm_video_url": {
-                    "description": "WebM format (VP9)",
                     "type": "string"
                 }
             }
@@ -956,36 +878,6 @@ const docTemplate = `{
                 },
                 "refresh_token": {
                     "type": "string"
-                }
-            }
-        },
-        "handlers.RegenerateRequest": {
-            "type": "object",
-            "properties": {
-                "cascade": {
-                    "description": "Regenerate subsequent scenes too",
-                    "type": "boolean"
-                }
-            }
-        },
-        "handlers.RegenerateResponse": {
-            "type": "object",
-            "properties": {
-                "cascade_count": {
-                    "description": "How many subsequent scenes regenerated",
-                    "type": "integer"
-                },
-                "clip_url": {
-                    "type": "string"
-                },
-                "job_id": {
-                    "type": "string"
-                },
-                "new_version": {
-                    "type": "integer"
-                },
-                "scene_number": {
-                    "type": "integer"
                 }
             }
         },

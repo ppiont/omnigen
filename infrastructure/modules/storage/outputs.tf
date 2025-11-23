@@ -52,3 +52,13 @@ output "dynamodb_usage_table_arn" {
   description = "ARN of the DynamoDB usage table"
   value       = aws_dynamodb_table.usage.arn
 }
+
+output "dynamodb_brand_guidelines_table_name" {
+  description = "Name of the DynamoDB brand guidelines table"
+  value       = aws_dynamodb_table.brand_guidelines.name
+}
+
+output "dynamodb_brand_guidelines_table_arn" {
+  description = "ARN of the DynamoDB brand guidelines table"
+  value       = aws_dynamodb_table.brand_guidelines.arn
+}
