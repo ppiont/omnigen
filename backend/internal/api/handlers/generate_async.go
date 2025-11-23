@@ -1534,14 +1534,14 @@ func wrapText(text string, videoWidth int, fontSize float64) (string, int) {
 	return strings.Join(lines, "\n"), maxCharsPerLine
 }
 
-// composeVideo concatenates video clips and prepares the final video track (no audio mixing).
-// 4-Track Architecture:
-//   - Video Track: final/video.mp4 and final/video.webm (output of this function)
-//   - Music Track: audio/background-music.mp3 (generated separately)
-//   - Narrator Track: audio/narrator-voiceover.mp3 (generated separately)
-//   - Text Track: side_effects_text metadata (rendered by the frontend)
+// composeVideo concatenates video clips, applies text overlay, and muxes audio tracks.
+// Audio Muxing:
+//   - Background music is mixed at 30% volume
+//   - Narrator audio is mixed at 100% volume
+//   - Both tracks are combined and embedded into the final video
+//   - Separate audio files (audio_url, narrator_audio_url) are kept for backwards compatibility
 //
-// All audio playback, mixing, and synchronization happens in the frontend.
+// Output: final/video.mp4 and final/video.webm with embedded audio
 // Returns: (mp4Key, webmKey, error) - webmKey may be empty if WebM encoding fails
 func (h *GenerateHandler) composeVideo(
 	ctx context.Context,
@@ -1762,6 +1762,68 @@ func (h *GenerateHandler) composeVideo(
 		}
 	}
 
+	// AUDIO MUXING: Download and mix audio tracks into video
+	musicPath := ""
+	narratorPath := ""
+
+	// Download background music if available
+	if job.AudioURL != "" {
+		musicPath = filepath.Join(tmpDir, "background-music.mp3")
+		musicS3Key := extractS3Key(job.AudioURL)
+		if err := h.s3Service.DownloadFile(ctx, h.assetsBucket, musicS3Key, musicPath); err != nil {
+			h.logger.Warn("Failed to download background music, continuing without it",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+			musicPath = ""
+		}
+	}
+
+	// Download narrator audio if available
+	if job.NarratorAudioURL != "" {
+		narratorPath = filepath.Join(tmpDir, "narrator-voiceover.mp3")
+		narratorS3Key := extractS3Key(job.NarratorAudioURL)
+		if err := h.s3Service.DownloadFile(ctx, h.assetsBucket, narratorS3Key, narratorPath); err != nil {
+			h.logger.Warn("Failed to download narrator audio, continuing without it",
+				zap.String("job_id", jobID),
+				zap.Error(err),
+			)
+			narratorPath = ""
+		}
+	}
+
+	// Mux audio into video if we have any audio tracks
+	if musicPath != "" || narratorPath != "" {
+		videoWithAudio := filepath.Join(tmpDir, "video_with_audio.mp4")
+
+		var muxErr error
+		if musicPath != "" && narratorPath != "" {
+			// Both audio tracks - mix them together
+			muxErr = h.muxVideoWithMixedAudio(ctx, jobID, finalVideo, musicPath, narratorPath, videoWithAudio)
+		} else if narratorPath != "" {
+			// Narrator only
+			muxErr = h.muxVideoWithSingleAudio(ctx, jobID, finalVideo, narratorPath, 1.0, videoWithAudio)
+		} else {
+			// Music only
+			muxErr = h.muxVideoWithSingleAudio(ctx, jobID, finalVideo, musicPath, 0.3, videoWithAudio)
+		}
+
+		if muxErr != nil {
+			h.logger.Warn("Audio muxing failed, continuing with video-only output",
+				zap.String("job_id", jobID),
+				zap.Error(muxErr),
+			)
+			// Keep finalVideo as-is (no audio)
+		} else {
+			h.logger.Info("Audio muxing complete",
+				zap.String("job_id", jobID),
+				zap.Bool("has_music", musicPath != ""),
+				zap.Bool("has_narrator", narratorPath != ""),
+			)
+			finalVideo = videoWithAudio
+		}
+	}
+
 	// Upload final MP4 video to S3
 	h.logger.Info("Uploading final MP4 video to S3",
 		zap.String("job_id", jobID),
@@ -1780,10 +1842,11 @@ func (h *GenerateHandler) composeVideo(
 	cmd = exec.CommandContext(ctx, "ffmpeg",
 		"-i", finalVideo,
 		"-c:v", "libvpx-vp9",
+		"-c:a", "libopus", // Use Opus for WebM audio
+		"-b:a", "128k",
 		"-crf", "30",
 		"-b:v", "0",
 		"-row-mt", "1",
-		"-an", // No audio in video file
 		"-y", webmVideo,
 	)
 
@@ -1820,6 +1883,88 @@ func (h *GenerateHandler) composeVideo(
 	)
 
 	return mp4S3Key, webmS3Key, nil
+}
+
+// muxVideoWithMixedAudio combines video with two audio tracks (music at 30%, narrator at 100%)
+func (h *GenerateHandler) muxVideoWithMixedAudio(
+	ctx context.Context,
+	jobID string,
+	videoPath string,
+	musicPath string,
+	narratorPath string,
+	outputPath string,
+) error {
+	h.logger.Info("Muxing video with mixed audio (music + narrator)",
+		zap.String("job_id", jobID),
+	)
+
+	// Mix music at 30% volume with narrator at 100%, then mux with video
+	// Uses amix filter to combine audio streams
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-i", videoPath,
+		"-i", musicPath,
+		"-i", narratorPath,
+		"-filter_complex", "[1:a]volume=0.3[music];[2:a]volume=1.0[narrator];[music][narrator]amix=inputs=2:duration=longest[audio]",
+		"-map", "0:v",
+		"-map", "[audio]",
+		"-c:v", "copy",
+		"-c:a", "aac",
+		"-b:a", "192k",
+		"-shortest",
+		"-y", outputPath,
+	)
+
+	if output, err := cmd.CombinedOutput(); err != nil {
+		h.logger.Error("ffmpeg audio mux failed",
+			zap.String("job_id", jobID),
+			zap.String("output", string(output)),
+			zap.Error(err),
+		)
+		return fmt.Errorf("ffmpeg audio mux failed: %w", err)
+	}
+
+	return nil
+}
+
+// muxVideoWithSingleAudio combines video with a single audio track at specified volume
+func (h *GenerateHandler) muxVideoWithSingleAudio(
+	ctx context.Context,
+	jobID string,
+	videoPath string,
+	audioPath string,
+	volume float64,
+	outputPath string,
+) error {
+	h.logger.Info("Muxing video with single audio track",
+		zap.String("job_id", jobID),
+		zap.Float64("volume", volume),
+	)
+
+	volumeFilter := fmt.Sprintf("volume=%.1f", volume)
+
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-i", videoPath,
+		"-i", audioPath,
+		"-af", volumeFilter,
+		"-map", "0:v",
+		"-map", "1:a",
+		"-c:v", "copy",
+		"-c:a", "aac",
+		"-b:a", "192k",
+		"-shortest",
+		"-y", outputPath,
+	)
+
+	if output, err := cmd.CombinedOutput(); err != nil {
+		h.logger.Error("ffmpeg single audio mux failed",
+			zap.String("job_id", jobID),
+			zap.String("output", string(output)),
+			zap.Error(err),
+		)
+		return fmt.Errorf("ffmpeg single audio mux failed: %w", err)
+	}
+
+	return nil
 }
 
 // downloadFile downloads a file from URL to local path

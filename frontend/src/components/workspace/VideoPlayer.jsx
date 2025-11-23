@@ -9,7 +9,6 @@ import {
   Maximize,
   Minimize,
 } from "lucide-react";
-import { showToast } from "../../utils/toast.js";
 
 const ASPECT_RATIO_CLASSES = {
   "16:9": "video-aspect-16-9",
@@ -24,11 +23,6 @@ const STATUS_VARIANTS = [
   "complete",
   "failed",
 ];
-const MUSIC_BASE_VOLUME = 0.3;
-const NARRATOR_BASE_VOLUME = 1.0;
-const DRIFT_RESYNC_THRESHOLD = 0.2;
-const DRIFT_WARNING_THRESHOLD = 0.5;
-const DRIFT_WARNING_COOLDOWN_MS = 5000;
 
 const normalizeStatus = (status) => (status || "").toLowerCase();
 const isProcessingStatus = (status) => {
@@ -51,14 +45,14 @@ function VideoPlayer({
   aspectRatio,
   onError,
   onRefresh,
+  // DEPRECATED: Audio is now embedded in video. These props are kept for backwards compatibility.
+  // eslint-disable-next-line no-unused-vars
   backgroundMusicUrl,
+  // eslint-disable-next-line no-unused-vars
   narratorAudioUrl,
 }) {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
-  const musicRef = useRef(null);
-  const narratorRef = useRef(null);
-  const driftWarningTimestampRef = useRef(0);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -89,143 +83,26 @@ function VideoPlayer({
 
   const applyVolumeMix = useCallback(() => {
     if (videoRef.current) {
-      videoRef.current.volume = 0;
-      videoRef.current.muted = true;
-    }
-    if (musicRef.current) {
-      const targetVolume = Math.min(1, MUSIC_BASE_VOLUME * volume);
-      musicRef.current.volume = targetVolume;
-    }
-    if (narratorRef.current) {
-      const targetVolume = Math.min(1, NARRATOR_BASE_VOLUME * volume);
-      narratorRef.current.volume = targetVolume;
+      videoRef.current.volume = volume;
+      videoRef.current.muted = false;
     }
   }, [volume]);
 
-  const syncSingleAudioElement = useCallback(
-    (element, label, targetTime, force = false) => {
-      if (!element) {
-        return;
-      }
-
-      const mediaTime = Number.isFinite(element.currentTime)
-        ? element.currentTime
-        : 0;
-      const shouldSync = force || Math.abs(mediaTime - targetTime) > 0.05;
-
-      if (!shouldSync) {
-        return;
-      }
-
-      const assignTime = () => {
-        try {
-          element.currentTime = targetTime;
-        } catch (error) {
-          console.warn(`[VIDEO_PLAYER] Failed to sync ${label} track`, error);
-        }
-      };
-
-      if (element.readyState >= 1) {
-        assignTime();
-      } else {
-        const handleLoadedMetadata = () => {
-          assignTime();
-          element.removeEventListener("loadedmetadata", handleLoadedMetadata);
-        };
-        element.addEventListener("loadedmetadata", handleLoadedMetadata, {
-          once: true,
-        });
-      }
-    },
-    []
-  );
-
-  const syncAudioToVideo = useCallback(
-    (force = false) => {
-      const videoElement = videoRef.current;
-      if (!videoElement) {
-        return;
-      }
-      const targetTime = Number.isFinite(videoElement.currentTime)
-        ? videoElement.currentTime
-        : 0;
-      syncSingleAudioElement(musicRef.current, "music", targetTime, force);
-      syncSingleAudioElement(
-        narratorRef.current,
-        "narrator",
-        targetTime,
-        force
-      );
-    },
-    [syncSingleAudioElement]
-  );
-
-  const pauseAudioTracks = useCallback(() => {
-    if (musicRef.current) {
-      musicRef.current.pause();
-    }
-    if (narratorRef.current) {
-      narratorRef.current.pause();
-    }
-  }, []);
-
-  const playAudioTracks = useCallback(() => {
-    const videoElement = videoRef.current;
-    if (!videoElement) {
-      return;
-    }
-
-    const operations = [];
-    applyVolumeMix();
-    syncAudioToVideo(true);
-
-    if (musicRef.current && backgroundMusicUrl) {
-      musicRef.current.playbackRate = videoElement.playbackRate || 1;
-      operations.push(
-        musicRef.current.play().catch((error) => {
-          console.warn(
-            "[VIDEO_PLAYER] Background music playback failed:",
-            error
-          );
-        })
-      );
-    }
-
-    if (narratorRef.current && narratorAudioUrl) {
-      narratorRef.current.playbackRate = videoElement.playbackRate || 1;
-      operations.push(
-        narratorRef.current.play().catch((error) => {
-          console.warn("[VIDEO_PLAYER] Narrator playback failed:", error);
-        })
-      );
-    }
-
-    return operations;
-  }, [applyVolumeMix, backgroundMusicUrl, narratorAudioUrl, syncAudioToVideo]);
-
   const handleVideoElementPlay = useCallback(() => {
     setIsPlaying(true);
-    playAudioTracks();
-  }, [playAudioTracks]);
+  }, []);
 
   const handleVideoElementPause = useCallback(() => {
     setIsPlaying(false);
-    pauseAudioTracks();
-  }, [pauseAudioTracks]);
+  }, []);
 
   const handleVideoEnded = useCallback(() => {
     setIsPlaying(false);
-    pauseAudioTracks();
-    syncAudioToVideo(true);
-  }, [pauseAudioTracks, syncAudioToVideo]);
-
-  const handleVideoSeeked = useCallback(() => {
-    syncAudioToVideo(true);
-  }, [syncAudioToVideo]);
+  }, []);
 
   useEffect(() => {
     applyVolumeMix();
-  }, [applyVolumeMix, backgroundMusicUrl, narratorAudioUrl]);
+  }, [applyVolumeMix]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -241,83 +118,8 @@ function VideoPlayer({
   useEffect(() => {
     if (!isCompletedStatus(status) && videoRef.current) {
       videoRef.current.pause();
-      pauseAudioTracks();
-      syncAudioToVideo(true);
     }
-  }, [pauseAudioTracks, status, syncAudioToVideo]);
-
-  useEffect(() => {
-    if (!videoUrl) {
-      return undefined;
-    }
-
-    const interval = setInterval(() => {
-      const videoElement = videoRef.current;
-      if (!videoElement || videoElement.paused || videoElement.readyState < 1) {
-        return;
-      }
-
-      const videoTime = Number.isFinite(videoElement.currentTime)
-        ? videoElement.currentTime
-        : 0;
-
-      const evaluateDrift = (element, label) => {
-        if (!element) {
-          return;
-        }
-        const mediaTime = Number.isFinite(element.currentTime)
-          ? element.currentTime
-          : 0;
-        const drift = Math.abs(mediaTime - videoTime);
-
-        if (drift > DRIFT_RESYNC_THRESHOLD) {
-          console.warn(
-            `[VIDEO_PLAYER] ${label} drift ${drift.toFixed(
-              3
-            )}s detected. Resyncing.`
-          );
-          syncSingleAudioElement(element, label.toLowerCase(), videoTime, true);
-        }
-
-        if (drift > DRIFT_WARNING_THRESHOLD) {
-          const now = Date.now();
-          if (
-            now - driftWarningTimestampRef.current >
-            DRIFT_WARNING_COOLDOWN_MS
-          ) {
-            showToast("Audio sync issues detected. Resyncing...", "warning");
-            driftWarningTimestampRef.current = now;
-          }
-        }
-      };
-
-      if (backgroundMusicUrl) {
-        evaluateDrift(musicRef.current, "Music");
-      }
-      if (narratorAudioUrl) {
-        evaluateDrift(narratorRef.current, "Narrator");
-      }
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, [backgroundMusicUrl, narratorAudioUrl, videoUrl, syncSingleAudioElement]);
-
-  useEffect(() => {
-    driftWarningTimestampRef.current = 0;
-    pauseAudioTracks();
-    syncAudioToVideo(true);
-  }, [pauseAudioTracks, syncAudioToVideo, videoUrl]);
-
-  useEffect(() => {
-    syncAudioToVideo(true);
-  }, [backgroundMusicUrl, narratorAudioUrl, syncAudioToVideo]);
-
-  useEffect(
-    () => () => {
-      pauseAudioTracks();
-    },
-    [pauseAudioTracks]
-  );
+  }, [status]);
 
   const handleLoadedMetadata = () => {
     if (!videoRef.current) return;
@@ -341,7 +143,6 @@ function VideoPlayer({
 
     setVideoError(nextError);
     setIsPlaying(false);
-    pauseAudioTracks();
 
     if (isExpired && onRefresh) {
       onRefresh("url_expired");
@@ -359,7 +160,6 @@ function VideoPlayer({
 
     if (isPlaying) {
       videoRef.current.pause();
-      pauseAudioTracks();
       setIsPlaying(false);
       return;
     }
@@ -387,7 +187,6 @@ function VideoPlayer({
 
     videoRef.current.currentTime = clipped;
     setCurrentTime(clipped);
-    syncAudioToVideo(true);
   };
 
   const handleProgressChange = (event) => {
@@ -459,8 +258,6 @@ function VideoPlayer({
     const currentErrorType = videoError?.type;
     resetPlaybackState();
     setVideoError(null);
-    pauseAudioTracks();
-    syncAudioToVideo(true);
     setReloadNonce((prev) => prev + 1);
 
     if (onRefresh) {
@@ -554,32 +351,14 @@ function VideoPlayer({
           className="video-element"
           src={videoUrl}
           playsInline
-          muted
           preload="auto"
           onLoadedMetadata={handleLoadedMetadata}
           onTimeUpdate={!progressIsActive ? handleTimeUpdate : undefined}
           onPlay={handleVideoElementPlay}
           onPause={handleVideoElementPause}
           onEnded={handleVideoEnded}
-          onSeeked={handleVideoSeeked}
           onError={handleVideoError}
         />
-        {backgroundMusicUrl && (
-          <audio
-            ref={musicRef}
-            src={backgroundMusicUrl}
-            preload="auto"
-            style={{ display: "none" }}
-          />
-        )}
-        {narratorAudioUrl && (
-          <audio
-            ref={narratorRef}
-            src={narratorAudioUrl}
-            preload="auto"
-            style={{ display: "none" }}
-          />
-        )}
       </div>
 
       <div className="video-controls" aria-label="Video controls">
@@ -674,6 +453,7 @@ VideoPlayer.propTypes = {
   aspectRatio: PropTypes.oneOf(Object.keys(ASPECT_RATIO_CLASSES)),
   onError: PropTypes.func,
   onRefresh: PropTypes.func,
+  // DEPRECATED: Audio is now embedded in video. These props are kept for backwards compatibility.
   backgroundMusicUrl: PropTypes.string,
   narratorAudioUrl: PropTypes.string,
 };
