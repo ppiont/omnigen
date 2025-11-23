@@ -111,10 +111,7 @@ function JobDetails() {
         percentage={jobProgress.percentage}
         stageTimeline={jobProgress.stageTimeline}
         estimatedTimeRemaining={jobProgress.estimatedTimeRemaining}
-<<<<<<< HEAD
         onRefresh={loadJob}
-=======
->>>>>>> origin/master
       />
     );
   };
@@ -137,7 +134,3 @@ function JobDetails() {
 }
 
 export default JobDetails;
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/master
