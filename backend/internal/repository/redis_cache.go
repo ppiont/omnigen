@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/omnigen/backend/internal/domain"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
