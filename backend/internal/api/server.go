@@ -18,27 +18,28 @@ import (
 
 // ServerConfig holds the server configuration
 type ServerConfig struct {
-	Port             string
-	Environment      string
-	Logger           *zap.Logger
-	JobRepo          *repository.DynamoDBRepository
-	S3Service        *repository.S3AssetRepository // For presigned URLs and video uploads/downloads
-	UsageRepo        *repository.DynamoDBUsageRepository
-	ParserService    *service.ParserService   // Script generation service
-	AssetService     *service.AssetService    // Asset URL generation service
-	VeoAdapter       *adapters.VeoAdapter     // Veo 3.1 video generation
-	MinimaxAdapter   *adapters.MinimaxAdapter // Minimax audio generation
-	TTSAdapter       adapters.TTSAdapter      // Text-to-speech adapter for narrator voiceover
-	GPT4oAdapter     *adapters.GPT4oAdapter   // GPT-4o for narration generation
-	AssetsBucket     string                   // S3 bucket for video assets
-	APIKeys          []string                 // Deprecated: Use JWTValidator instead
-	JWTValidator     *auth.JWTValidator
-	CookieConfig     auth.CookieConfig // Cookie configuration for httpOnly tokens
-	CloudFrontDomain string            // For CORS in production
-	CognitoDomain    string            // Cognito hosted UI domain for CORS
-	OpenAIKey        string            // OpenAI API key for title generation
-	ReadTimeout      time.Duration
-	WriteTimeout     time.Duration
+	Port                string
+	Environment         string
+	Logger              *zap.Logger
+	JobRepo             *repository.DynamoDBRepository
+	S3Service           *repository.S3AssetRepository // For presigned URLs and video uploads/downloads
+	UsageRepo           *repository.DynamoDBUsageRepository
+	BrandGuidelinesRepo repository.BrandGuidelinesRepository // Brand guidelines repository
+	ParserService       *service.ParserService                // Script generation service
+	AssetService        *service.AssetService                 // Asset URL generation service
+	VeoAdapter          *adapters.VeoAdapter                  // Veo 3.1 video generation
+	MinimaxAdapter      *adapters.MinimaxAdapter              // Minimax audio generation
+	TTSAdapter          adapters.TTSAdapter                   // Text-to-speech adapter for narrator voiceover
+	GPT4oAdapter        *adapters.GPT4oAdapter                 // GPT-4o for narration generation
+	AssetsBucket        string                                // S3 bucket for video assets
+	APIKeys             []string                              // Deprecated: Use JWTValidator instead
+	JWTValidator        *auth.JWTValidator
+	CookieConfig        auth.CookieConfig // Cookie configuration for httpOnly tokens
+	CloudFrontDomain    string            // For CORS in production
+	CognitoDomain       string            // Cognito hosted UI domain for CORS
+	OpenAIKey           string            // OpenAI API key for title generation
+	ReadTimeout         time.Duration
+	WriteTimeout        time.Duration
 }
 
 // Server represents the HTTP server
@@ -172,6 +173,7 @@ func (s *Server) setupRoutes() {
 			disclaimerService,
 			s.config.S3Service,
 			s.config.JobRepo,
+			s.config.BrandGuidelinesRepo,
 			s.config.AssetsBucket,
 			s.config.Logger,
 		)
@@ -209,6 +211,13 @@ func (s *Server) setupRoutes() {
 			s.config.Logger,
 		)
 
+		brandGuidelinesHandler := handlers.NewBrandGuidelinesHandler(
+			s.config.BrandGuidelinesRepo,
+			s.config.S3Service,
+			s.config.AssetsBucket,
+			s.config.Logger,
+		)
+
 		// Generation routes
 		v1.POST("/generate", generateHandler.Generate)
 		v1.POST("/generate/title", titleHandler.GenerateTitle)
@@ -219,6 +228,15 @@ func (s *Server) setupRoutes() {
 		v1.DELETE("/jobs/:id", jobsHandler.DeleteJob)
 		v1.GET("/jobs/:id/progress", progressHandler.GetProgress)                               // SSE streaming endpoint
 		v1.POST("/jobs/:id/scenes/:scene_number/regenerate", regenerateHandler.RegenerateScene) // Scene regeneration
+
+		// Brand guidelines routes
+		v1.POST("/brand-guidelines", brandGuidelinesHandler.CreateBrandGuidelines)
+		v1.GET("/brand-guidelines", brandGuidelinesHandler.ListBrandGuidelines)
+		v1.GET("/brand-guidelines/:id", brandGuidelinesHandler.GetBrandGuidelines)
+		v1.PUT("/brand-guidelines/:id", brandGuidelinesHandler.UpdateBrandGuidelines)
+		v1.POST("/brand-guidelines/:id/activate", brandGuidelinesHandler.SetActiveBrandGuidelines)
+		v1.DELETE("/brand-guidelines/:id", brandGuidelinesHandler.DeleteBrandGuidelines)
+		v1.POST("/brand-guidelines/upload/presigned-url", brandGuidelinesHandler.GetPresignedURLForBrandDocument)
 
 		// Upload routes
 		v1.POST("/upload/presigned-url", uploadHandler.GetPresignedURL)

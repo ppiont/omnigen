@@ -21,16 +21,18 @@ import (
 
 // GenerateHandler handles video generation requests with goroutine-based async processing
 type GenerateHandler struct {
-	parserService         *service.ParserService
-	veoAdapter            *adapters.VeoAdapter
-	minimaxAdapter        *adapters.MinimaxAdapter
-	ttsAdapter            adapters.TTSAdapter // Text-to-speech adapter for narrator voiceover
-	s3Service             *repository.S3AssetRepository
-	jobRepo               *repository.DynamoDBRepository
-	brandGuidelinesRepo   repository.BrandGuidelinesRepository // Brand guidelines repository
-	assetsBucket          string
-	logger                *zap.Logger
-	semaphore             *concurrency.Semaphore // Limits concurrent video generations
+	parserService       *service.ParserService
+	veoAdapter          *adapters.VeoAdapter
+	minimaxAdapter      *adapters.MinimaxAdapter
+	ttsAdapter          adapters.TTSAdapter // Text-to-speech adapter for narrator voiceover
+	gpt4oAdapter        *adapters.GPT4oAdapter
+	disclaimerService   *service.DisclaimerService
+	s3Service           *repository.S3AssetRepository
+	jobRepo             *repository.DynamoDBRepository
+	brandGuidelinesRepo repository.BrandGuidelinesRepository // Brand guidelines repository
+	assetsBucket        string
+	logger              *zap.Logger
+	semaphore           *concurrency.Semaphore // Limits concurrent video generations
 }
 
 // NewGenerateHandler creates a new generate handler
@@ -39,6 +41,8 @@ func NewGenerateHandler(
 	veoAdapter *adapters.VeoAdapter,
 	minimaxAdapter *adapters.MinimaxAdapter,
 	ttsAdapter adapters.TTSAdapter,
+	gpt4oAdapter *adapters.GPT4oAdapter,
+	disclaimerService *service.DisclaimerService,
 	s3Service *repository.S3AssetRepository,
 	jobRepo *repository.DynamoDBRepository,
 	brandGuidelinesRepo repository.BrandGuidelinesRepository,
@@ -50,12 +54,14 @@ func NewGenerateHandler(
 		veoAdapter:          veoAdapter,
 		minimaxAdapter:      minimaxAdapter,
 		ttsAdapter:          ttsAdapter,
+		gpt4oAdapter:        gpt4oAdapter,
+		disclaimerService:   disclaimerService,
 		s3Service:           s3Service,
 		jobRepo:             jobRepo,
 		brandGuidelinesRepo: brandGuidelinesRepo,
 		assetsBucket:        assetsBucket,
 		logger:              logger,
-		semaphore:      concurrency.NewSemaphore(MaxConcurrentGenerations),
+		semaphore:           concurrency.NewSemaphore(MaxConcurrentGenerations),
 	}
 }
 
