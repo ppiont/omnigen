@@ -44,6 +44,11 @@ type Job struct {
 	SideEffectsText      string  `dynamodbav:"side_effects_text,omitempty" json:"side_effects_text,omitempty"`
 	SideEffectsStartTime float64 `dynamodbav:"side_effects_start_time,omitempty" json:"side_effects_start_time,omitempty"`
 
+	// Two-pass narration fields (Phase 4)
+	DisclaimerSpec  *DisclaimerSpec `dynamodbav:"disclaimer_spec,omitempty" json:"disclaimer_spec,omitempty"`
+	NarrationBudget float64         `dynamodbav:"narration_budget,omitempty" json:"narration_budget,omitempty"`
+	NarrationWords  int             `dynamodbav:"narration_words,omitempty" json:"narration_words,omitempty"`
+
 	VideoKey     string `dynamodbav:"video_key,omitempty" json:"video_key,omitempty"`           // S3 key (MP4)
 	WebMVideoKey string `dynamodbav:"webm_video_key,omitempty" json:"webm_video_key,omitempty"` // S3 key (WebM)
 	Model        string `dynamodbav:"model,omitempty" json:"model,omitempty"`                   // Video generation model (e.g., "Veo 3.1")

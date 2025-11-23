@@ -8,6 +8,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -18,6 +22,10 @@ type TTSAdapter interface {
 	// GenerateVoiceover generates speech audio at 1.0x speed.
 	// Variable speed (e.g. 1.4x for side effects) is applied post-generation using ffmpeg.
 	GenerateVoiceover(ctx context.Context, text string, voice string) ([]byte, error)
+
+	// GenerateVoiceoverWithDuration generates speech audio and returns duration.
+	// Speed parameter allows 1.4x for side effects disclaimers.
+	GenerateVoiceoverWithDuration(ctx context.Context, text string, voice string, speed float64) ([]byte, float64, error)
 }
 
 // OpenAITTSAdapter implements text-to-speech using the OpenAI TTS API.
@@ -200,4 +208,74 @@ func isRetryableStatus(status int) bool {
 	}
 	// Do not retry on client errors (4xx), including 429 rate limit.
 	return false
+}
+
+// GenerateVoiceoverWithDuration generates TTS audio at specified speed and returns duration.
+func (t *OpenAITTSAdapter) GenerateVoiceoverWithDuration(ctx context.Context, text string, voice string, speed float64) ([]byte, float64, error) {
+	if text == "" {
+		return nil, 0, fmt.Errorf("empty text for TTS")
+	}
+
+	openAIVoice, ok := voiceMap[voice]
+	if !ok {
+		return nil, 0, fmt.Errorf("invalid voice selection: %s (expected 'male' or 'female')", voice)
+	}
+
+	reqPayload := openAITTSRequest{
+		Model:          t.model,
+		Input:          text,
+		Voice:          openAIVoice,
+		ResponseFormat: "mp3",
+		Speed:          speed,
+	}
+
+	t.logger.Info("Generating voiceover with duration",
+		zap.String("voice", voice),
+		zap.Int("text_length", len(text)),
+		zap.Float64("speed", speed),
+	)
+
+	audioData, err := t.callOpenAITTS(ctx, reqPayload)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to generate TTS: %w", err)
+	}
+
+	// Write to temp file to get duration via ffprobe
+	tmpFile, err := os.CreateTemp("", "tts-*.mp3")
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	defer func() { _ = tmpFile.Close() }()
+
+	if _, err := tmpFile.Write(audioData); err != nil {
+		return nil, 0, fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	duration, err := getAudioDurationFromFile(tmpFile.Name())
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get audio duration: %w", err)
+	}
+
+	t.logger.Info("Generated voiceover with duration",
+		zap.Int("audio_size_bytes", len(audioData)),
+		zap.Float64("duration_seconds", duration),
+	)
+
+	return audioData, duration, nil
+}
+
+// getAudioDurationFromFile uses ffprobe to get audio duration in seconds.
+func getAudioDurationFromFile(path string) (float64, error) {
+	cmd := exec.Command("ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		path,
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe failed: %w", err)
+	}
+	return strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
 }

@@ -188,6 +188,7 @@ func main() {
 		VeoAdapter:       veoAdapter,     // Video generation (Veo 3.1)
 		MinimaxAdapter:   minimaxAdapter, // Audio generation
 		TTSAdapter:       ttsAdapter,     // Text-to-speech for narrator voiceover
+		GPT4oAdapter:     gpt4oAdapter,   // GPT-4o for narration generation
 		AssetsBucket:     cfg.AssetsBucket,
 		APIKeys:          apiKeys,
 		JWTValidator:     jwtValidator,

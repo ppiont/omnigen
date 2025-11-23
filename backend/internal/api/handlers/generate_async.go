@@ -520,7 +520,9 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 	musicChan := make(chan audioResult, 1)
 
 	// Start narrator voiceover generation (if configured)
-	needsNarrator := job.Voice != "" && job.AudioSpec.NarratorScript != ""
+	// Use two-pass system for pharmaceutical ads with side effects
+	isPharmaceuticalAd := job.Voice != "" && job.SideEffectsText != ""
+	needsNarrator := job.Voice != "" && (job.AudioSpec.NarratorScript != "" || isPharmaceuticalAd)
 	if needsNarrator {
 		go func() {
 			defer func() {
@@ -536,17 +538,32 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 			h.logger.Info("Generating narrator voiceover (parallel with music)",
 				zap.String("job_id", job.JobID),
 				zap.Float64("target_duration", actualVideoDuration),
+				zap.Bool("two_pass", isPharmaceuticalAd),
 			)
 
-			narratorURL, err := h.generateNarratorVoiceover(
-				jobCtx,
-				job.UserID,
-				job.JobID,
-				job.Voice,
-				job.AudioSpec.NarratorScript,
-				job.SideEffectsStartTime,
-				int(actualVideoDuration),
-			)
+			var narratorURL string
+			var err error
+
+			if isPharmaceuticalAd {
+				// Use two-pass system for pharmaceutical ads
+				narratorURL, err = h.generateNarratorVoiceoverTwoPass(
+					jobCtx,
+					job,
+					script,
+					actualVideoDuration,
+				)
+			} else {
+				// Use legacy single-pass for non-pharmaceutical ads
+				narratorURL, err = h.generateNarratorVoiceover(
+					jobCtx,
+					job.UserID,
+					job.JobID,
+					job.Voice,
+					job.AudioSpec.NarratorScript,
+					job.SideEffectsStartTime,
+					int(actualVideoDuration),
+				)
+			}
 			narratorChan <- audioResult{url: narratorURL, err: err}
 		}()
 	} else {
@@ -638,11 +655,8 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 
 	mp4Key, webmKey, err := h.composeVideo(
 		jobCtx,
-		job.UserID,
-		job.JobID,
+		job,
 		clipVideos,
-		job.SideEffectsText,
-		job.SideEffectsStartTime,
 	)
 	if err != nil {
 		h.failJob(jobCtx, job, compositionFailureMessage, err, zap.String("stage", "composing"))
@@ -986,15 +1000,251 @@ func (h *GenerateHandler) generateAudio(
 	return "", fmt.Errorf("audio generation timed out")
 }
 
-// generateNarratorVoiceover generates narrator voiceover with variable speed for side effects
+// generateNarratorVoiceoverTwoPass generates narrator voiceover using the two-pass system.
+// Pass 1: Compute disclaimer spec and timing budget
+// Pass 2: Generate narration with exact word budget, then TTS
+func (h *GenerateHandler) generateNarratorVoiceoverTwoPass(
+	ctx context.Context,
+	job *domain.Job,
+	script *domain.Script,
+	actualDuration float64,
+) (string, error) {
+	if h.ttsAdapter == nil {
+		return "", fmt.Errorf("tts adapter not configured")
+	}
+
+	if h.disclaimerService == nil {
+		return "", fmt.Errorf("disclaimer service not configured")
+	}
+
+	voice := job.Voice
+	if voice == "" {
+		voice = "male"
+	}
+
+	h.logger.Info("Starting two-pass narrator voiceover generation",
+		zap.String("job_id", job.JobID),
+		zap.Float64("actual_duration", actualDuration),
+		zap.String("voice", voice),
+	)
+
+	tmpDir := filepath.Join("/tmp", job.JobID, "narrator")
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Step 1: Compute disclaimer spec (tier, audio text, duration)
+	disclaimerSpec, err := h.disclaimerService.ComputeDisclaimerSpec(
+		ctx,
+		job.SideEffectsText,
+		int(actualDuration),
+		voice,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to compute disclaimer spec: %w", err)
+	}
+	job.DisclaimerSpec = disclaimerSpec
+
+	// Step 2: Calculate narration budget
+	budgetSeconds, budgetWords := service.CalculateNarrationBudget(
+		int(actualDuration),
+		disclaimerSpec.AudioDuration,
+	)
+	job.NarrationBudget = budgetSeconds
+	job.NarrationWords = budgetWords
+
+	h.logger.Info("Narration budget calculated",
+		zap.String("job_id", job.JobID),
+		zap.Float64("total_duration", actualDuration),
+		zap.Float64("disclaimer_duration", disclaimerSpec.AudioDuration),
+		zap.Float64("narration_budget_seconds", budgetSeconds),
+		zap.Int("narration_budget_words", budgetWords),
+		zap.String("disclaimer_tier", string(disclaimerSpec.Tier)),
+	)
+
+	// Safety check: minimum 5 seconds for narration
+	if budgetSeconds < 5 {
+		if disclaimerSpec.Tier != domain.DisclaimerTierTextOnly {
+			// Switch to text-only mode
+			h.logger.Warn("Narration budget too short, switching to text-only disclaimer",
+				zap.String("job_id", job.JobID),
+			)
+			disclaimerSpec.Tier = domain.DisclaimerTierTextOnly
+			disclaimerSpec.UseAudio = false
+			disclaimerSpec.AudioDuration = 0
+			budgetSeconds = actualDuration - service.CalculateMusicTail(int(actualDuration))
+			budgetWords = int(budgetSeconds * 2.5)
+			job.NarrationBudget = budgetSeconds
+			job.NarrationWords = budgetWords
+		}
+	}
+
+	// Step 3: Generate narration with exact budget
+	narrationResponse, err := h.gpt4oAdapter.GenerateNarrationForScenes(
+		ctx,
+		script.Scenes,
+		actualDuration,
+		disclaimerSpec.AudioDuration,
+		budgetWords,
+		script.Metadata.ProductName,
+		job.Prompt, // Product description
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate narration: %w", err)
+	}
+
+	narration, wordCount, err := adapters.ParseNarrationResponse(narrationResponse)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse narration: %w", err)
+	}
+
+	h.logger.Info("Narration generated",
+		zap.String("job_id", job.JobID),
+		zap.Int("word_count", wordCount),
+		zap.Int("target_words", budgetWords),
+	)
+
+	// Step 4: Expand if too short (≥15% under target)
+	minWords := int(float64(budgetWords) * 0.85)
+	if wordCount < minWords {
+		h.logger.Info("Narration too short, expanding",
+			zap.String("job_id", job.JobID),
+			zap.Int("current_words", wordCount),
+			zap.Int("target_words", budgetWords),
+		)
+
+		expandedResponse, err := h.gpt4oAdapter.ExpandNarration(ctx, narration, wordCount, budgetWords)
+		if err != nil {
+			h.logger.Warn("Failed to expand narration, using original",
+				zap.String("job_id", job.JobID),
+				zap.Error(err),
+			)
+		} else {
+			narration, wordCount, _ = adapters.ParseNarrationResponse(expandedResponse)
+			h.logger.Info("Narration expanded",
+				zap.String("job_id", job.JobID),
+				zap.Int("new_word_count", wordCount),
+			)
+		}
+	}
+
+	// Step 5: Generate TTS for main narration
+	mainAudioData, err := h.ttsAdapter.GenerateVoiceover(ctx, narration, voice)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate main narration TTS: %w", err)
+	}
+
+	mainAudioPath := filepath.Join(tmpDir, "narrator-main.mp3")
+	if err := os.WriteFile(mainAudioPath, mainAudioData, 0o644); err != nil {
+		return "", fmt.Errorf("failed to write main audio: %w", err)
+	}
+
+	h.logger.Info("Main narration TTS generated",
+		zap.String("job_id", job.JobID),
+		zap.Int("audio_size_bytes", len(mainAudioData)),
+	)
+
+	// Step 6: Handle disclaimer audio (if not text-only)
+	var finalAudioPath string
+	if disclaimerSpec.UseAudio {
+		// Generate disclaimer TTS at 1.4x speed
+		disclaimerAudioData, _, err := h.ttsAdapter.GenerateVoiceoverWithDuration(
+			ctx,
+			disclaimerSpec.AudioText,
+			voice,
+			disclaimerSpec.Speed,
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate disclaimer TTS: %w", err)
+		}
+
+		disclaimerAudioPath := filepath.Join(tmpDir, "narrator-disclaimer.mp3")
+		if err := os.WriteFile(disclaimerAudioPath, disclaimerAudioData, 0o644); err != nil {
+			return "", fmt.Errorf("failed to write disclaimer audio: %w", err)
+		}
+
+		h.logger.Info("Disclaimer TTS generated",
+			zap.String("job_id", job.JobID),
+			zap.Int("audio_size_bytes", len(disclaimerAudioData)),
+			zap.Float64("speed", disclaimerSpec.Speed),
+		)
+
+		// Concatenate main + disclaimer
+		finalAudioPath = filepath.Join(tmpDir, "narrator-voiceover.mp3")
+		concatFile := filepath.Join(tmpDir, "concat.txt")
+		concatContent := fmt.Sprintf("file '%s'\nfile '%s'\n", mainAudioPath, disclaimerAudioPath)
+		if err := os.WriteFile(concatFile, []byte(concatContent), 0o644); err != nil {
+			return "", fmt.Errorf("failed to write concat file: %w", err)
+		}
+
+		cmd := exec.CommandContext(ctx, "ffmpeg",
+			"-f", "concat",
+			"-safe", "0",
+			"-i", concatFile,
+			"-c", "copy",
+			"-y", finalAudioPath,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("failed to concatenate audio: %w (%s)", err, strings.TrimSpace(string(output)))
+		}
+
+		h.logger.Info("Main narration and disclaimer concatenated",
+			zap.String("job_id", job.JobID),
+		)
+	} else {
+		// Text-only mode: just use main narration
+		finalAudioPath = mainAudioPath
+		h.logger.Info("Using text-only disclaimer mode (no disclaimer audio)",
+			zap.String("job_id", job.JobID),
+		)
+	}
+
+	// Step 7: Upload to S3
+	h.logger.Info("Uploading narrator audio to S3",
+		zap.String("job_id", job.JobID),
+	)
+	s3Key := buildNarratorAudioKey(job.UserID, job.JobID)
+	narratorAudioURL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, s3Key, finalAudioPath, "audio/mpeg")
+	if err != nil {
+		return "", fmt.Errorf("failed to upload narrator audio: %w", err)
+	}
+
+	// Update side effects start time based on actual disclaimer timing
+	job.SideEffectsStartTime = h.calculateSideEffectsStartTime(actualDuration, disclaimerSpec)
+
+	h.logger.Info("Narrator voiceover uploaded",
+		zap.String("job_id", job.JobID),
+		zap.String("s3_key", s3Key),
+		zap.String("url", narratorAudioURL),
+		zap.Float64("side_effects_start_time", job.SideEffectsStartTime),
+	)
+
+	return narratorAudioURL, nil
+}
+
+// calculateSideEffectsStartTime calculates the dynamic side effects start time.
+func (h *GenerateHandler) calculateSideEffectsStartTime(actualDuration float64, disclaimerSpec *domain.DisclaimerSpec) float64 {
+	if disclaimerSpec == nil || !disclaimerSpec.UseAudio {
+		return 0 // No audio disclaimer
+	}
+	musicTail := service.CalculateMusicTail(int(actualDuration))
+	return actualDuration - disclaimerSpec.AudioDuration - musicTail
+}
+
+// generateNarratorVoiceover generates narrator voiceover for non-pharmaceutical ads.
+// This is a simple single-pass TTS generation without any speed manipulation.
+//
+// DEPRECATED: For pharmaceutical ads, use generateNarratorVoiceoverTwoPass instead,
+// which handles the two-pass narration system with dynamic disclaimer timing.
 func (h *GenerateHandler) generateNarratorVoiceover(
 	ctx context.Context,
 	userID string,
 	jobID string,
 	voice string,
 	narratorScript string,
-	sideEffectsStartTime float64,
-	duration int,
+	_ float64, // sideEffectsStartTime - no longer used (kept for API compatibility)
+	_ int, // duration - no longer used (kept for API compatibility)
 ) (string, error) {
 	if h.ttsAdapter == nil {
 		return "", fmt.Errorf("tts adapter not configured")
@@ -1004,13 +1254,13 @@ func (h *GenerateHandler) generateNarratorVoiceover(
 		return "", fmt.Errorf("narrator script is empty")
 	}
 
-	h.logger.Info("Generating narrator voiceover",
+	h.logger.Info("Generating narrator voiceover (legacy single-pass for non-pharma ads)",
 		zap.String("job_id", jobID),
 		zap.String("voice", voice),
 		zap.Int("script_length", len(narratorScript)),
-		zap.Float64("side_effects_start_time", sideEffectsStartTime),
 	)
 
+	// Generate TTS audio at normal speed
 	audioData, err := h.ttsAdapter.GenerateVoiceover(ctx, narratorScript, voice)
 	if err != nil {
 		return "", fmt.Errorf("tts generation failed: %w", err)
@@ -1027,113 +1277,15 @@ func (h *GenerateHandler) generateNarratorVoiceover(
 	}
 	defer os.RemoveAll(tmpDir)
 
-	rawAudioPath := filepath.Join(tmpDir, "narrator-raw.mp3")
-	if err := os.WriteFile(rawAudioPath, audioData, 0o644); err != nil {
+	audioPath := filepath.Join(tmpDir, "narrator.mp3")
+	if err := os.WriteFile(audioPath, audioData, 0o644); err != nil {
 		return "", fmt.Errorf("failed to write narrator audio: %w", err)
 	}
 
-	processedAudioPath := filepath.Join(tmpDir, "narrator-processed.mp3")
-
-	// Get actual audio duration using ffprobe
-	audioDuration, err := getAudioDuration(ctx, rawAudioPath)
-	if err != nil {
-		h.logger.Warn("Failed to get audio duration, skipping variable speed",
-			zap.String("job_id", jobID),
-			zap.Error(err),
-		)
-		audioDuration = 0
-	}
-
-	h.logger.Info("TTS audio generated",
-		zap.String("job_id", jobID),
-		zap.Float64("audio_duration", audioDuration),
-		zap.Float64("video_duration", float64(duration)),
-		zap.Float64("requested_split_time", sideEffectsStartTime),
-	)
-
-	// Calculate proportional split point based on actual audio duration
-	// sideEffectsStartTime is 80% of video duration, we want 80% of audio duration
-	var actualSplitTime float64
-	if sideEffectsStartTime > 0 && float64(duration) > 0 {
-		// Use same ratio for audio: if side effects start at 80% of video, start at 80% of audio
-		ratio := sideEffectsStartTime / float64(duration)
-		actualSplitTime = audioDuration * ratio
-	}
-
-	// Only apply variable speed if we have valid audio and split point
-	if actualSplitTime > 0 && audioDuration > 0 && actualSplitTime < audioDuration-0.5 {
-		h.logger.Info("Applying variable speed to narrator audio",
-			zap.String("job_id", jobID),
-			zap.Float64("audio_duration", audioDuration),
-			zap.Float64("split_time", actualSplitTime),
-		)
-
-		mainSegmentPath := filepath.Join(tmpDir, "main-segment.mp3")
-		sideEffectsSegmentPath := filepath.Join(tmpDir, "side-effects.mp3")
-		sideEffectsFastPath := filepath.Join(tmpDir, "side-effects-fast.mp3")
-
-		cmd := exec.CommandContext(ctx, "ffmpeg",
-			"-i", rawAudioPath,
-			"-ss", "0",
-			"-to", fmt.Sprintf("%.2f", actualSplitTime),
-			"-c", "copy",
-			"-y", mainSegmentPath,
-		)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return "", fmt.Errorf("failed to extract main segment: %w (%s)", err, strings.TrimSpace(string(output)))
-		}
-
-		cmd = exec.CommandContext(ctx, "ffmpeg",
-			"-i", rawAudioPath,
-			"-ss", fmt.Sprintf("%.2f", actualSplitTime),
-			"-c", "copy",
-			"-y", sideEffectsSegmentPath,
-		)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return "", fmt.Errorf("failed to extract side effects segment: %w (%s)", err, strings.TrimSpace(string(output)))
-		}
-
-		cmd = exec.CommandContext(ctx, "ffmpeg",
-			"-i", sideEffectsSegmentPath,
-			"-filter:a", "atempo=1.4",
-			"-y", sideEffectsFastPath,
-		)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return "", fmt.Errorf("failed to speed up side effects segment: %w (%s)", err, strings.TrimSpace(string(output)))
-		}
-
-		concatFile := filepath.Join(tmpDir, "concat.txt")
-		concatContent := fmt.Sprintf("file '%s'\nfile '%s'\n", mainSegmentPath, sideEffectsFastPath)
-		if err := os.WriteFile(concatFile, []byte(concatContent), 0o644); err != nil {
-			return "", fmt.Errorf("failed to create concat file: %w", err)
-		}
-
-		cmd = exec.CommandContext(ctx, "ffmpeg",
-			"-f", "concat",
-			"-safe", "0",
-			"-i", concatFile,
-			"-c", "copy",
-			"-y", processedAudioPath,
-		)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return "", fmt.Errorf("failed to concatenate narrator segments: %w (%s)", err, strings.TrimSpace(string(output)))
-		}
-	} else {
-		h.logger.Info("Skipping variable speed for narrator audio",
-			zap.String("job_id", jobID),
-			zap.Float64("side_effects_start_time", sideEffectsStartTime),
-			zap.Float64("audio_duration", audioDuration),
-			zap.Float64("actual_split_time", actualSplitTime),
-		)
-
-		if err := os.Rename(rawAudioPath, processedAudioPath); err != nil {
-			return "", fmt.Errorf("failed to finalize narrator audio: %w", err)
-		}
-	}
-
+	// Upload to S3
 	h.logger.Info("Uploading narrator audio to S3", zap.String("job_id", jobID))
 	s3Key := buildNarratorAudioKey(userID, jobID)
-	narratorAudioURL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, s3Key, processedAudioPath, "audio/mpeg")
+	narratorAudioURL, err := h.s3Service.UploadFile(ctx, h.assetsBucket, s3Key, audioPath, "audio/mpeg")
 	if err != nil {
 		return "", fmt.Errorf("failed to upload narrator audio: %w", err)
 	}
@@ -1177,28 +1329,6 @@ func (h *GenerateHandler) processAudio(ctx context.Context, userID string, jobID
 
 	h.logger.Info("Audio processed and uploaded", zap.String("job_id", jobID), zap.String("s3_url", audioS3URL))
 	return audioS3URL, nil
-}
-
-// getAudioDuration returns the duration of an audio file in seconds using ffprobe
-func getAudioDuration(ctx context.Context, audioPath string) (float64, error) {
-	cmd := exec.CommandContext(ctx, "ffprobe",
-		"-v", "error",
-		"-show_entries", "format=duration",
-		"-of", "default=noprint_wrappers=1:nokey=1",
-		audioPath,
-	)
-	output, err := cmd.Output()
-	if err != nil {
-		return 0, fmt.Errorf("ffprobe failed: %w", err)
-	}
-
-	durationStr := strings.TrimSpace(string(output))
-	duration, err := strconv.ParseFloat(durationStr, 64)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse duration '%s': %w", durationStr, err)
-	}
-
-	return duration, nil
 }
 
 // detectAvailableFont returns the first available font file path from a prioritized list.
@@ -1415,27 +1545,60 @@ func wrapText(text string, videoWidth int, fontSize float64) (string, int) {
 // Returns: (mp4Key, webmKey, error) - webmKey may be empty if WebM encoding fails
 func (h *GenerateHandler) composeVideo(
 	ctx context.Context,
-	userID string,
-	jobID string,
+	job *domain.Job,
 	clips []ClipVideo,
-	sideEffectsText string,
-	sideEffectsStartTime float64,
 ) (string, string, error) {
-	trimmedText := strings.TrimSpace(sideEffectsText)
+	userID := job.UserID
+	jobID := job.JobID
+
 	var totalDuration float64
 	for _, clip := range clips {
 		totalDuration += clip.Duration
 	}
 
+	// Determine text overlay settings based on disclaimer tier
+	var overlayText string
+	var overlayStart float64
+
+	if job.DisclaimerSpec != nil {
+		switch job.DisclaimerSpec.Tier {
+		case domain.DisclaimerTierTextOnly:
+			// Text-only: show abbreviated disclaimer for last 4-5 seconds
+			overlayText = job.DisclaimerSpec.AudioText // Abbreviated version
+			overlayStart = math.Max(0, totalDuration-5.0)
+			h.logger.Info("Using text-only disclaimer overlay",
+				zap.String("job_id", jobID),
+				zap.Float64("overlay_start", overlayStart),
+				zap.String("tier", string(job.DisclaimerSpec.Tier)),
+			)
+
+		case domain.DisclaimerTierShort, domain.DisclaimerTierFull:
+			// Audio disclaimer: show full text starting when audio disclaimer begins
+			overlayText = job.DisclaimerSpec.FullText
+			overlayStart = h.calculateSideEffectsStartTime(totalDuration, job.DisclaimerSpec)
+			h.logger.Info("Using audio-synced disclaimer overlay",
+				zap.String("job_id", jobID),
+				zap.Float64("overlay_start", overlayStart),
+				zap.String("tier", string(job.DisclaimerSpec.Tier)),
+			)
+		}
+	} else {
+		// Fallback to existing behavior for non-pharmaceutical ads or legacy jobs
+		overlayText = job.SideEffectsText
+		overlayStart = job.SideEffectsStartTime
+	}
+
+	trimmedText := strings.TrimSpace(overlayText)
+
 	h.logger.Info("Composing final video",
 		zap.String("job_id", jobID),
 		zap.Int("num_clips", len(clips)),
 		zap.Bool("has_side_effects", trimmedText != ""),
-		zap.Float64("side_effects_start_time", sideEffectsStartTime),
+		zap.Float64("side_effects_start_time", overlayStart),
 		zap.Float64("video_duration_estimate", totalDuration),
 	)
 
-	if sideEffectsStartTime > 0 && trimmedText == "" {
+	if overlayStart > 0 && trimmedText == "" {
 		return "", "", fmt.Errorf("side effects text is required when sideEffectsStartTime is provided")
 	}
 
@@ -1515,7 +1678,7 @@ func (h *GenerateHandler) composeVideo(
 			videoHeight = 1080
 		}
 
-		config, err := buildDrawtextConfig(h.logger, trimmedText, sideEffectsStartTime, totalDuration, videoWidth, videoHeight)
+		config, err := buildDrawtextConfig(h.logger, trimmedText, overlayStart, totalDuration, videoWidth, videoHeight)
 		if err != nil {
 			return "", "", err
 		}

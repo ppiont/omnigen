@@ -250,7 +250,7 @@ func (h *RegenerateHandler) RegenerateScene(c *gin.Context) {
 
 	// Re-compose final video with updated clips
 	clips := h.buildClipVideosFromJob(job)
-	mp4Key, webmKey, err := h.composeVideo(ctx, job.UserID, jobID, clips, job.SideEffectsText, job.SideEffectsStartTime)
+	mp4Key, webmKey, err := h.composeVideo(ctx, job, clips)
 	if err != nil {
 		h.logger.Error("Video recomposition failed",
 			zap.String("job_id", jobID),
@@ -418,11 +418,8 @@ func (h *RegenerateHandler) buildClipVideosFromJob(job *domain.Job) []ClipVideo 
 // Returns: (mp4Key, webmKey, error) - webmKey may be empty if WebM encoding fails
 func (h *RegenerateHandler) composeVideo(
 	ctx context.Context,
-	userID string,
-	jobID string,
+	job *domain.Job,
 	clips []ClipVideo,
-	sideEffectsText string,
-	sideEffectsStartTime float64,
 ) (string, string, error) {
-	return composeVideoCommon(ctx, h.s3Service, h.assetsBucket, h.logger, userID, jobID, clips, sideEffectsText, sideEffectsStartTime)
+	return composeVideoCommon(ctx, h.s3Service, h.assetsBucket, h.logger, job, clips)
 }
