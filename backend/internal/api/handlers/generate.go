@@ -245,6 +245,11 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 		job.Title = req.Title
 	}
 
+	// Store product image URL for end card generation
+	if strings.TrimSpace(req.StartImage) != "" {
+		job.ProductImageURL = req.StartImage
+	}
+
 	// Save job to database
 	if err := h.jobRepo.CreateJob(c.Request.Context(), job); err != nil {
 		h.logger.Error("Failed to create job", zap.Error(err))
