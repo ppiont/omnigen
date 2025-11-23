@@ -22,23 +22,100 @@ type KlingAdapter struct {
 	modelVersion string
 }
 
+// ReplicateModelVersion represents a model version from Replicate API
+type ReplicateModelVersion struct {
+	ID      string `json:"id"`
+	Created string `json:"created_at"`
+}
+
+// ReplicateModelVersionsResponse represents the response from Replicate versions API
+type ReplicateModelVersionsResponse struct {
+	Results []ReplicateModelVersion `json:"results"`
+}
+
 // NewKlingAdapter creates a new Kling V2.5 adapter
 func NewKlingAdapter(apiToken string, logger *zap.Logger) *KlingAdapter {
-	return &KlingAdapter{
+	adapter := &KlingAdapter{
 		apiToken: apiToken,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 		logger: logger,
-		// Kling V2.5 Turbo Pro model on Replicate
-		// Replicate HTTP API requires the full version hash for direct API calls
-		// To get the version hash:
-		//   1. Visit https://replicate.com/kwaivgi/kling-v2.5-turbo-pro
-		//   2. Click on a version to see the hash in the URL
-		//   3. Or use: curl -H "Authorization: Bearer $REPLICATE_API_TOKEN" https://api.replicate.com/v1/models/kwaivgi/kling-v2.5-turbo-pro/versions
-		// Using :latest as fallback - should be replaced with specific version hash for production
-		modelVersion: "kwaivgi/kling-v2.5-turbo-pro:latest",
+		modelVersion: "", // Will be initialized
 	}
+
+	// Try to fetch model version from Replicate API
+	// This ensures we always use a valid version hash
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if version := adapter.fetchModelVersion(ctx); version != "" {
+		adapter.modelVersion = version
+		logger.Info("Successfully initialized Kling model version from Replicate API",
+			zap.String("model_version", version),
+		)
+	} else {
+		// Fallback: try alternative model names or use a known working version
+		// If this still fails, the error will be clear from the API response
+		adapter.modelVersion = "kwaivgi/kling-v2.5-turbo-pro"
+		logger.Warn("Could not fetch Kling model version from API, using model name without version hash",
+			zap.String("fallback_version", adapter.modelVersion),
+		)
+	}
+
+	return adapter
+}
+
+// fetchModelVersion queries Replicate API for available versions and returns the latest
+func (k *KlingAdapter) fetchModelVersion(ctx context.Context) string {
+	// Try the primary model name
+	modelName := "kwaivgi/kling-v2.5-turbo-pro"
+	url := fmt.Sprintf("https://api.replicate.com/v1/models/%s/versions", modelName)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		k.logger.Debug("Failed to create request for model versions", zap.Error(err))
+		return ""
+	}
+
+	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", k.apiToken))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := k.httpClient.Do(httpReq)
+	if err != nil {
+		k.logger.Debug("Failed to fetch model versions from Replicate API", zap.Error(err))
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		k.logger.Debug("Replicate API returned non-200 status when fetching versions",
+			zap.Int("status_code", resp.StatusCode),
+		)
+		return ""
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		k.logger.Debug("Failed to read model versions response", zap.Error(err))
+		return ""
+	}
+
+	var versionsResp ReplicateModelVersionsResponse
+	if err := json.Unmarshal(body, &versionsResp); err != nil {
+		k.logger.Debug("Failed to unmarshal model versions response", zap.Error(err))
+		return ""
+	}
+
+	if len(versionsResp.Results) > 0 {
+		// Use the first version (most recent, as Replicate returns them sorted)
+		versionID := versionsResp.Results[0].ID
+		fullVersion := fmt.Sprintf("%s:%s", modelName, versionID)
+		return fullVersion
+	}
+
+	k.logger.Debug("No model versions found in Replicate API response")
+	return ""
 }
 
 // KlingRequest matches the Kling API schema on Replicate
