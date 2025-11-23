@@ -155,6 +155,335 @@
                 }
             }
         },
+        "/api/v1/brand-guidelines": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all brand guidelines for the authenticated user",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "brand-guidelines"
+                ],
+                "summary": "List user's brand guidelines",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.BrandGuidelineSummary"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create new brand guidelines for the authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "brand-guidelines"
+                ],
+                "summary": "Create brand guidelines",
+                "parameters": [
+                    {
+                        "description": "Brand guideline data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.BrandGuidelineRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.BrandGuidelines"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/brand-guidelines/upload/presigned-url": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generate a presigned URL for uploading a brand guidelines document",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "brand-guidelines"
+                ],
+                "summary": "Get presigned URL for brand document upload",
+                "parameters": [
+                    {
+                        "description": "Upload request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PresignedURLRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PresignedURLResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/brand-guidelines/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get specific brand guidelines by ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "brand-guidelines"
+                ],
+                "summary": "Get brand guidelines by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Guideline ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.BrandGuidelines"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update existing brand guidelines",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "brand-guidelines"
+                ],
+                "summary": "Update brand guidelines",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Guideline ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated brand guideline data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.BrandGuidelineRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.BrandGuidelines"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete specific brand guidelines",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "brand-guidelines"
+                ],
+                "summary": "Delete brand guidelines",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Guideline ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/brand-guidelines/{id}/activate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Set specific brand guidelines as active for the user",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "brand-guidelines"
+                ],
+                "summary": "Set active brand guidelines",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Guideline ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.BrandGuidelines"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/generate": {
             "post": {
                 "security": [
@@ -600,6 +929,513 @@
         }
     },
     "definitions": {
+        "domain.BrandColors": {
+            "type": "object",
+            "properties": {
+                "accent": {
+                    "description": "Accent/highlight colors",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ColorSpec"
+                    }
+                },
+                "neutral": {
+                    "description": "Grays, blacks, whites",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ColorSpec"
+                    }
+                },
+                "primary": {
+                    "description": "Main brand colors",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ColorSpec"
+                    }
+                },
+                "prohibited": {
+                    "description": "Colors to avoid",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ColorSpec"
+                    }
+                },
+                "secondary": {
+                    "description": "Supporting colors",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ColorSpec"
+                    }
+                }
+            }
+        },
+        "domain.BrandGuidelineRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "brand_voice": {
+                    "$ref": "#/definitions/domain.BrandVoice"
+                },
+                "colors": {
+                    "$ref": "#/definitions/domain.BrandColors"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "image_style": {
+                    "$ref": "#/definitions/domain.ImageStyle"
+                },
+                "logo_assets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.LogoAsset"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parse_from_document": {
+                    "description": "For document parsing - client can upload a document and we'll extract guidelines",
+                    "type": "boolean"
+                },
+                "source_document": {
+                    "$ref": "#/definitions/domain.DocumentRef"
+                },
+                "typography": {
+                    "$ref": "#/definitions/domain.BrandTypography"
+                },
+                "video_style": {
+                    "$ref": "#/definitions/domain.VideoStyle"
+                }
+            }
+        },
+        "domain.BrandGuidelineSummary": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "guideline_id": {
+                    "type": "string"
+                },
+                "has_colors": {
+                    "type": "boolean"
+                },
+                "has_image_style": {
+                    "type": "boolean"
+                },
+                "has_logos": {
+                    "type": "boolean"
+                },
+                "has_video_style": {
+                    "type": "boolean"
+                },
+                "has_voice": {
+                    "type": "boolean"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.BrandGuidelines": {
+            "type": "object",
+            "properties": {
+                "brand_voice": {
+                    "description": "Tone and Messaging",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.BrandVoice"
+                        }
+                    ]
+                },
+                "colors": {
+                    "description": "Visual Brand Elements",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.BrandColors"
+                        }
+                    ]
+                },
+                "created_at": {
+                    "description": "Unix timestamp",
+                    "type": "integer"
+                },
+                "description": {
+                    "description": "Optional description",
+                    "type": "string"
+                },
+                "guideline_id": {
+                    "description": "Primary key",
+                    "type": "string"
+                },
+                "image_style": {
+                    "description": "Media Guidelines",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.ImageStyle"
+                        }
+                    ]
+                },
+                "is_active": {
+                    "description": "Metadata",
+                    "type": "boolean"
+                },
+                "logo_assets": {
+                    "description": "Logo variations",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.LogoAsset"
+                    }
+                },
+                "name": {
+                    "description": "User-friendly name for the guidelines",
+                    "type": "string"
+                },
+                "source_document": {
+                    "description": "Document References",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.DocumentRef"
+                        }
+                    ]
+                },
+                "typography": {
+                    "description": "Font preferences",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.BrandTypography"
+                        }
+                    ]
+                },
+                "updated_at": {
+                    "description": "Unix timestamp",
+                    "type": "integer"
+                },
+                "user_id": {
+                    "description": "User who uploaded this",
+                    "type": "string"
+                },
+                "video_style": {
+                    "description": "Video-specific guidelines",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.VideoStyle"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.BrandTypography": {
+            "type": "object",
+            "properties": {
+                "fallbacks": {
+                    "description": "Web-safe fallback fonts",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "primary": {
+                    "description": "Main brand font",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.FontSpec"
+                        }
+                    ]
+                },
+                "restrictions": {
+                    "description": "Fonts to avoid",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "secondary": {
+                    "description": "Supporting font",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.FontSpec"
+                        }
+                    ]
+                }
+            }
+        },
+        "domain.BrandVoice": {
+            "type": "object",
+            "properties": {
+                "do_list": {
+                    "description": "Things to do in messaging",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "dont_list": {
+                    "description": "Things to avoid",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "messaging_style": {
+                    "description": "formal, casual, playful, etc.",
+                    "type": "string"
+                },
+                "personality": {
+                    "description": "Brand personality traits",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sample_messages": {
+                    "description": "Example brand messages",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tone_keywords": {
+                    "description": "Descriptive tone words",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "domain.ColorSpec": {
+            "type": "object",
+            "properties": {
+                "cmyk": {
+                    "description": "For print",
+                    "type": "string"
+                },
+                "description": {
+                    "description": "Usage context",
+                    "type": "string"
+                },
+                "hex": {
+                    "description": "#FF0000",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Color name (e.g., \"Primary Blue\")",
+                    "type": "string"
+                },
+                "pantone": {
+                    "description": "Pantone code",
+                    "type": "string"
+                },
+                "rgb": {
+                    "description": "rgb(255, 0, 0)",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.DocumentRef": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "description": "MIME type",
+                    "type": "string"
+                },
+                "file_size": {
+                    "description": "File size in bytes",
+                    "type": "integer"
+                },
+                "filename": {
+                    "description": "Original filename",
+                    "type": "string"
+                },
+                "s3_url": {
+                    "description": "S3 storage location",
+                    "type": "string"
+                },
+                "uploaded_at": {
+                    "description": "Unix timestamp",
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.FontSpec": {
+            "type": "object",
+            "properties": {
+                "family": {
+                    "description": "Font family name",
+                    "type": "string"
+                },
+                "styles": {
+                    "description": "Available styles (italic, normal)",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "usage_context": {
+                    "description": "When to use this font",
+                    "type": "string"
+                },
+                "weights": {
+                    "description": "Available weights (light, regular, bold)",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "domain.ImageStyle": {
+            "type": "object",
+            "properties": {
+                "color_treatment": {
+                    "description": "Color processing style",
+                    "type": "string"
+                },
+                "composition": {
+                    "description": "Composition preferences",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "mood": {
+                    "description": "Overall mood/feeling",
+                    "type": "string"
+                },
+                "restrictions": {
+                    "description": "What to avoid in images",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "style": {
+                    "description": "Photography style",
+                    "type": "string"
+                },
+                "subjects": {
+                    "description": "Preferred subjects/themes",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "domain.LogoAsset": {
+            "type": "object",
+            "properties": {
+                "asset_id": {
+                    "description": "Unique identifier",
+                    "type": "string"
+                },
+                "color_type": {
+                    "description": "full-color, monochrome, white, etc.",
+                    "type": "string"
+                },
+                "content_type": {
+                    "description": "MIME type",
+                    "type": "string"
+                },
+                "file_size": {
+                    "description": "File size in bytes",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "Logo variant name",
+                    "type": "string"
+                },
+                "s3_url": {
+                    "description": "S3 storage location",
+                    "type": "string"
+                },
+                "usage": {
+                    "description": "Usage guidelines",
+                    "type": "string"
+                },
+                "variant": {
+                    "description": "horizontal, vertical, icon, etc.",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.TextOverlayStyle": {
+            "type": "object",
+            "properties": {
+                "animation": {
+                    "description": "Animation style for text",
+                    "type": "string"
+                },
+                "background": {
+                    "description": "Background treatment for text",
+                    "type": "string"
+                },
+                "color": {
+                    "description": "Text color (often from brand colors)",
+                    "type": "string"
+                },
+                "font_family": {
+                    "description": "Preferred font for overlays",
+                    "type": "string"
+                },
+                "font_size": {
+                    "description": "Size guidelines (large, medium, small)",
+                    "type": "string"
+                },
+                "position": {
+                    "description": "Positioning preference",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.VideoStyle": {
+            "type": "object",
+            "properties": {
+                "camera_movement": {
+                    "description": "Preferred camera movements",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "color_grading": {
+                    "description": "Color grading style",
+                    "type": "string"
+                },
+                "pacing_style": {
+                    "description": "fast, medium, slow",
+                    "type": "string"
+                },
+                "text_overlays": {
+                    "description": "Text overlay guidelines",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.TextOverlayStyle"
+                        }
+                    ]
+                },
+                "transition_type": {
+                    "description": "Preferred transitions",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "errors.APIError": {
             "type": "object",
             "properties": {

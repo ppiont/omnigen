@@ -18,26 +18,27 @@ import (
 
 // ServerConfig holds the server configuration
 type ServerConfig struct {
-	Port             string
-	Environment      string
-	Logger           *zap.Logger
-	JobRepo          *repository.DynamoDBRepository
-	S3Service        *repository.S3AssetRepository // For presigned URLs and video uploads/downloads
-	UsageRepo        *repository.DynamoDBUsageRepository
-	ParserService    *service.ParserService   // Script generation service
-	AssetService     *service.AssetService    // Asset URL generation service
-	VeoAdapter       *adapters.VeoAdapter     // Veo 3.1 video generation
-	MinimaxAdapter   *adapters.MinimaxAdapter // Minimax audio generation
-	TTSAdapter       adapters.TTSAdapter      // Text-to-speech adapter for narrator voiceover
-	AssetsBucket     string                   // S3 bucket for video assets
-	APIKeys          []string                 // Deprecated: Use JWTValidator instead
-	JWTValidator     *auth.JWTValidator
-	CookieConfig     auth.CookieConfig // Cookie configuration for httpOnly tokens
-	CloudFrontDomain string            // For CORS in production
-	CognitoDomain    string            // Cognito hosted UI domain for CORS
-	OpenAIKey        string            // OpenAI API key for title generation
-	ReadTimeout      time.Duration
-	WriteTimeout     time.Duration
+	Port                string
+	Environment         string
+	Logger              *zap.Logger
+	JobRepo             *repository.DynamoDBRepository
+	S3Service           *repository.S3AssetRepository // For presigned URLs and video uploads/downloads
+	UsageRepo           *repository.DynamoDBUsageRepository
+	BrandGuidelinesRepo repository.BrandGuidelinesRepository // Brand guidelines repository
+	ParserService       *service.ParserService                // Script generation service
+	AssetService        *service.AssetService                 // Asset URL generation service
+	VeoAdapter          *adapters.VeoAdapter                  // Veo 3.1 video generation
+	MinimaxAdapter      *adapters.MinimaxAdapter              // Minimax audio generation
+	TTSAdapter          adapters.TTSAdapter                   // Text-to-speech adapter for narrator voiceover
+	AssetsBucket        string                                // S3 bucket for video assets
+	APIKeys             []string                              // Deprecated: Use JWTValidator instead
+	JWTValidator        *auth.JWTValidator
+	CookieConfig        auth.CookieConfig // Cookie configuration for httpOnly tokens
+	CloudFrontDomain    string            // For CORS in production
+	CognitoDomain       string            // Cognito hosted UI domain for CORS
+	OpenAIKey           string            // OpenAI API key for title generation
+	ReadTimeout         time.Duration
+	WriteTimeout        time.Duration
 }
 
 // Server represents the HTTP server
@@ -163,6 +164,7 @@ func (s *Server) setupRoutes() {
 			s.config.TTSAdapter,
 			s.config.S3Service,
 			s.config.JobRepo,
+			s.config.BrandGuidelinesRepo,
 			s.config.AssetsBucket,
 			s.config.Logger,
 		)

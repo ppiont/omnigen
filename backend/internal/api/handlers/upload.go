@@ -84,23 +84,11 @@ func (h *UploadHandler) GetPresignedURL(c *gin.Context) {
 		return
 	}
 
-	// Validate file size (max 10MB)
-	const maxFileSize = 10 * 1024 * 1024 // 10MB
-	if req.FileSize > maxFileSize {
-		h.logger.Warn("File size exceeds limit",
-			zap.String("user_id", userID),
-			zap.String("asset_type", assetType),
-			zap.Int64("file_size", req.FileSize),
-			zap.Int64("max_size", maxFileSize),
-		)
-		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
-			Error: errors.ErrInvalidRequest,
-		})
-		return
-	}
 
 	// Generate S3 key based on asset type
 	var s3Key string
+	var maxFileSize int64 = 10 * 1024 * 1024 // Default 10MB
+
 	switch assetType {
 	case "product_image":
 		// Sanitize filename
@@ -108,10 +96,32 @@ func (h *UploadHandler) GetPresignedURL(c *gin.Context) {
 		// Use timestamp to ensure uniqueness
 		timestamp := time.Now().Unix()
 		s3Key = fmt.Sprintf("users/%s/uploads/product_images/%d_%s", userID, timestamp, filename)
+	case "brand_document":
+		// Brand guidelines documents can be larger
+		maxFileSize = 25 * 1024 * 1024 // 25MB for documents
+		// Sanitize filename
+		filename := sanitizeFilename(req.Filename)
+		// Use timestamp to ensure uniqueness
+		timestamp := time.Now().Unix()
+		s3Key = fmt.Sprintf("users/%s/brand-guidelines/%d_%s", userID, timestamp, filename)
 	default:
 		h.logger.Warn("Unsupported asset type",
 			zap.String("user_id", userID),
 			zap.String("asset_type", assetType),
+		)
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+			Error: errors.ErrInvalidRequest,
+		})
+		return
+	}
+
+	// Validate file size with the appropriate limit for this asset type
+	if req.FileSize > maxFileSize {
+		h.logger.Warn("File size exceeds limit",
+			zap.String("user_id", userID),
+			zap.String("asset_type", assetType),
+			zap.Int64("file_size", req.FileSize),
+			zap.Int64("max_size", maxFileSize),
 		)
 		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
 			Error: errors.ErrInvalidRequest,

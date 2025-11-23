@@ -205,7 +205,7 @@ health: ## Check API health
 
 swagger: ## Generate Swagger API documentation
 	@printf '${CYAN}Generating Swagger documentation...${NC}\n'
-	@cd backend && swag init -g cmd/api/main.go --output docs
+	@cd backend && $(HOME)/go/bin/swag init -g cmd/api/main.go --output docs
 	@printf '${GREEN}Swagger docs generated successfully in backend/docs/${NC}\n'
 
 # Cleanup
