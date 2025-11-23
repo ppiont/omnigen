@@ -137,9 +137,9 @@ func main() {
 	zapLogger.Info("Asset service initialized")
 
 	// Initialize video and audio generation adapters
-	veoAdapter := adapters.NewVeoAdapter(replicateAPIKey, zapLogger)
+	klingAdapter := adapters.NewKlingAdapter(replicateAPIKey, zapLogger)
 	minimaxAdapter := adapters.NewMinimaxAdapter(replicateAPIKey, zapLogger)
-	zapLogger.Info("Video and audio generation adapters initialized (Veo 3.1)")
+	zapLogger.Info("Video and audio generation adapters initialized (Kling V2.5)")
 
 	// Initialize TTS adapter for narrator voiceover generation
 	// Try to get OpenAI API key from Secrets Manager or environment variable
@@ -192,7 +192,7 @@ func main() {
 		BrandGuidelinesRepo: brandGuidelinesRepo,
 		ParserService:       parserService,
 		AssetService:        assetService,
-		VeoAdapter:          veoAdapter,     // Video generation (Veo 3.1)
+		KlingAdapter:        klingAdapter,     // Video generation (Kling V2.5)
 		MinimaxAdapter:      minimaxAdapter, // Audio generation
 		TTSAdapter:          ttsAdapter,     // Text-to-speech for narrator voiceover
 		GPT4oAdapter:        gpt4oAdapter,   // GPT-4o for narration generation

@@ -22,7 +22,7 @@ import (
 // GenerateHandler handles video generation requests with goroutine-based async processing
 type GenerateHandler struct {
 	parserService       *service.ParserService
-	veoAdapter          *adapters.VeoAdapter
+	klingAdapter        *adapters.KlingAdapter
 	minimaxAdapter      *adapters.MinimaxAdapter
 	ttsAdapter          adapters.TTSAdapter // Text-to-speech adapter for narrator voiceover
 	gpt4oAdapter        *adapters.GPT4oAdapter
@@ -38,7 +38,7 @@ type GenerateHandler struct {
 // NewGenerateHandler creates a new generate handler
 func NewGenerateHandler(
 	parserService *service.ParserService,
-	veoAdapter *adapters.VeoAdapter,
+	klingAdapter *adapters.KlingAdapter,
 	minimaxAdapter *adapters.MinimaxAdapter,
 	ttsAdapter adapters.TTSAdapter,
 	gpt4oAdapter *adapters.GPT4oAdapter,
@@ -51,7 +51,7 @@ func NewGenerateHandler(
 ) *GenerateHandler {
 	return &GenerateHandler{
 		parserService:       parserService,
-		veoAdapter:          veoAdapter,
+		klingAdapter:        klingAdapter,
 		minimaxAdapter:      minimaxAdapter,
 		ttsAdapter:          ttsAdapter,
 		gpt4oAdapter:        gpt4oAdapter,
@@ -188,10 +188,10 @@ func (h *GenerateHandler) Generate(c *gin.Context) {
 
 	req.StartImage = strings.TrimSpace(req.StartImage)
 
-	// Validate duration is multiple of 5 (Veo constraint: 5s or 10s clips only)
-	if req.Duration < 10 || req.Duration > 60 || req.Duration%5 != 0 {
+	// Validate duration (Kling supports flexible durations, but we keep 10-60s range)
+	if req.Duration < 10 || req.Duration > 60 {
 		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
-			Error: errors.NewValidationError("duration", "Duration must be between 10-60 seconds and divisible by 5"),
+			Error: errors.NewValidationError("duration", "Duration must be between 10-60 seconds"),
 		})
 		return
 	}
