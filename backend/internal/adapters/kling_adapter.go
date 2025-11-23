@@ -31,7 +31,12 @@ func NewKlingAdapter(apiToken string, logger *zap.Logger) *KlingAdapter {
 		},
 		logger: logger,
 		// Kling V2.5 Turbo Pro model on Replicate
-		// Using :latest - can be updated to specific version hash if needed
+		// Replicate HTTP API requires the full version hash for direct API calls
+		// To get the version hash:
+		//   1. Visit https://replicate.com/kwaivgi/kling-v2.5-turbo-pro
+		//   2. Click on a version to see the hash in the URL
+		//   3. Or use: curl -H "Authorization: Bearer $REPLICATE_API_TOKEN" https://api.replicate.com/v1/models/kwaivgi/kling-v2.5-turbo-pro/versions
+		// Using :latest as fallback - should be replaced with specific version hash for production
 		modelVersion: "kwaivgi/kling-v2.5-turbo-pro:latest",
 	}
 }
@@ -123,6 +128,7 @@ func (k *KlingAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRe
 
 		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", k.apiToken))
 		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Prefer", "wait=0") // Don't wait for completion
 
 		resp, err := k.httpClient.Do(httpReq)
 		if err != nil {
@@ -153,7 +159,16 @@ func (k *KlingAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRe
 			}
 
 			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-				return retry.NewNonRetryableError(fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, errorBody))
+				// Provide more specific error messages for common errors
+				var errMsg string
+				if resp.StatusCode == 422 {
+					errMsg = fmt.Sprintf("API error (status %d): Invalid request parameters or model version. Check that model version '%s' is correct and parameters match Kling V2.5 schema. Response: %s", resp.StatusCode, k.modelVersion, errorBody)
+				} else if resp.StatusCode == 404 {
+					errMsg = fmt.Sprintf("API error (status %d): Model not found. Check that model version '%s' exists on Replicate. Response: %s", resp.StatusCode, k.modelVersion, errorBody)
+				} else {
+					errMsg = fmt.Sprintf("API error: status %d, body: %s", resp.StatusCode, errorBody)
+				}
+				return retry.NewNonRetryableError(fmt.Errorf(errMsg))
 			}
 			return fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, errorBody)
 		}
