@@ -111,6 +111,7 @@ function JobDetails() {
         percentage={jobProgress.percentage}
         stageTimeline={jobProgress.stageTimeline}
         estimatedTimeRemaining={jobProgress.estimatedTimeRemaining}
+        onRefresh={loadJob}
       />
     );
   };
@@ -133,4 +134,3 @@ function JobDetails() {
 }
 
 export default JobDetails;
-

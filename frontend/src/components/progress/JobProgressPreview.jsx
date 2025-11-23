@@ -1,6 +1,11 @@
 import PropTypes from "prop-types";
+import { useState } from "react";
 import ScenePreview from "./ScenePreview.jsx";
 import AudioPreview from "./AudioPreview.jsx";
+import JobControls from "../intervention/JobControls.jsx";
+import SceneEditor from "../intervention/SceneEditor.jsx";
+import ParameterEditor from "../intervention/ParameterEditor.jsx";
+import { useJobIntervention } from "../../hooks/useJobIntervention.js";
 
 const EMPTY_ARRAY = [];
 const DEFAULT_STAGE_ORDER = [
@@ -114,9 +119,23 @@ function JobProgressPreview({
   percentage,
   stageTimeline,
   estimatedTimeRemaining,
+  onRefresh // Added to trigger manual refreshes after intervention
 }) {
+  const [editingScene, setEditingScene] = useState(null);
+  const [isParameterEditorOpen, setIsParameterEditorOpen] = useState(false);
+  const { 
+    isUpdating, 
+    pauseJob, 
+    resumeJob, 
+    modifyScene, 
+    skipScene, 
+    updateParameters 
+  } = useJobIntervention(job?.job_id, onRefresh);
+
   const prompt = job?.prompt || progress?.prompt || "Untitled video";
   const status = progress?.status || job?.status || "processing";
+  const isPaused = job?.is_paused || status === "paused";
+  
   const scenesCompleted =
     progress?.scenes_completed ??
     job?.scenes_completed ??
@@ -168,16 +187,51 @@ function JobProgressPreview({
     scene_number: scene.scene_number || scene.SceneNumber || index + 1,
   }));
 
+  const handleEditScene = (scene) => {
+    setEditingScene(scene);
+  };
+
+  const handleSaveScene = async (data) => {
+    if (editingScene) {
+      await modifyScene(editingScene.scene_number, data);
+      setEditingScene(null);
+    }
+  };
+
+  const handleSkipScene = async (sceneNumber) => {
+    await skipScene(sceneNumber);
+    setEditingScene(null); // Close editor if skipping currently edited scene
+  };
+
+  const handleSaveParameters = async (params) => {
+    await updateParameters(params);
+    setIsParameterEditorOpen(false);
+  };
+
+  const isJobActive = status === "processing" || status === "paused";
+
   return (
     <div className="job-progress-preview">
       <header className="job-progress-header">
         <div>
           <p className="eyebrow-text">Job status</p>
           <h2>{prompt}</h2>
-          <span className={`job-status-badge status-${status}`}>
+          <span className={`job-status-badge status-${status.toLowerCase()}`}>
             {status.replace(/_/g, " ")}
           </span>
         </div>
+        
+        {/* Intervention Controls */}
+        {isJobActive && (
+          <JobControls 
+            isPaused={isPaused}
+            onPause={pauseJob}
+            onResume={resumeJob}
+            onEditParameters={() => setIsParameterEditorOpen(true)}
+            disabled={isUpdating}
+          />
+        )}
+
         <div className="progress-metrics">
           <div>
             <p className="metric-label">Overall progress</p>
@@ -204,7 +258,10 @@ function JobProgressPreview({
         <div className="progress-bar-track">
           <div
             className="progress-bar-fill"
-            style={{ width: `${Math.min(100, Math.max(0, percentage))}%` }}
+            style={{ 
+              width: `${Math.min(100, Math.max(0, percentage))}%`,
+              opacity: isPaused ? 0.6 : 1
+            }}
           />
         </div>
       </div>
@@ -224,7 +281,7 @@ function JobProgressPreview({
                 stage.status === "completed"
                   ? "Done"
                   : stage.status === "active"
-                  ? "In progress"
+                  ? (isPaused ? "Paused" : "In progress")
                   : "Queued"
               }
             />
@@ -252,6 +309,17 @@ function JobProgressPreview({
           <h3>Scene Previews</h3>
           <p>Scenes become playable the moment each render finishes.</p>
         </div>
+        
+        {editingScene && (
+          <SceneEditor 
+            scene={editingScene}
+            onSave={handleSaveScene}
+            onCancel={() => setEditingScene(null)}
+            onSkip={handleSkipScene}
+            isSaving={isUpdating}
+          />
+        )}
+
         <div className="scene-preview-grid">
           {gridScenes.length ? (
             gridScenes.map((scene, index) => {
@@ -269,17 +337,30 @@ function JobProgressPreview({
                 statusForScene = "active";
               }
 
+              // Determine if scene is editable (only upcoming or active scenes when paused)
+              const isEditable = isJobActive && !clipInfo?.url && (statusForScene === "pending" || (statusForScene === "active" && isPaused));
+
               return (
-                <ScenePreview
-                  key={sceneNumber}
-                  sceneNumber={sceneNumber}
-                  title={scene.location || scene.Location || scene.title}
-                  description={scene.action || scene.Action || scene.generation_prompt}
-                  videoUrl={clipInfo?.url}
-                  thumbnailUrl={clipInfo?.thumbnail}
-                  duration={scene.duration || scene.Duration}
-                  status={statusForScene}
-                />
+                <div key={sceneNumber} className="scene-preview-wrapper">
+                  <ScenePreview
+                    sceneNumber={sceneNumber}
+                    title={scene.location || scene.Location || scene.title}
+                    description={scene.action || scene.Action || scene.generation_prompt}
+                    videoUrl={clipInfo?.url}
+                    thumbnailUrl={clipInfo?.thumbnail}
+                    duration={scene.duration || scene.Duration}
+                    status={statusForScene}
+                  />
+                  {isEditable && !editingScene && (
+                    <button 
+                      className="btn-secondary btn-sm scene-edit-btn"
+                      onClick={() => handleEditScene(scene)}
+                      disabled={isUpdating}
+                    >
+                      Edit Scene
+                    </button>
+                  )}
+                </div>
               );
             })
           ) : (
@@ -295,6 +376,18 @@ function JobProgressPreview({
         thumbnailUrl={thumbnailUrl}
         status={status}
       />
+
+      {isParameterEditorOpen && (
+        <ParameterEditor 
+          currentParams={{
+            aspectRatio: job?.aspect_ratio,
+            style: job?.style
+          }}
+          onSave={handleSaveParameters}
+          onCancel={() => setIsParameterEditorOpen(false)}
+          isSaving={isUpdating}
+        />
+      )}
     </div>
   );
 }
@@ -311,6 +404,7 @@ JobProgressPreview.propTypes = {
     })
   ),
   estimatedTimeRemaining: PropTypes.number,
+  onRefresh: PropTypes.func,
 };
 
 JobProgressPreview.defaultProps = {
@@ -319,7 +413,7 @@ JobProgressPreview.defaultProps = {
   percentage: 0,
   stageTimeline: DEFAULT_STAGE_ORDER.map((stage) => ({ ...stage, status: "pending" })),
   estimatedTimeRemaining: null,
+  onRefresh: () => {},
 };
 
 export default JobProgressPreview;
-

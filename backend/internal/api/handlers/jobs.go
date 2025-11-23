@@ -543,3 +543,234 @@ func calculateDynamicProgress(stage string, totalScenes int) int {
 
 	return 0
 }
+
+// PauseJob handles POST /api/v1/jobs/:id/pause
+func (h *JobsHandler) PauseJob(c *gin.Context) {
+	jobID := c.Param("id")
+	userID := auth.MustGetUserID(c)
+
+	job, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
+	if err != nil {
+		if err == repository.ErrJobNotFound {
+			c.JSON(http.StatusNotFound, errors.ErrorResponse{Error: errors.ErrJobNotFound})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{Error: errors.ErrInternalServer})
+		return
+	}
+
+	if job.UserID != userID {
+		c.JSON(http.StatusForbidden, errors.ErrorResponse{Error: errors.ErrForbidden})
+		return
+	}
+
+	if job.Status != domain.StatusProcessing {
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+			Error: errors.NewValidationError("status", "Only processing jobs can be paused"),
+		})
+		return
+	}
+
+	job.IsPaused = true
+	job.Status = domain.StatusPaused
+	
+	if err := h.jobRepo.UpdateJob(c.Request.Context(), job); err != nil {
+		h.logger.Error("Failed to pause job", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{Error: errors.ErrInternalServer})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "paused"})
+}
+
+// ResumeJob handles POST /api/v1/jobs/:id/resume
+func (h *JobsHandler) ResumeJob(c *gin.Context) {
+	jobID := c.Param("id")
+	userID := auth.MustGetUserID(c)
+
+	job, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
+	if err != nil {
+		if err == repository.ErrJobNotFound {
+			c.JSON(http.StatusNotFound, errors.ErrorResponse{Error: errors.ErrJobNotFound})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{Error: errors.ErrInternalServer})
+		return
+	}
+
+	if job.UserID != userID {
+		c.JSON(http.StatusForbidden, errors.ErrorResponse{Error: errors.ErrForbidden})
+		return
+	}
+
+	if job.Status != domain.StatusPaused {
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+			Error: errors.NewValidationError("status", "Only paused jobs can be resumed"),
+		})
+		return
+	}
+
+	job.IsPaused = false
+	job.Status = domain.StatusProcessing
+	
+	if err := h.jobRepo.UpdateJob(c.Request.Context(), job); err != nil {
+		h.logger.Error("Failed to resume job", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{Error: errors.ErrInternalServer})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "processing"})
+}
+
+// ModifyScene handles PUT /api/v1/jobs/:id/scenes/:scene_number
+func (h *JobsHandler) ModifyScene(c *gin.Context) {
+	jobID := c.Param("id")
+	sceneNumStr := c.Param("scene_number")
+	userID := auth.MustGetUserID(c)
+
+	sceneNum, err := strconv.Atoi(sceneNumStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse{Error: errors.ErrInvalidRequest})
+		return
+	}
+
+	var req struct {
+		Prompt   string  `json:"prompt"`
+		Duration float64 `json:"duration"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse{Error: errors.ErrInvalidRequest})
+		return
+	}
+
+	job, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{Error: errors.ErrInternalServer})
+		return
+	}
+
+	if job.UserID != userID {
+		c.JSON(http.StatusForbidden, errors.ErrorResponse{Error: errors.ErrForbidden})
+		return
+	}
+
+	// Validate scene number
+	if sceneNum < 1 || sceneNum > len(job.Scenes) {
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+			Error: errors.NewValidationError("scene_number", "Invalid scene number"),
+		})
+		return
+	}
+
+	// Only allow modification of upcoming scenes or current scene if paused
+	if sceneNum <= job.ScenesCompleted && !job.IsPaused {
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+			Error: errors.NewValidationError("scene_number", "Cannot modify completed scenes unless regenerating"),
+		})
+		return
+	}
+
+	// Update scene
+	idx := sceneNum - 1
+	if req.Prompt != "" {
+		job.Scenes[idx].GenerationPrompt = req.Prompt
+		job.Scenes[idx].Action = req.Prompt // Update action description too
+	}
+	if req.Duration > 0 {
+		job.Scenes[idx].Duration = req.Duration
+	}
+
+	if err := h.jobRepo.UpdateJob(c.Request.Context(), job); err != nil {
+		h.logger.Error("Failed to update scene", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{Error: errors.ErrInternalServer})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "updated", "scene": job.Scenes[idx]})
+}
+
+// SkipScene handles DELETE /api/v1/jobs/:id/scenes/:scene_number
+func (h *JobsHandler) SkipScene(c *gin.Context) {
+	jobID := c.Param("id")
+	sceneNumStr := c.Param("scene_number")
+	userID := auth.MustGetUserID(c)
+
+	sceneNum, err := strconv.Atoi(sceneNumStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse{Error: errors.ErrInvalidRequest})
+		return
+	}
+
+	job, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{Error: errors.ErrInternalServer})
+		return
+	}
+
+	if job.UserID != userID {
+		c.JSON(http.StatusForbidden, errors.ErrorResponse{Error: errors.ErrForbidden})
+		return
+	}
+
+	if sceneNum <= job.ScenesCompleted {
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse{
+			Error: errors.NewValidationError("scene_number", "Cannot skip completed scenes"),
+		})
+		return
+	}
+
+	// Add to skipped scenes list
+	job.SkippedScenes = append(job.SkippedScenes, sceneNum)
+
+	if err := h.jobRepo.UpdateJob(c.Request.Context(), job); err != nil {
+		h.logger.Error("Failed to skip scene", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{Error: errors.ErrInternalServer})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "skipped", "scene_number": sceneNum})
+}
+
+// UpdateJobParameters handles PUT /api/v1/jobs/:id/parameters
+func (h *JobsHandler) UpdateJobParameters(c *gin.Context) {
+	jobID := c.Param("id")
+	userID := auth.MustGetUserID(c)
+
+	var req struct {
+		AspectRatio string `json:"aspect_ratio"`
+		Style       string `json:"style"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.ErrorResponse{Error: errors.ErrInvalidRequest})
+		return
+	}
+
+	job, err := h.jobRepo.GetJob(c.Request.Context(), jobID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{Error: errors.ErrInternalServer})
+		return
+	}
+
+	if job.UserID != userID {
+		c.JSON(http.StatusForbidden, errors.ErrorResponse{Error: errors.ErrForbidden})
+		return
+	}
+
+	// Update parameters
+	if req.AspectRatio != "" {
+		job.AspectRatio = req.AspectRatio
+	}
+	if req.Style != "" {
+		job.Style = req.Style
+		// Note: Ideally this would update prompts for remaining scenes
+		// For now, we just store the intent
+	}
+
+	if err := h.jobRepo.UpdateJob(c.Request.Context(), job); err != nil {
+		h.logger.Error("Failed to update job parameters", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, errors.ErrorResponse{Error: errors.ErrInternalServer})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "updated"})
+}

@@ -5,7 +5,7 @@ type Job struct {
 	JobID    string `dynamodbav:"job_id" json:"job_id"`
 	UserID   string `dynamodbav:"user_id" json:"user_id"`
 	ScriptID string `dynamodbav:"script_id,omitempty" json:"script_id,omitempty"`
-	Status   string `dynamodbav:"status" json:"status"`                   // pending, processing, completed, failed
+	Status   string `dynamodbav:"status" json:"status"`                   // pending, processing, completed, failed, paused
 	Stage    string `dynamodbav:"stage,omitempty" json:"stage,omitempty"` // Granular progress: script_generating, scene_1_complete, etc.
 
 	// Progress fields (structured for better API responses)
@@ -58,6 +58,12 @@ type Job struct {
 
 	// All clip versions: maps "scene-{N}-v{V}" to S3 URL
 	ClipVersions map[string]string `dynamodbav:"clip_versions,omitempty" json:"clip_versions,omitempty"`
+
+	// Intervention State
+	IsPaused          bool              `dynamodbav:"is_paused,omitempty" json:"is_paused,omitempty"`
+	SkippedScenes     []int             `dynamodbav:"skipped_scenes,omitempty" json:"skipped_scenes,omitempty"`
+	UserModifications map[string]string `dynamodbav:"user_modifications,omitempty" json:"user_modifications,omitempty"` // JSON string of modifications
+
 	CreatedAt    int64             `dynamodbav:"created_at" json:"created_at"`
 	UpdatedAt    int64             `dynamodbav:"updated_at" json:"updated_at"`
 	CompletedAt  *int64            `dynamodbav:"completed_at,omitempty" json:"completed_at,omitempty"`
@@ -92,6 +98,7 @@ const (
 	StatusProcessing = "processing"
 	StatusCompleted  = "completed"
 	StatusFailed     = "failed"
+	StatusPaused     = "paused"
 )
 
 // AspectRatio constants
