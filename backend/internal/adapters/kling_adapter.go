@@ -121,7 +121,7 @@ func (k *KlingAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRe
 			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
 		}
 
-		httpReq.Header.Set("Authorization", "Token "+k.apiToken)
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", k.apiToken))
 		httpReq.Header.Set("Content-Type", "application/json")
 
 		resp, err := k.httpClient.Do(httpReq)
@@ -140,7 +140,17 @@ func (k *KlingAdapter) GenerateVideo(ctx context.Context, req *VideoGenerationRe
 			k.logger.Error("Kling API error",
 				zap.Int("status_code", resp.StatusCode),
 				zap.String("response_body", errorBody),
+				zap.String("request_url", httpReq.URL.String()),
+				zap.String("model_version", k.modelVersion),
 			)
+
+			// Log the request payload for debugging 422 errors
+			if resp.StatusCode == 422 {
+				k.logger.Error("Kling API validation error - request payload",
+					zap.Any("request_input", klingReq.Input),
+					zap.String("full_request", string(jsonData)),
+				)
+			}
 
 			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 				return retry.NewNonRetryableError(fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, errorBody))
@@ -196,7 +206,7 @@ func (k *KlingAdapter) GetStatus(ctx context.Context, predictionID string) (*Vid
 			return retry.NewNonRetryableError(fmt.Errorf("failed to create request: %w", err))
 		}
 
-		httpReq.Header.Set("Authorization", "Token "+k.apiToken)
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", k.apiToken))
 
 		resp, err := k.httpClient.Do(httpReq)
 		if err != nil {
@@ -282,12 +292,18 @@ func (k *KlingAdapter) mapAspectRatio(ar string) string {
 
 // mapDuration maps scene duration to Kling's supported durations
 // Based on schema: duration is an integer (default 5 seconds)
-// Kling supports various durations - using the requested duration directly
+// Kling typically supports 5 or 10 seconds - constrain to valid values
 func (k *KlingAdapter) mapDuration(seconds int) int {
-	// Kling accepts integer durations
-	// Default is 5, but can be other values
-	// Return the requested duration as-is (Kling is more flexible than Veo)
-	return seconds
+	// Kling typically supports 5 or 10 seconds
+	// Map to closest valid duration
+	if seconds <= 5 {
+		return 5
+	}
+	if seconds <= 10 {
+		return 10
+	}
+	// For longer durations, use 10 (max single clip)
+	return 10
 }
 
 // mapStatus maps Kling's status to our internal status
