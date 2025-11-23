@@ -121,6 +121,11 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
    - Include: Subject, action, setting, lighting, color, camera detail
    - Optimize for Veo 3.1 (works best with concrete, visual descriptions)
    - Avoid abstract concepts, focus on visible elements
+   - **CRITICAL - Content Moderation**: Veo 3.1 will REJECT prompts with:
+     * Medical crisis language: "pain", "suffering", "crisis", "emergency", "agony"
+     * Negative health terms: "sick", "ill", "disease", "symptoms"
+     * Violent language: "fighting", "attack", "weapon", "blood", "injury"
+     * Replace with safe alternatives: "discomfort" (not "pain"), "managing wellness" (not "suffering"), "health journey" (not "disease"), "consultation" (not "treatment")
 
 6. **Transitions**:
    - First scene: transition_in = "none"
@@ -585,7 +590,34 @@ Optimize your generation_prompts for Veo by:
 - Specifying exact lighting conditions and color temperatures
 - Including subtle realistic details (fabric textures, skin tones, environmental elements)
 - Keeping camera movements smooth and motivated (not arbitrary)
-- For disclaimer text scenes: specify "clean background area for text overlay"`,
+- For disclaimer text scenes: specify "clean background area for text overlay"
+
+## CONTENT MODERATION COMPLIANCE (CRITICAL)
+
+Veo 3.1 has strict content moderation that will REJECT prompts containing:
+- Violent language: "fighting", "attack", "weapon", "blood", "injury", "pain", "hurt"
+- Medical crisis language: "emergency", "crisis", "severe pain", "suffering", "agony"
+- Negative health descriptors: "sick", "ill", "disease", "symptoms", "disorder"
+- Medical procedure terms: "treatment", "diagnosis", "surgery", "injection"
+
+**REQUIRED REPLACEMENTS:**
+- "pain" → "discomfort" or "challenge"
+- "suffering from" → "managing" or "addressing"
+- "sick person" → "person seeking wellness"
+- "medical emergency" → "health consultation"
+- "treatment" → "wellness journey" or "health management"
+- "symptoms" → "wellness considerations"
+- "crisis" → "moment of discovery"
+
+**For pharmaceutical ads:**
+- Focus on POSITIVE outcomes: "relief", "comfort", "freedom", "active living"
+- Show empowerment and lifestyle improvement, not medical procedures
+- Use "consultation" instead of "treatment"
+- Emphasize "wellness journey" over "disease management"
+
+**Self-check before finalizing each generation_prompt:**
+- Scan for any flagged terms and replace with safe alternatives
+- When in doubt, use more generic, positive language`,
 
 	"kling": `## VIDEO MODEL OPTIMIZATION: Kling V2.5
 
