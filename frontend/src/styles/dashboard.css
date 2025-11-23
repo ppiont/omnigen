@@ -2739,3 +2739,358 @@ textarea.dropdown-field {
     justify-content: center;
   }
 }
+
+/* Job Details & Progress Preview */
+.job-details-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.page-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.btn-ghost:hover {
+  background: var(--surface-hover);
+}
+
+.job-progress-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: var(--surface-card);
+  border-radius: 16px;
+  padding: 1.5rem;
+  border: 1px solid var(--border-subtle);
+}
+
+.job-progress-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.job-progress-header h2 {
+  margin: 0.25rem 0;
+}
+
+.eyebrow-text {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.job-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  text-transform: capitalize;
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.job-status-badge.status-completed {
+  background: rgba(52, 199, 89, 0.15);
+  color: #34c759;
+}
+
+.job-status-badge.status-failed {
+  background: rgba(255, 59, 48, 0.15);
+  color: #ff3b30;
+}
+
+.progress-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.75rem;
+}
+
+.metric-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.15rem;
+}
+
+.metric-value {
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8b5cf6, #c084fc);
+}
+
+.job-progress-section {
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 1.25rem;
+  background: var(--surface-panel);
+}
+
+.section-heading h3 {
+  margin: 0;
+}
+
+.section-heading p {
+  color: var(--text-secondary);
+  margin: 0.15rem 0 1rem;
+}
+
+.progress-stage-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.progress-stage {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+}
+
+.progress-stage-indicator {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  margin-top: 0.2rem;
+  background: var(--surface-muted);
+}
+
+.progress-stage-active {
+  border-color: rgba(139, 92, 246, 0.4);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.progress-stage-active .progress-stage-indicator {
+  background: #8b5cf6;
+}
+
+.progress-stage-completed .progress-stage-indicator {
+  background: #34c759;
+}
+
+.progress-stage-label {
+  font-weight: 600;
+  margin: 0;
+}
+
+.progress-stage-description {
+  margin: 0.15rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.script-preview-list {
+  display: grid;
+  gap: 0.75rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.script-preview-item {
+  padding: 0.9rem;
+  border-radius: 12px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+}
+
+.script-preview-item-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.script-preview-action {
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+}
+
+.script-preview-empty {
+  padding: 1rem;
+  border-radius: 12px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.audio-track-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.audio-track-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1rem;
+  background: var(--surface-card);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.audio-track-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.audio-track-description {
+  margin: 0.15rem 0 0;
+  color: var(--text-secondary);
+}
+
+.audio-track-placeholder {
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.scene-preview-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.scene-preview-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-card);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.scene-preview-media {
+  position: relative;
+}
+
+.scene-preview-media video {
+  width: 100%;
+  display: block;
+  border-bottom: 1px solid var(--border-subtle);
+  background: #000;
+}
+
+.scene-preview-placeholder {
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.scene-status {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+
+.scene-status-active {
+  background: rgba(139, 92, 246, 0.9);
+}
+
+.scene-status-completed {
+  background: rgba(52, 199, 89, 0.9);
+}
+
+.scene-preview-body {
+  padding: 0 1rem 1rem;
+}
+
+.scene-preview-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.scene-title {
+  margin: 0.4rem 0 0.2rem;
+  font-weight: 600;
+}
+
+.scene-description {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.scene-preview-empty {
+  padding: 1rem;
+  border-radius: 12px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.final-preview-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 200px;
+  background: #000;
+}
+
+.final-preview-video {
+  width: 100%;
+  display: block;
+}
+
+.final-preview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 220px;
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+}
+
+@media (max-width: 768px) {
+  .job-progress-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .progress-metrics {
+    width: 100%;
+  }
+}
