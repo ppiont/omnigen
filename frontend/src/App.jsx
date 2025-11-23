@@ -15,6 +15,18 @@ import Workspace from "./pages/Workspace.jsx";
 import Settings from "./pages/Settings.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import Onboarding from "./pages/Onboarding.jsx";
+import JobDetails from "./pages/JobDetails.jsx";
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <JobDetails />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
 
 function App() {
   const location = useLocation();

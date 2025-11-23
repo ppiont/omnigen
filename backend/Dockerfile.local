@@ -1,4 +1,5 @@
 FROM golang:1.23-alpine
+ENV GOTOOLCHAIN=auto
 
 # Install ffmpeg for video processing
 RUN apk add --no-cache ffmpeg curl

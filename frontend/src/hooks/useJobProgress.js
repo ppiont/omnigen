@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { connectToProgress } from '../utils/sse';
 
 /**
@@ -11,6 +11,13 @@ import { connectToProgress } from '../utils/sse';
  * @param {number} options.maxRetries - Maximum retry attempts (default: 3)
  * @returns {Object} Progress state and helpers
  */
+const DEFAULT_STAGE_ORDER = [
+  { key: 'script', label: 'Script Generation' },
+  { key: 'audio', label: 'Audio Mix' },
+  { key: 'scenes', label: 'Scene Rendering' },
+  { key: 'compose', label: 'Final Composition' },
+];
+
 export function useJobProgress(jobId, options = {}) {
   const {
     onComplete,
@@ -116,6 +123,30 @@ export function useJobProgress(jobId, options = {}) {
     connect();
   }, [connect]);
 
+  const stageTimeline = useMemo(() => {
+    const completedSet = new Set(progress?.stages_completed || progress?.completed_stages || []);
+    const pendingSet = new Set(progress?.stages_pending || progress?.pending_stages || []);
+    const currentStageKey = progress?.current_stage || progress?.currentStage || '';
+
+    return DEFAULT_STAGE_ORDER.map((stage) => {
+      let status = 'pending';
+      if (completedSet.has(stage.key)) {
+        status = 'completed';
+      } else if (pendingSet.has(stage.key)) {
+        status = 'pending';
+      }
+
+      if (stage.key === currentStageKey && status !== 'completed') {
+        status = 'active';
+      }
+
+      return {
+        ...stage,
+        status,
+      };
+    });
+  }, [progress]);
+
   return {
     // Raw progress data
     progress,
@@ -141,6 +172,7 @@ export function useJobProgress(jobId, options = {}) {
     pendingStages: progress?.stages_pending ?? [],
     estimatedTimeRemaining: progress?.estimated_time_remaining,
     assets: progress?.assets ?? {},
+    stageTimeline,
 
     // Retry info
     retryCount: retriesRef.current,

@@ -67,8 +67,13 @@ function VideoLibrary() {
     return video.status?.toLowerCase() === statusFilter.toLowerCase();
   });
 
-  const handleVideoClick = (videoId) => {
-    navigate(`/workspace/${videoId}`);
+  const handleVideoClick = (video) => {
+    const status = video.status?.toLowerCase();
+    if (status === "completed") {
+      navigate(`/workspace/${video.id}`);
+    } else {
+      navigate(`/jobs/${video.id}`);
+    }
   };
 
   const handleStatusFilterChange = (e) => {
@@ -193,11 +198,7 @@ function VideoLibrary() {
         ) : (
           <div className="videos-grid">
             {filteredVideos.map((video) => (
-              <div
-                key={video.id}
-                onClick={() => handleVideoClick(video.id)}
-                style={{ cursor: "pointer" }}
-              >
+              <div key={video.id} onClick={() => handleVideoClick(video)} style={{ cursor: "pointer" }}>
                 <VideoCard
                   video={video}
                   onDownload={handleDownloadClick}
