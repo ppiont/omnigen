@@ -41,7 +41,7 @@ function VideoLibrary() {
         status: job.status || "processing",
         createdAt: formatTimeAgo(job.created_at),
         duration: job.duration ? `${job.duration}s` : "0s",
-        aspectRatios: job.aspect_ratios || ["16:9"],
+        aspectRatios: job.aspect_ratio ? [job.aspect_ratio] : ["16:9"],
         thumbnailUrl: job.thumbnail_url,
         videoUrl: job.video_url,
         jobData: job, // Keep full job data for download

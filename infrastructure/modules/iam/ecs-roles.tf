@@ -117,7 +117,9 @@ resource "aws_iam_role_policy" "ecs_task" {
         Resource = [
           var.dynamodb_table_arn,
           "${var.dynamodb_table_arn}/index/*",
-          var.dynamodb_usage_table_arn
+          var.dynamodb_usage_table_arn,
+          var.dynamodb_brand_guidelines_table_arn,
+          "${var.dynamodb_brand_guidelines_table_arn}/index/*"
         ]
       },
       {

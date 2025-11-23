@@ -50,6 +50,10 @@ resource "aws_ecs_task_definition" "api" {
           value = var.dynamodb_usage_table_name
         },
         {
+          name  = "BRAND_GUIDELINES_TABLE"
+          value = var.dynamodb_brand_guidelines_table_name
+        },
+        {
           name  = "REPLICATE_SECRET_ARN"
           value = var.replicate_secret_arn
         },

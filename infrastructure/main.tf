@@ -28,14 +28,15 @@ module "networking" {
 module "iam" {
   source = "./modules/iam"
 
-  project_name             = var.project_name
-  assets_bucket_arn        = module.storage.assets_bucket_arn
-  frontend_bucket_arn      = module.storage.frontend_bucket_arn
-  dynamodb_table_arn       = module.storage.dynamodb_table_arn
-  dynamodb_usage_table_arn = module.storage.dynamodb_usage_table_arn
-  replicate_secret_arn     = var.replicate_api_key_secret_arn
-  openai_secret_arn        = var.openai_api_key_secret_arn
-  ecr_repository_arn       = module.compute.ecr_repository_arn
+  project_name                      = var.project_name
+  assets_bucket_arn                 = module.storage.assets_bucket_arn
+  frontend_bucket_arn               = module.storage.frontend_bucket_arn
+  dynamodb_table_arn                 = module.storage.dynamodb_table_arn
+  dynamodb_usage_table_arn          = module.storage.dynamodb_usage_table_arn
+  dynamodb_brand_guidelines_table_arn = module.storage.dynamodb_brand_guidelines_table_arn
+  replicate_secret_arn              = var.replicate_api_key_secret_arn
+  openai_secret_arn                 = var.openai_api_key_secret_arn
+  ecr_repository_arn                = module.compute.ecr_repository_arn
 }
 
 # Storage Module - S3 Buckets and DynamoDB Table
@@ -80,11 +81,12 @@ module "compute" {
   container_name            = local.container_name
   container_port            = local.container_port
   log_group_name            = module.monitoring.ecs_log_group_name
-  aws_region                = var.aws_region
-  assets_bucket_name        = module.storage.assets_bucket_name
-  dynamodb_table_name       = module.storage.dynamodb_table_name
-  dynamodb_usage_table_name = module.storage.dynamodb_usage_table_name
-  replicate_secret_arn      = var.replicate_api_key_secret_arn
+  aws_region                         = var.aws_region
+  assets_bucket_name                 = module.storage.assets_bucket_name
+  dynamodb_table_name                = module.storage.dynamodb_table_name
+  dynamodb_usage_table_name          = module.storage.dynamodb_usage_table_name
+  dynamodb_brand_guidelines_table_name = module.storage.dynamodb_brand_guidelines_table_name
+  replicate_secret_arn               = var.replicate_api_key_secret_arn
   openai_secret_arn         = var.openai_api_key_secret_arn
   cognito_user_pool_id      = module.auth.user_pool_id
   cognito_client_id         = module.auth.client_id
