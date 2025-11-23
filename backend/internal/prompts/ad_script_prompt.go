@@ -93,7 +93,7 @@ You MUST respond with ONLY valid JSON matching this exact schema. Do not include
    - **CRITICAL**: Each scene duration MUST be exactly 4, 6, or 8 seconds (Veo 3.1 constraint)
    - These are the ONLY valid durations - no other values allowed
    - Plan scene count so total equals requested duration:
-     * 10s = 4+6 (2 scenes) or 4+4 trimmed (less ideal)
+     * 10s = 6+4 (2 scenes - PREFERRED) or 4+6 (2 scenes)
      * 12s = 4+8 or 6+6 (2 scenes)
      * 16s = 8+8 or 4+6+6 (2-3 scenes)
      * 20s = 4+8+8 or 6+6+8 (3 scenes)
@@ -435,6 +435,7 @@ type EnhancedPromptOptions struct {
 	ProCinematography bool   // use advanced film terminology
 	CreativeBoost     bool   // higher temperature for more creativity
 }
+
 // PharmaceuticalAdGuidance provides always-on guidance for pharmaceutical ad generation
 // This guidance ensures FDA compliance and industry best practices
 const PharmaceuticalAdGuidance = `## PHARMACEUTICAL ADVERTISING GUIDANCE

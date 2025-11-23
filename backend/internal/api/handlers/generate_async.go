@@ -393,46 +393,79 @@ func (h *GenerateHandler) generateVideoAsync(ctx context.Context, job *domain.Jo
 			zap.Int("total", len(script.Scenes)),
 		)
 
-		// Image selection logic for pharmaceutical ads:
-		// 1. Scenes 1..N-1 use the previous clip's last frame for continuity.
-		// 2. Last scene (N) uses the product image provided by the user.
-		if i == len(script.Scenes)-1 && strings.TrimSpace(req.StartImage) != "" {
-			// Extract S3 key from the product image URL
-			s3Key := extractS3Key(req.StartImage)
+		// Image selection logic:
+		// 1. If Pharma Ad:
+		//    - Last scene (N) uses the product image (req.StartImage) if provided.
+		//    - All other scenes use continuity frames (lastFrameURL from previous scene).
+		//    - First scene uses nothing (lastFrameURL is empty initially).
+		// 2. If Standard Ad:
+		//    - First scene (1) uses req.StartImage if provided.
+		//    - Subsequent scenes use continuity frames.
+
+		isPharma := job.SideEffectsText != "" || job.Voice != ""
+		var sceneStartImage string
+		useStartImage := false
+
+		if isPharma {
+			// PHARMA LOGIC: Product image ONLY at the END
+			if i == len(script.Scenes)-1 && strings.TrimSpace(req.StartImage) != "" {
+				sceneStartImage = req.StartImage
+				useStartImage = true
+				h.logger.Info("Using product image for last scene (pharma)",
+					zap.String("job_id", job.JobID),
+					zap.Int("scene", i+1),
+				)
+			} else {
+				// Use continuity frame (or empty for first scene)
+				sceneStartImage = lastFrameURL
+				useStartImage = false
+			}
+		} else {
+			// STANDARD LOGIC: Start image at the BEGINNING
+			if i == 0 && strings.TrimSpace(req.StartImage) != "" {
+				sceneStartImage = req.StartImage
+				useStartImage = true
+				h.logger.Info("Using start image for first scene",
+					zap.String("job_id", job.JobID),
+					zap.Int("scene", i+1),
+				)
+			} else {
+				// Use continuity frame
+				sceneStartImage = lastFrameURL
+				useStartImage = false
+			}
+		}
+
+		// Set scene.StartImageURL based on whether we're using StartImage or continuity frame
+		if useStartImage && sceneStartImage != "" {
+			// Extract S3 key from the StartImage URL
+			s3Key := extractS3Key(sceneStartImage)
 
 			// Generate presigned URL for video API access (valid for 1 hour)
 			presignedURL, err := h.s3Service.GetPresignedURL(jobCtx, s3Key, 1*time.Hour)
 			if err != nil {
-				h.logger.Error("Failed to generate presigned URL for product image",
+				h.logger.Error("Failed to generate presigned URL for start image",
 					zap.String("job_id", job.JobID),
 					zap.String("s3_key", s3Key),
-					zap.String("original_url", req.StartImage),
 					zap.Error(err),
 				)
-				// Fall back to direct URL if presigning fails (shouldn't happen, but be safe)
-				scene.StartImageURL = req.StartImage
+				// Fall back to direct URL if presigning fails
+				scene.StartImageURL = sceneStartImage
 			} else {
 				scene.StartImageURL = presignedURL
-				h.logger.Info("Using product image for last scene (side effects segment)",
-					zap.String("job_id", job.JobID),
-					zap.Int("scene", i+1),
-					zap.String("product_image_url", presignedURL),
-				)
 			}
-		} else {
+		} else if sceneStartImage != "" {
+			// Using continuity frame (lastFrameURL from previous scene)
 			scene.StartImageURL = lastFrameURL
-			if lastFrameURL != "" {
-				h.logger.Info("Using last frame for visual continuity",
-					zap.String("job_id", job.JobID),
-					zap.Int("scene", i+1),
-				)
-			} else if i != len(script.Scenes)-1 {
+			h.logger.Info("Using last frame for visual continuity",
+				zap.String("job_id", job.JobID),
+				zap.Int("scene", i+1),
+			)
+		} else {
+			// No start image (first scene without StartImage, or no continuity frame available)
+			scene.StartImageURL = ""
+			if i != 0 {
 				h.logger.Info("No continuity frame available, generating scene without start image",
-					zap.String("job_id", job.JobID),
-					zap.Int("scene", i+1),
-				)
-			} else {
-				h.logger.Warn("Product image missing for last scene; falling back to continuity frame",
 					zap.String("job_id", job.JobID),
 					zap.Int("scene", i+1),
 				)

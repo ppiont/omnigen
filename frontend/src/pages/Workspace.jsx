@@ -449,16 +449,41 @@ function Workspace() {
       return;
     }
 
+    // Extract narrator script from various possible locations
+    const narratorScript =
+      jobData.audio_spec?.narrator_script ||
+      jobData.metadata?.audio_spec?.narrator_script ||
+      jobData.metadata?.script?.audio_spec?.narrator_script ||
+      jobData.audio_spec?.voiceover_text ||
+      jobData.metadata?.audio_spec?.voiceover_text ||
+      jobData.metadata?.script?.audio_spec?.voiceover_text ||
+      null;
+
     if (scriptJobIdRef.current !== jobData.job_id) {
       scriptJobIdRef.current = jobData.job_id;
-      setScript(jobData.prompt || "");
+      // Use narrator script if available, otherwise fall back to prompt
+      setScript(narratorScript || jobData.prompt || "");
       return;
     }
 
-    if (!script && jobData.prompt) {
+    // Only update if script is empty and we have narrator script
+    if (!script && narratorScript) {
+      setScript(narratorScript);
+    } else if (!script && jobData.prompt) {
+      // Fall back to prompt only if no narrator script exists
       setScript(jobData.prompt);
     }
-  }, [jobData?.job_id, jobData?.prompt, script]);
+  }, [
+    jobData?.job_id,
+    jobData?.prompt,
+    jobData?.audio_spec?.narrator_script,
+    jobData?.audio_spec?.voiceover_text,
+    jobData?.metadata?.audio_spec?.narrator_script,
+    jobData?.metadata?.audio_spec?.voiceover_text,
+    jobData?.metadata?.script?.audio_spec?.narrator_script,
+    jobData?.metadata?.script?.audio_spec?.voiceover_text,
+    script,
+  ]);
 
   useEffect(() => {
     let countdownInterval;
@@ -793,22 +818,69 @@ function Workspace() {
     jobData.metadata?.script?.scenes ||
     [];
 
+  // Normalize scenes to ensure they have correct start_time and duration
+  if (scenes.length > 0) {
+    let runningTime = 0;
+    scenes = scenes.map((scene, index) => {
+      // Use actual duration from scene, or calculate from total duration if missing
+      const sceneDuration = scene.duration != null ? scene.duration : 
+        (jobData.duration && scenes.length > 0 ? jobData.duration / scenes.length : 0);
+      
+      const normalizedScene = {
+        ...scene,
+        scene_number: scene.scene_number || index + 1,
+        start_time: scene.start_time != null ? scene.start_time : runningTime,
+        duration: sceneDuration,
+        location: scene.location || `Scene ${scene.scene_number || index + 1}`,
+        action: scene.action || `Scene ${scene.scene_number || index + 1} video clip`,
+      };
+      
+      runningTime += sceneDuration;
+      return normalizedScene;
+    });
+  }
+
   if (
     scenes.length === 0 &&
     Array.isArray(jobData.scene_video_urls) &&
     jobData.scene_video_urls.length > 0
   ) {
+    // If we have scene_video_urls but no scenes array, create scenes with actual durations if available
+    // Otherwise fall back to equal distribution
     const numScenes = jobData.scene_video_urls.length;
     const totalDuration = jobData.duration || 30;
-    const sceneDuration = totalDuration / numScenes;
-
-    scenes = jobData.scene_video_urls.map((url, index) => ({
-      scene_number: index + 1,
-      start_time: index * sceneDuration,
-      duration: sceneDuration,
-      location: `Scene ${index + 1}`,
-      action: `Scene ${index + 1} video clip`,
-    }));
+    
+    // Try to get actual scene durations from stored scenes if available
+    const storedScenes = jobData.scenes || jobData.metadata?.scenes || jobData.metadata?.script?.scenes || [];
+    const hasActualDurations = storedScenes.length === numScenes && storedScenes.every(s => s.duration != null);
+    
+    if (hasActualDurations) {
+      // Use actual durations from stored scenes
+      let runningTime = 0;
+      scenes = jobData.scene_video_urls.map((url, index) => {
+        const storedScene = storedScenes[index];
+        const sceneDuration = storedScene.duration || (totalDuration / numScenes);
+        const scene = {
+          scene_number: index + 1,
+          start_time: runningTime,
+          duration: sceneDuration,
+          location: storedScene.location || `Scene ${index + 1}`,
+          action: storedScene.action || `Scene ${index + 1} video clip`,
+        };
+        runningTime += sceneDuration;
+        return scene;
+      });
+    } else {
+      // Fall back to equal distribution
+      const sceneDuration = totalDuration / numScenes;
+      scenes = jobData.scene_video_urls.map((url, index) => ({
+        scene_number: index + 1,
+        start_time: index * sceneDuration,
+        duration: sceneDuration,
+        location: `Scene ${index + 1}`,
+        action: `Scene ${index + 1} video clip`,
+      }));
+    }
 
     console.log("[WORKSPACE] Created scenes from scene_video_urls:", scenes);
   }
