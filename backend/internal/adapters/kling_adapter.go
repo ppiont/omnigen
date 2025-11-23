@@ -57,18 +57,29 @@ func NewKlingAdapter(apiToken string, logger *zap.Logger) *KlingAdapter {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	version := adapter.fetchModelVersion(ctx)
-	if version != "" {
-		adapter.modelVersion = version
-		logger.Info("Successfully fetched Kling model version from Replicate API",
-			zap.String("model_version", version),
-		)
+	// Check if API token is available
+	if adapter.apiToken == "" {
+		logger.Error("Replicate API token is empty - cannot fetch model version")
+		// Set fallback model name (will likely fail but gives clearer error)
+		adapter.modelVersion = "kwaivgi/kling-v2.5-turbo-pro"
 	} else {
-		logger.Warn("Could not fetch Kling model version from API - video generation will fail with clear error",
-			zap.String("error", "Model version fetch failed or timed out"),
-		)
-		// Don't set a fallback - let GenerateVideo fail with clear error
-		// This prevents using invalid version that causes 422 errors
+		version := adapter.fetchModelVersion(ctx)
+		if version != "" {
+			adapter.modelVersion = version
+			logger.Info("Successfully fetched Kling model version from Replicate API",
+				zap.String("model_version", version),
+			)
+		} else {
+			// Fallback: try using model name without version hash
+			// Replicate might auto-select latest version
+			fallbackVersion := "kwaivgi/kling-v2.5-turbo-pro"
+			adapter.modelVersion = fallbackVersion
+			logger.Warn("Could not fetch Kling model version from API - using fallback (may cause 422 errors)",
+				zap.String("fallback_version", fallbackVersion),
+				zap.String("api_token_prefix", maskToken(adapter.apiToken)),
+				zap.String("note", "If video generation fails with 422, check Replicate API token and model name"),
+			)
+		}
 	}
 
 	// Signal that fetch is complete (even if it failed)
@@ -90,7 +101,15 @@ func (k *KlingAdapter) fetchModelVersion(ctx context.Context) string {
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		k.logger.Debug("Failed to create request for model versions", zap.Error(err))
+		k.logger.Error("Failed to create request for model versions",
+			zap.Error(err),
+			zap.String("url", url),
+		)
+		return ""
+	}
+
+	if k.apiToken == "" {
+		k.logger.Error("Replicate API token is empty - cannot fetch model versions")
 		return ""
 	}
 
@@ -99,27 +118,40 @@ func (k *KlingAdapter) fetchModelVersion(ctx context.Context) string {
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		k.logger.Debug("Failed to fetch model versions from Replicate API", zap.Error(err))
+		k.logger.Error("Failed to fetch model versions from Replicate API",
+			zap.Error(err),
+			zap.String("url", url),
+			zap.String("api_token_prefix", maskToken(k.apiToken)),
+		)
 		return ""
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		k.logger.Debug("Replicate API returned non-200 status when fetching versions",
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		k.logger.Error("Failed to read model versions response",
+			zap.Error(err),
 			zap.Int("status_code", resp.StatusCode),
 		)
 		return ""
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		k.logger.Debug("Failed to read model versions response", zap.Error(err))
+	if resp.StatusCode != http.StatusOK {
+		k.logger.Error("Replicate API returned non-200 status when fetching versions",
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("response_body", string(body)),
+			zap.String("url", url),
+			zap.String("api_token_prefix", maskToken(k.apiToken)),
+		)
 		return ""
 	}
 
 	var versionsResp ReplicateModelVersionsResponse
 	if err := json.Unmarshal(body, &versionsResp); err != nil {
-		k.logger.Debug("Failed to unmarshal model versions response", zap.Error(err))
+		k.logger.Error("Failed to unmarshal model versions response",
+			zap.Error(err),
+			zap.String("response_body", string(body)),
+		)
 		return ""
 	}
 
@@ -130,8 +162,19 @@ func (k *KlingAdapter) fetchModelVersion(ctx context.Context) string {
 		return fullVersion
 	}
 
-	k.logger.Debug("No model versions found in Replicate API response")
+	k.logger.Error("No model versions found in Replicate API response",
+		zap.String("url", url),
+		zap.Int("results_count", len(versionsResp.Results)),
+	)
 	return ""
+}
+
+// maskToken masks most of the API token for logging (shows first 4 and last 4 chars)
+func maskToken(token string) string {
+	if len(token) <= 8 {
+		return "****"
+	}
+	return token[:4] + "..." + token[len(token)-4:]
 }
 
 // KlingRequest matches the Kling API schema on Replicate
