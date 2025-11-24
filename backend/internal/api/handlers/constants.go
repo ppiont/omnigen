@@ -5,7 +5,9 @@ import "time"
 // Video generation constants
 const (
 	// VideoGenerationTimeout is the maximum time for entire video generation pipeline
-	VideoGenerationTimeout = 15 * time.Minute
+	// 45 minutes allows for: scene generation (up to 20 min for 6 scenes),
+	// audio generation (5 min), and composition with WebM transcoding (15+ min)
+	VideoGenerationTimeout = 45 * time.Minute
 
 	// VideoGenerationMaxAttempts is maximum polling attempts for video generation
 	// Veo 3.1 can take 15-20 minutes, especially with images

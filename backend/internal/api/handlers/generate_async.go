@@ -173,7 +173,9 @@ func (h *GenerateHandler) failJob(
 		}
 	}
 
-	if err := h.jobRepo.MarkJobFailed(ctx, job.JobID, errorMessage); err != nil {
+	// Use context.Background() instead of the passed context to ensure the job
+	// is marked as failed even when the original context is cancelled (e.g., due to timeout)
+	if err := h.jobRepo.MarkJobFailed(context.Background(), job.JobID, errorMessage); err != nil {
 		h.logger.Error("Failed to mark job failed",
 			zap.String("job_id", job.JobID),
 			zap.Error(err),
