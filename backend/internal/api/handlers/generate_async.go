@@ -1072,11 +1072,15 @@ func (h *GenerateHandler) generateAudio(
 			return "", fmt.Errorf("minimax generation failed: %s", result.Error)
 		}
 
-		// Log only every 12th attempt (every minute instead of every 5 seconds)
-		if attempt%12 == 0 {
-			h.logger.Debug("Minimax still processing",
+		// Log status every 6th attempt (every 30 seconds) at Info level for visibility
+		if attempt%6 == 0 {
+			h.logger.Info("Minimax polling status",
 				zap.String("job_id", jobID),
+				zap.String("prediction_id", result.PredictionID),
+				zap.String("status", result.Status),
+				zap.String("error", result.Error),
 				zap.Int("attempt", attempt),
+				zap.Int("max_attempts", maxAttempts),
 			)
 		}
 	}
@@ -1767,7 +1771,7 @@ func (h *GenerateHandler) composeVideo(
 			return "", "", err
 		}
 		if config != nil {
-			h.logger.Info("Applying side effects text overlay",
+			h.logger.Info("Applying side effects text overlay with fade effects",
 				zap.String("job_id", jobID),
 				zap.Float64("overlay_start", config.OverlayStart),
 				zap.Float64("overlay_end", config.OverlayEnd),
@@ -1776,14 +1780,32 @@ func (h *GenerateHandler) composeVideo(
 			)
 
 			videoWithText := filepath.Join(tmpDir, "video_with_text.mp4")
-			// Combine FPS interpolation with text overlay if needed (single re-encode)
-			vfFilter := config.Filter
+
+			// Build video filter chain: FPS interpolation (if needed) + fade effects + text overlay
+			var vfFilters []string
 			if needsInterpolation {
-				vfFilter = "fps=30," + config.Filter
-				h.logger.Info("Combining FPS interpolation with text overlay",
+				vfFilters = append(vfFilters, "fps=30")
+				h.logger.Info("Including FPS interpolation in filter chain",
 					zap.String("job_id", jobID),
 				)
 			}
+
+			// Add fade in/out effects (1.5s fade in, 2s fade out)
+			const fadeInDuration = 1.5
+			const fadeOutDuration = 2.0
+			fadeFilter := buildFadeFilters(fadeInDuration, fadeOutDuration, totalDuration)
+			vfFilters = append(vfFilters, fadeFilter)
+			h.logger.Info("Adding fade effects to filter chain",
+				zap.String("job_id", jobID),
+				zap.Float64("fade_in_duration", fadeInDuration),
+				zap.Float64("fade_out_duration", fadeOutDuration),
+				zap.String("fade_filter", fadeFilter),
+			)
+
+			// Add text overlay
+			vfFilters = append(vfFilters, config.Filter)
+
+			vfFilter := strings.Join(vfFilters, ",")
 			cmd = exec.CommandContext(ctx, "ffmpeg",
 				"-i", finalVideo,
 				"-vf", vfFilter,
@@ -1802,48 +1824,147 @@ func (h *GenerateHandler) composeVideo(
 				return "", "", fmt.Errorf("ffmpeg text overlay failed: %w", err)
 			}
 
-			h.logger.Info("Text overlay applied successfully", zap.String("job_id", jobID))
+			h.logger.Info("Text overlay with fade effects applied successfully", zap.String("job_id", jobID))
 			finalVideo = videoWithText
 		}
 	} else if trimmedText == "" {
-		h.logger.Info("Skipping text overlay (no side effects text)", zap.String("job_id", jobID))
+		// No text overlay, but still apply fade effects
+		h.logger.Info("Applying fade effects (no text overlay)", zap.String("job_id", jobID))
+
+		videoWithFades := filepath.Join(tmpDir, "video_with_fades.mp4")
+
+		// Build video filter chain: FPS interpolation (if needed) + fade effects
+		var vfFilters []string
+		if needsInterpolation {
+			vfFilters = append(vfFilters, "fps=30")
+			h.logger.Info("Including FPS interpolation in filter chain",
+				zap.String("job_id", jobID),
+			)
+		}
+
+		// Add fade in/out effects (1.5s fade in, 2s fade out)
+		const fadeInDuration = 1.5
+		const fadeOutDuration = 2.0
+		fadeFilter := buildFadeFilters(fadeInDuration, fadeOutDuration, totalDuration)
+		vfFilters = append(vfFilters, fadeFilter)
+		h.logger.Info("Adding fade effects to filter chain",
+			zap.String("job_id", jobID),
+			zap.Float64("fade_in_duration", fadeInDuration),
+			zap.Float64("fade_out_duration", fadeOutDuration),
+			zap.String("fade_filter", fadeFilter),
+		)
+
+		cmd = exec.CommandContext(ctx, "ffmpeg",
+			"-i", finalVideo,
+			"-vf", strings.Join(vfFilters, ","),
+			"-c:v", "libx264",
+			"-preset", "medium",
+			"-crf", "21",
+			"-an",
+			"-y", videoWithFades,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			h.logger.Error("ffmpeg fade effects failed",
+				zap.String("job_id", jobID),
+				zap.String("output", string(output)),
+				zap.Error(err),
+			)
+			return "", "", fmt.Errorf("ffmpeg fade effects failed: %w", err)
+		}
+
+		h.logger.Info("Fade effects applied successfully", zap.String("job_id", jobID))
+		finalVideo = videoWithFades
 	} else {
-		h.logger.Warn("Skipping text overlay (unknown video duration)",
+		h.logger.Warn("Skipping text overlay and fade effects (unknown video duration)",
 			zap.String("job_id", jobID),
 			zap.Float64("video_duration", totalDuration),
 		)
 	}
 
-	// Apply FPS interpolation if needed and not already done via text overlay
-	if needsInterpolation && !strings.Contains(finalVideo, "video_with_text") {
-		h.logger.Info("Applying standalone FPS interpolation to 30fps",
+	// Note: FPS interpolation is now handled above within the text overlay and fade effects paths
+	// This standalone section is no longer needed since fade effects always require re-encoding
+
+	// END CARD GENERATION
+	const endCardDuration = 2.5       // seconds
+	const crossDissolveDuration = 1.5 // seconds
+
+	// Only generate end card if we have product image and CTA
+	if job.ProductImageURL != "" && job.ScriptMetadata.CallToAction != "" {
+		h.logger.Info("Generating end card sequence",
 			zap.String("job_id", jobID),
-			zap.Float64("source_fps", sourceFPS),
 		)
-		interpolatedVideo := filepath.Join(tmpDir, "interpolated.mp4")
-		cmd := exec.CommandContext(ctx, "ffmpeg",
-			"-i", finalVideo,
-			"-vf", "fps=30",
-			"-c:v", "libx264",
-			"-preset", "medium",
-			"-crf", "21",
-			"-an",
-			"-y", interpolatedVideo,
-		)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			h.logger.Warn("FPS interpolation failed, using original video",
+
+		// Download product image
+		productImagePath := filepath.Join(tmpDir, "product-image.jpg")
+		productS3Key := extractS3Key(job.ProductImageURL)
+		if err := h.s3Service.DownloadFile(ctx, h.assetsBucket, productS3Key, productImagePath); err != nil {
+			h.logger.Warn("Failed to download product image for end card, skipping end card",
 				zap.String("job_id", jobID),
-				zap.Float64("source_fps", sourceFPS),
-				zap.String("output", string(output)),
 				zap.Error(err),
 			)
-			// Graceful fallback: continue with original FPS video
 		} else {
-			h.logger.Info("FPS interpolation complete",
-				zap.String("job_id", jobID),
-			)
-			finalVideo = interpolatedVideo
+			// Get video dimensions
+			videoWidth, videoHeight, err := probeVideoDimensions(finalVideo)
+			if err != nil {
+				videoWidth = 1920
+				videoHeight = 1080
+			}
+
+			// Get abbreviated side effects text
+			sideEffectsText := ""
+			if job.DisclaimerSpec != nil {
+				sideEffectsText = job.DisclaimerSpec.AudioText // Abbreviated version
+			}
+
+			// Generate end card image
+			endCardImagePath := filepath.Join(tmpDir, "end-card.jpg")
+			err = h.generateEndCard(ctx, jobID, EndCardConfig{
+				ProductImagePath: productImagePath,
+				CTAText:          job.ScriptMetadata.CallToAction,
+				SideEffectsText:  sideEffectsText,
+				Width:            videoWidth,
+				Height:           videoHeight,
+				OutputPath:       endCardImagePath,
+			})
+			if err != nil {
+				h.logger.Warn("End card generation failed, continuing without end card",
+					zap.String("job_id", jobID),
+					zap.Error(err),
+				)
+			} else {
+				// Convert end card image to video
+				endCardVideoPath := filepath.Join(tmpDir, "end-card.mp4")
+				err = h.generateEndCardVideo(ctx, jobID, endCardImagePath, endCardDuration, endCardVideoPath)
+				if err != nil {
+					h.logger.Warn("End card video generation failed, continuing without end card",
+						zap.String("job_id", jobID),
+						zap.Error(err),
+					)
+				} else {
+					// Append end card with cross-dissolve
+					videoWithEndCard := filepath.Join(tmpDir, "video_with_endcard.mp4")
+					err = h.appendEndCardWithCrossDissolve(ctx, jobID, finalVideo, endCardVideoPath, crossDissolveDuration, videoWithEndCard)
+					if err != nil {
+						h.logger.Warn("End card append failed, continuing without end card",
+							zap.String("job_id", jobID),
+							zap.Error(err),
+						)
+					} else {
+						h.logger.Info("End card appended successfully",
+							zap.String("job_id", jobID),
+						)
+						finalVideo = videoWithEndCard
+						// Note: Audio muxing functions probe duration directly via getVideoDuration()
+					}
+				}
+			}
 		}
+	} else {
+		h.logger.Info("Skipping end card (no product image or CTA)",
+			zap.String("job_id", jobID),
+			zap.Bool("has_product_image", job.ProductImageURL != ""),
+			zap.Bool("has_cta", job.ScriptMetadata.CallToAction != ""),
+		)
 	}
 
 	// AUDIO MUXING: Download and mix audio tracks into video
@@ -1970,6 +2091,7 @@ func (h *GenerateHandler) composeVideo(
 }
 
 // muxVideoWithMixedAudio combines video with two audio tracks (music at 30%, narrator at 100%)
+// with layered audio fade-out: music fades over 3 seconds, narrator fades over 1 second
 func (h *GenerateHandler) muxVideoWithMixedAudio(
 	ctx context.Context,
 	jobID string,
@@ -1982,13 +2104,32 @@ func (h *GenerateHandler) muxVideoWithMixedAudio(
 		zap.String("job_id", jobID),
 	)
 
-	// Mix music at 30% volume with narrator at 100%, then mux with video
-	// Uses amix filter to combine audio streams
+	// Calculate fade timing based on video duration
+	videoDuration := getVideoDuration(videoPath)
+	musicFadeStart := math.Max(0, videoDuration-3.0)   // Music fades last 3 seconds
+	narratorFadeStart := math.Max(0, videoDuration-1.0) // Narrator fades last 1 second
+
+	h.logger.Info("Audio fade timing calculated",
+		zap.String("job_id", jobID),
+		zap.Float64("video_duration", videoDuration),
+		zap.Float64("music_fade_start", musicFadeStart),
+		zap.Float64("narrator_fade_start", narratorFadeStart),
+	)
+
+	// Build filter complex with layered audio fading:
+	// - Music: volume 0.3, fade out over last 3 seconds
+	// - Narrator: volume 1.0, fade out over last 1 second
+	filterComplex := fmt.Sprintf(
+		"[1:a]volume=0.3,afade=t=out:st=%.2f:d=3[music];[2:a]volume=1.0,afade=t=out:st=%.2f:d=1[narrator];[music][narrator]amix=inputs=2:duration=longest[audio]",
+		musicFadeStart,
+		narratorFadeStart,
+	)
+
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-i", videoPath,
 		"-i", musicPath,
 		"-i", narratorPath,
-		"-filter_complex", "[1:a]volume=0.3[music];[2:a]volume=1.0[narrator];[music][narrator]amix=inputs=2:duration=longest[audio]",
+		"-filter_complex", filterComplex,
 		"-map", "0:v",
 		"-map", "[audio]",
 		"-c:v", "copy",
@@ -2011,6 +2152,7 @@ func (h *GenerateHandler) muxVideoWithMixedAudio(
 }
 
 // muxVideoWithSingleAudio combines video with a single audio track at specified volume
+// with audio fade-out over the last 3 seconds
 func (h *GenerateHandler) muxVideoWithSingleAudio(
 	ctx context.Context,
 	jobID string,
@@ -2024,12 +2166,23 @@ func (h *GenerateHandler) muxVideoWithSingleAudio(
 		zap.Float64("volume", volume),
 	)
 
-	volumeFilter := fmt.Sprintf("volume=%.1f", volume)
+	// Calculate fade timing based on video duration
+	videoDuration := getVideoDuration(videoPath)
+	fadeStart := math.Max(0, videoDuration-3.0) // Audio fades last 3 seconds
+
+	h.logger.Info("Audio fade timing calculated",
+		zap.String("job_id", jobID),
+		zap.Float64("video_duration", videoDuration),
+		zap.Float64("fade_start", fadeStart),
+	)
+
+	// Build audio filter with volume and fade-out
+	audioFilter := fmt.Sprintf("volume=%.1f,afade=t=out:st=%.2f:d=3", volume, fadeStart)
 
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-i", videoPath,
 		"-i", audioPath,
-		"-af", volumeFilter,
+		"-af", audioFilter,
 		"-map", "0:v",
 		"-map", "1:a",
 		"-c:v", "copy",
@@ -2132,6 +2285,41 @@ func probeVideoDimensions(videoPath string) (int, int, error) {
 	return width, height, nil
 }
 
+// buildFadeFilters returns FFmpeg video filter string for fade in/out effects.
+// fadeInDuration: seconds for fade from black at start
+// fadeOutDuration: seconds for fade to black at end
+// totalDuration: total video duration in seconds
+func buildFadeFilters(fadeInDuration, fadeOutDuration, totalDuration float64) string {
+	fadeOutStart := totalDuration - fadeOutDuration
+	if fadeOutStart < fadeInDuration {
+		// Video too short for both fades, prioritize fade out
+		fadeOutStart = 0
+		return fmt.Sprintf("fade=t=out:st=%.2f:d=%.2f", fadeOutStart, fadeOutDuration)
+	}
+	return fmt.Sprintf("fade=t=in:st=0:d=%.2f,fade=t=out:st=%.2f:d=%.2f",
+		fadeInDuration, fadeOutStart, fadeOutDuration)
+}
+
+// getVideoDuration returns the duration of a video file in seconds using ffprobe.
+// Returns 0 on error (caller should handle gracefully).
+func getVideoDuration(videoPath string) float64 {
+	cmd := exec.Command("ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		videoPath,
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+	duration, err := strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
+	if err != nil {
+		return 0
+	}
+	return duration
+}
+
 // probeVideoFPS returns the frame rate of a video file as a float64.
 // Returns 0 on error (caller should handle gracefully).
 func probeVideoFPS(videoPath string) float64 {
@@ -2165,4 +2353,177 @@ func probeVideoFPS(videoPath string) float64 {
 	}
 
 	return num / den
+}
+
+// escapeFFmpegText escapes special characters for FFmpeg drawtext filter
+func escapeFFmpegText(text string) string {
+	// Escape backslashes first (order matters)
+	text = strings.ReplaceAll(text, "\\", "\\\\")
+	// Escape single quotes by ending quote, adding escaped quote, starting new quote
+	text = strings.ReplaceAll(text, "'", "'\\''")
+	// Escape colons which are filter separators in FFmpeg
+	text = strings.ReplaceAll(text, ":", "\\:")
+	return text
+}
+
+// EndCardConfig holds configuration for end card generation
+type EndCardConfig struct {
+	ProductImagePath string
+	CTAText          string
+	SideEffectsText  string
+	Width            int
+	Height           int
+	OutputPath       string
+}
+
+// generateEndCard creates an end card image with product, CTA, and side effects text.
+// Layout: Product image centered, CTA below, side effects at bottom.
+func (h *GenerateHandler) generateEndCard(ctx context.Context, jobID string, config EndCardConfig) error {
+	h.logger.Info("Generating end card",
+		zap.String("job_id", jobID),
+		zap.String("cta", config.CTAText),
+	)
+
+	// Create end card using FFmpeg:
+	// 1. Create black background
+	// 2. Overlay product image (scaled and centered)
+	// 3. Add CTA text below image
+	// 4. Add side effects text at bottom
+
+	// Escape text for FFmpeg drawtext filter
+	ctaEscaped := escapeFFmpegText(config.CTAText)
+	sideEffectsEscaped := escapeFFmpegText(config.SideEffectsText)
+
+	// Calculate positions (product image takes top 60%, CTA at 70%, side effects at 85%)
+	productScale := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease",
+		int(float64(config.Width)*0.5), int(float64(config.Height)*0.5))
+	productX := "(W-w)/2" // Center horizontally
+	productY := fmt.Sprintf("%d", int(float64(config.Height)*0.1)) // 10% from top
+
+	ctaY := int(float64(config.Height) * 0.68)
+	sideEffectsY := int(float64(config.Height) * 0.82)
+
+	// Font sizes relative to video height
+	ctaFontSize := int(float64(config.Height) * 0.04)         // ~4% of height
+	sideEffectsFontSize := int(float64(config.Height) * 0.025) // ~2.5% of height
+
+	filterComplex := fmt.Sprintf(
+		"color=black:s=%dx%d:d=1[bg];"+
+			"[1:v]%s[product];"+
+			"[bg][product]overlay=%s:%s[with_product];"+
+			"[with_product]drawtext=text='%s':fontcolor=white:fontsize=%d:x=(w-text_w)/2:y=%d[with_cta];"+
+			"[with_cta]drawtext=text='%s':fontcolor=#CCCCCC:fontsize=%d:x=(w-text_w)/2:y=%d[final]",
+		config.Width, config.Height,
+		productScale,
+		productX, productY,
+		ctaEscaped, ctaFontSize, ctaY,
+		sideEffectsEscaped, sideEffectsFontSize, sideEffectsY,
+	)
+
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-f", "lavfi",
+		"-i", fmt.Sprintf("color=black:s=%dx%d:d=1", config.Width, config.Height),
+		"-i", config.ProductImagePath,
+		"-filter_complex", filterComplex,
+		"-map", "[final]",
+		"-frames:v", "1",
+		"-y", config.OutputPath,
+	)
+
+	if output, err := cmd.CombinedOutput(); err != nil {
+		h.logger.Error("End card generation failed",
+			zap.String("job_id", jobID),
+			zap.String("output", string(output)),
+			zap.Error(err),
+		)
+		return fmt.Errorf("end card generation failed: %w", err)
+	}
+
+	return nil
+}
+
+// generateEndCardVideo creates a video clip from the end card image.
+// duration: how long the end card should display (2-3 seconds recommended)
+func (h *GenerateHandler) generateEndCardVideo(
+	ctx context.Context,
+	jobID string,
+	endCardImagePath string,
+	duration float64,
+	outputPath string,
+) error {
+	h.logger.Info("Converting end card to video",
+		zap.String("job_id", jobID),
+		zap.Float64("duration", duration),
+	)
+
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-loop", "1",
+		"-i", endCardImagePath,
+		"-c:v", "libx264",
+		"-t", fmt.Sprintf("%.2f", duration),
+		"-pix_fmt", "yuv420p",
+		"-preset", "medium",
+		"-crf", "21",
+		"-y", outputPath,
+	)
+
+	if output, err := cmd.CombinedOutput(); err != nil {
+		h.logger.Error("End card video generation failed",
+			zap.String("job_id", jobID),
+			zap.String("output", string(output)),
+			zap.Error(err),
+		)
+		return fmt.Errorf("end card video generation failed: %w", err)
+	}
+
+	return nil
+}
+
+// appendEndCardWithCrossDissolve appends the end card video to the main video
+// with a cross-dissolve transition of specified duration.
+func (h *GenerateHandler) appendEndCardWithCrossDissolve(
+	ctx context.Context,
+	jobID string,
+	mainVideoPath string,
+	endCardVideoPath string,
+	crossDissolveDuration float64,
+	outputPath string,
+) error {
+	h.logger.Info("Appending end card with cross-dissolve",
+		zap.String("job_id", jobID),
+		zap.Float64("dissolve_duration", crossDissolveDuration),
+	)
+
+	mainDuration := getVideoDuration(mainVideoPath)
+	dissolveStart := mainDuration - crossDissolveDuration
+
+	// xfade filter creates cross-dissolve between two videos
+	filterComplex := fmt.Sprintf(
+		"[0:v][1:v]xfade=transition=fade:duration=%.2f:offset=%.2f[outv]",
+		crossDissolveDuration,
+		dissolveStart,
+	)
+
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-i", mainVideoPath,
+		"-i", endCardVideoPath,
+		"-filter_complex", filterComplex,
+		"-map", "[outv]",
+		"-c:v", "libx264",
+		"-preset", "medium",
+		"-crf", "21",
+		"-an", // Audio handled separately
+		"-y", outputPath,
+	)
+
+	if output, err := cmd.CombinedOutput(); err != nil {
+		h.logger.Error("Cross-dissolve failed",
+			zap.String("job_id", jobID),
+			zap.String("output", string(output)),
+			zap.Error(err),
+		)
+		return fmt.Errorf("cross-dissolve failed: %w", err)
+	}
+
+	return nil
 }

@@ -12,14 +12,14 @@
 **Audio Visual Sync:**
 
 - [x] Voiceover timing (ad creatives) 
-- [ ] Sound effects aligned with visuals
+- [x] Sound effects aligned with visuals
 - [x] No audio video drift
 
 **Output Quality:**
 
 - [x] Minimum 1080p resolution
 - [x] 30+ FPS <-- FFmpeg?
-- [ ] Clean audio (no distortion or clipping)
+- [x] Clean audio (no distortion or clipping)
 - [x] Proper compression (reasonable file size)
 
 ## **2\. Pipeline Performance**

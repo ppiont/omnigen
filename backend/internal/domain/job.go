@@ -21,8 +21,9 @@ type Job struct {
 	AspectRatio string `dynamodbav:"aspect_ratio,omitempty" json:"aspect_ratio,omitempty"`
 
 	// Pharmaceutical ad configuration
-	Voice       string `dynamodbav:"voice,omitempty" json:"voice,omitempty"`               // "male" or "female"
-	SideEffects string `dynamodbav:"side_effects,omitempty" json:"side_effects,omitempty"` // User-provided disclosure text
+	Voice           string `dynamodbav:"voice,omitempty" json:"voice,omitempty"`                       // "male" or "female"
+	SideEffects     string `dynamodbav:"side_effects,omitempty" json:"side_effects,omitempty"`         // User-provided disclosure text
+	ProductImageURL string `dynamodbav:"product_image_url,omitempty" json:"product_image_url,omitempty"` // Product image for end card
 
 	// Enhanced prompt options (Phase 1 - all optional)
 	Style             string `dynamodbav:"style,omitempty" json:"style,omitempty"`
