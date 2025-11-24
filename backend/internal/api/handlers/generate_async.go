@@ -1048,11 +1048,15 @@ func (h *GenerateHandler) generateAudio(
 			return "", fmt.Errorf("minimax generation failed: %s", result.Error)
 		}
 
-		// Log only every 12th attempt (every minute instead of every 5 seconds)
-		if attempt%12 == 0 {
-			h.logger.Debug("Minimax still processing",
+		// Log status every 6th attempt (every 30 seconds) at Info level for visibility
+		if attempt%6 == 0 {
+			h.logger.Info("Minimax polling status",
 				zap.String("job_id", jobID),
+				zap.String("prediction_id", result.PredictionID),
+				zap.String("status", result.Status),
+				zap.String("error", result.Error),
 				zap.Int("attempt", attempt),
+				zap.Int("max_attempts", maxAttempts),
 			)
 		}
 	}
