@@ -272,18 +272,28 @@ func (m *MinimaxAdapter) generateMusicPrompt(videoPrompt, mood, style string) st
 	return prompt
 }
 
-// generateLyrics creates instrumental structure based on duration
+// generateLyrics creates instrumental structure based on duration.
+// For instrumental music, we use structural markers with filler text
+// to guide the model on section duration. The "la la la" pattern
+// signals instrumental/humming content without actual lyrics.
 func (m *MinimaxAdapter) generateLyrics(duration int) string {
-	// For instrumental music, use structural markers
+	// Short filler for instrumental sections - guides duration
+	shortFiller := "la la la la"
+	longFiller := "la la la la la la la la"
+
 	if duration <= 15 {
-		return "[intro]\n[verse]\n[outro]"
+		return fmt.Sprintf("[intro]\n%s\n[verse]\n%s\n[outro]\n%s",
+			shortFiller, longFiller, shortFiller)
 	} else if duration <= 30 {
-		return "[intro]\n[verse]\n[chorus]\n[outro]"
+		return fmt.Sprintf("[intro]\n%s\n[verse]\n%s\n[chorus]\n%s\n[outro]\n%s",
+			shortFiller, longFiller, longFiller, shortFiller)
 	} else if duration <= 60 {
-		return "[intro]\n[verse]\n[chorus]\n[verse]\n[chorus]\n[outro]"
+		return fmt.Sprintf("[intro]\n%s\n[verse]\n%s\n[chorus]\n%s\n[verse]\n%s\n[chorus]\n%s\n[outro]\n%s",
+			shortFiller, longFiller, longFiller, longFiller, longFiller, shortFiller)
 	} else {
-		// Longer videos
-		return "[intro]\n[verse]\n[chorus]\n[bridge]\n[verse]\n[chorus]\n[outro]"
+		// Longer videos - more sections for extended duration
+		return fmt.Sprintf("[intro]\n%s\n[verse]\n%s\n[chorus]\n%s\n[bridge]\n%s\n[verse]\n%s\n[chorus]\n%s\n[outro]\n%s",
+			shortFiller, longFiller, longFiller, longFiller, longFiller, longFiller, shortFiller)
 	}
 }
 
