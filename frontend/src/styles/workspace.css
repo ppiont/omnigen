@@ -2731,7 +2731,7 @@
   top: calc(100% + var(--space-8));
   left: 0;
   min-width: 180px;
-  background: var(--card-bg);
+  background: var(--bg);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-12);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
