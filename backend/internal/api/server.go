@@ -9,8 +9,10 @@ import (
 	"github.com/omnigen/backend/internal/api/handlers"
 	"github.com/omnigen/backend/internal/api/middleware"
 	"github.com/omnigen/backend/internal/auth"
+	"github.com/omnigen/backend/internal/domain"
 	"github.com/omnigen/backend/internal/repository"
 	"github.com/omnigen/backend/internal/service"
+	"github.com/redis/go-redis/v9"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
@@ -38,6 +40,7 @@ type ServerConfig struct {
 	CloudFrontDomain    string            // For CORS in production
 	CognitoDomain       string            // Cognito hosted UI domain for CORS
 	OpenAIKey           string            // OpenAI API key for title generation
+	CacheConfig         domain.CacheConfig
 	ReadTimeout         time.Duration
 	WriteTimeout        time.Duration
 }
@@ -163,6 +166,13 @@ func (s *Server) setupRoutes() {
 			disclaimerService = service.NewDisclaimerService(ttsAdapter, s.config.GPT4oAdapter, s.config.Logger)
 		}
 
+		// Initialize cache service
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: s.config.CacheConfig.RedisURL,
+		})
+		redisCache := repository.NewRedisCache(redisClient, s.config.Logger, s.config.CacheConfig.DefaultTTL)
+		cacheService := service.NewCacheService(redisCache, s.config.Logger, s.config.CacheConfig)
+
 		// Initialize handlers with goroutine-based async architecture
 		generateHandler := handlers.NewGenerateHandler(
 			s.config.ParserService,
@@ -176,6 +186,7 @@ func (s *Server) setupRoutes() {
 			s.config.BrandGuidelinesRepo,
 			s.config.AssetsBucket,
 			s.config.Logger,
+			cacheService,
 		)
 
 		jobsHandler := handlers.NewJobsHandler(

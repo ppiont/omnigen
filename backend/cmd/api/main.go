@@ -271,6 +271,14 @@ type Config struct {
 
 	// TTS configuration (for narrator voiceover generation)
 	TTSAPIKey string `envconfig:"TTS_API_KEY"` // OpenAI TTS API key for narrator voiceover
+
+	// Cache configuration
+	CacheURL       string  `envconfig:"REDIS_URL" default:"redis://localhost:6379"`
+	CacheTTL       string  `envconfig:"CACHE_TTL" default:"1h"`
+	CacheMaxSize   int64   `envconfig:"CACHE_MAX_SIZE" default:"10737418240"` // 10GB
+	EnableCache    bool    `envconfig:"ENABLE_CACHE" default:"true"`
+	ScriptHitRatio float64 `envconfig:"SCRIPT_HIT_RATIO" default:"0.3"`
+	SceneHitRatio  float64 `envconfig:"SCENE_HIT_RATIO" default:"0.15"`
 }
 
 func loadConfig() (*Config, error) {

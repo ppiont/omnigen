@@ -33,6 +33,7 @@ type GenerateHandler struct {
 	assetsBucket        string
 	logger              *zap.Logger
 	semaphore           *concurrency.Semaphore // Limits concurrent video generations
+	cacheService        *service.CacheService
 }
 
 // NewGenerateHandler creates a new generate handler
@@ -48,6 +49,7 @@ func NewGenerateHandler(
 	brandGuidelinesRepo repository.BrandGuidelinesRepository,
 	assetsBucket string,
 	logger *zap.Logger,
+	cacheService *service.CacheService,
 ) *GenerateHandler {
 	return &GenerateHandler{
 		parserService:       parserService,
@@ -62,6 +64,7 @@ func NewGenerateHandler(
 		assetsBucket:        assetsBucket,
 		logger:              logger,
 		semaphore:           concurrency.NewSemaphore(MaxConcurrentGenerations),
+		cacheService:        cacheService,
 	}
 }
 

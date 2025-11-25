@@ -3094,3 +3094,70 @@ textarea.dropdown-field {
     width: 100%;
   }
 }
+
+/* Cache Metrics Dashboard */
+.cache-metrics-dashboard {
+  background: var(--surface-card);
+  border-radius: 16px;
+  padding: 1.5rem;
+  border: 1px solid var(--border-subtle);
+  margin-top: 2rem;
+}
+
+.cache-metrics-dashboard h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.metric-card {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+}
+
+.metric-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--surface-hover);
+  color: var(--brand-primary);
+}
+
+.metric-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.metric-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0 0 0.25rem 0;
+}
+
+.metric-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.metric-subtext {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin: 0.25rem 0 0 0;
+}
